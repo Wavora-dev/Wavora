@@ -1,0 +1,34 @@
+package com.wavora.domain.repository
+
+import com.wavora.domain.model.entities.ArtistEntity
+import com.wavora.domain.model.model.browse.artist.ArtistBrowse
+import com.wavora.domain.utils.Resource
+import kotlinx.coroutines.flow.Flow
+import kotlinx.datetime.LocalDateTime
+
+interface ArtistRepository {
+    fun getAllArtists(limit: Int): Flow<List<ArtistEntity>>
+
+    fun getArtistById(id: String): Flow<ArtistEntity?>
+
+    suspend fun insertArtist(artistEntity: ArtistEntity)
+
+    suspend fun updateArtistImage(
+        channelId: String,
+        thumbnail: String,
+    )
+
+    suspend fun updateFollowedStatus(
+        channelId: String,
+        followedStatus: Int,
+    )
+
+    fun getFollowedArtists(): Flow<List<ArtistEntity>>
+
+    suspend fun updateArtistInLibrary(
+        inLibrary: LocalDateTime,
+        channelId: String,
+    )
+
+    fun getArtistData(channelId: String): Flow<Resource<ArtistBrowse>>
+}
