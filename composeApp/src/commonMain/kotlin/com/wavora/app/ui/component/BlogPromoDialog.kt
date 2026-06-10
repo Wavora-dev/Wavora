@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.size
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import com.wavora.app.ui.theme.typo
@@ -20,6 +21,7 @@ import wavora.composeapp.generated.resources.blog_promo_message
 import wavora.composeapp.generated.resources.blog_promo_title
 import wavora.composeapp.generated.resources.later
 import wavora.composeapp.generated.resources.visit_blog
+import wavora.composeapp.generated.resources.circle_app_icon
 
 
 @Composable
