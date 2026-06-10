@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="asset/screenshot/01.png" width="120" style="border-radius: 20px"/>
+  <img src="composeAPP/appimage/wavora.png" width="120" style="border-radius: 20px"/>
   <h1>Wavora</h1>
   A modern YouTube Music client for Android and Desktop.<br>
   Futuristic UI · Immersive · Emotional
