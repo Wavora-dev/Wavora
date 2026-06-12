@@ -91,7 +91,7 @@ fun NotificationScreen(
                 }
             } else if (it.isNotEmpty()) {
                 LazyColumn(modifier = Modifier.padding(15.dp)) {
-                    items(it) { notification ->
+                    items(it, key = { it.id }) { notification ->
                         NotificationItem(
                             notification = notification,
                             navController,
@@ -170,7 +170,7 @@ fun NotificationItem(
             LazyRow(
                 Modifier.padding(top = 15.dp),
             ) {
-                items(notification.single) { single ->
+                items(notification.single, key = { it["browseId"] ?: it.hashCode().toString() }) { single ->
                     ItemAlbumNotification(
                         isAlbum = false,
                         browseId = single["browseId"] ?: "",
@@ -179,7 +179,7 @@ fun NotificationItem(
                         navController,
                     )
                 }
-                items(notification.album) { album ->
+                items(notification.album, key = { it["browseId"] ?: it.hashCode().toString() }) { album ->
                     ItemAlbumNotification(
                         isAlbum = true,
                         browseId = album["browseId"] ?: "",

@@ -135,6 +135,15 @@ class JvmMediaPlayerHandlerImpl(
 
     override val player: MediaPlayerInterface = getKoin().get()
     private var discordRPC: DiscordRPC? = null
+    // Discord RPC is throttled: only update every 15 s (150 × 100 ms ticks).
+    // When Discord is disabled discordRPC is null, so we skip the DataStore
+    // read entirely instead of launching a no-op coroutine 10 times per second.
+    private var discordRpcTickCounter = 0
+    private val DISCORD_RPC_TICK_INTERVAL = 150 // 150 × 100 ms = 15 s
+    // In-memory cache for DataStore values read in hot paths.
+    // Updated by a single collector each — zero cost to read, no coroutine suspension.
+    private var cachedPlaybackSpeed: Float = 1.0f
+    private var cachedSponsorBlockEnabled: Boolean = false
     override var onUpdateNotification: (List<GenericCommandButton>) -> Unit = {}
     override var showToast: (ToastType) -> Unit = {}
     override var pushPlayerError: (PlayerError) -> Unit = {}
@@ -349,7 +358,7 @@ class JvmMediaPlayerHandlerImpl(
                         }.filter { it >= 0f }
                         .distinctUntilChanged()
                         .collect { current ->
-                            if (dataStoreManager.sponsorBlockEnabled.first() == TRUE) {
+                            if (cachedSponsorBlockEnabled) {
                                 if (player.duration > 0L) {
                                     val skipSegments = skipSegments.value
                                     val listCategory = dataStoreManager.getSponsorBlockCategories()
@@ -393,6 +402,7 @@ class JvmMediaPlayerHandlerImpl(
             val playbackSpeedPitchJob =
                 launch {
                     combine(dataStoreManager.playbackSpeed, dataStoreManager.pitch) { speed, pitch ->
+                        cachedPlaybackSpeed = speed
                         Pair(speed, pitch)
                     }.distinctUntilChanged().collectLatest { pair ->
                         Logger.w(TAG, "Playback speed: ${pair.first}, Pitch: ${pair.second}")
@@ -403,6 +413,12 @@ class JvmMediaPlayerHandlerImpl(
                             )
                         Logger.w(TAG, "Playback current speed: ${player.playbackParameters.speed}, Pitch: ${player.playbackParameters.pitch}")
                     }
+                }
+            val sponsorBlockCacheJob =
+                launch {
+                    dataStoreManager.sponsorBlockEnabled
+                        .distinctUntilChanged()
+                        .collect { cachedSponsorBlockEnabled = it == TRUE }
                 }
             val discordRPCEnabledJob =
                 launch {
@@ -426,6 +442,7 @@ class JvmMediaPlayerHandlerImpl(
             skipSegmentsJob.join()
             playbackJob.join()
             playbackSpeedPitchJob.join()
+            sponsorBlockCacheJob.join()
             discordRPCEnabledJob.join()
         }
     }
@@ -527,7 +544,7 @@ class JvmMediaPlayerHandlerImpl(
                             }
                         }
                     }
-                if (dataStoreManager.sponsorBlockEnabled.first() == TRUE) {
+                if (cachedSponsorBlockEnabled) {
                     getSkipSegments(videoId)
                 }
                 if (dataStoreManager.sendBackToGoogle.first() == TRUE) {
@@ -735,8 +752,13 @@ class JvmMediaPlayerHandlerImpl(
                     delay(100)
                     _simpleMediaState.value = SimpleMediaState.Progress(player.currentPosition)
                     updateMacOSElapsedTime()
-                    nowPlayingState.value.songEntity?.let {
-                        updateDiscordRpc(it)
+                    // Only update Discord RPC every 15 s and only when it's enabled.
+                    if (discordRPC != null) {
+                        discordRpcTickCounter++
+                        if (discordRpcTickCounter >= DISCORD_RPC_TICK_INTERVAL) {
+                            discordRpcTickCounter = 0
+                            nowPlayingState.value.songEntity?.let { updateDiscordRpc(it) }
+                        }
                     }
                 }
             }
@@ -2360,7 +2382,7 @@ class JvmMediaPlayerHandlerImpl(
         coroutineScope.launch {
             val progress = getProgress()
             val duration = getPlayerDuration()
-            val speed = dataStoreManager.playbackSpeed.first()
+            val speed = cachedPlaybackSpeed
             withContext(Dispatchers.IO) {
                 discordRPC?.updateSong(progress, duration, speed, song)
             }

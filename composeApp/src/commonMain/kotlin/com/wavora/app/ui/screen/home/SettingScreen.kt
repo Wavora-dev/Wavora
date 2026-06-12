@@ -2198,7 +2198,7 @@ fun SettingScreen(
                                 )
                             }
                         } else {
-                            items(data) {
+                            items(data, key = { it.email }) {
                                 Row(
                                     modifier =
                                         Modifier
@@ -2355,7 +2355,7 @@ fun SettingScreen(
                             .padding(vertical = 6.dp)
                             .heightIn(0.dp, 500.dp),
                     ) {
-                        items(alertState.selectOne.listSelect) { item ->
+                        items(alertState.selectOne.listSelect, key = { it.second }) { item ->
                             val onSelect = {
                                 viewModel.setAlertData(
                                     alertState.copy(
@@ -2408,7 +2408,7 @@ fun SettingScreen(
                     LazyColumn(
                         Modifier.padding(vertical = 6.dp),
                     ) {
-                        items(alertState.multipleSelect.listSelect) { item ->
+                        items(alertState.multipleSelect.listSelect, key = { it.second }) { item ->
                             val onCheck = {
                                 viewModel.setAlertData(
                                     alertState.copy(

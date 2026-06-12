@@ -166,7 +166,7 @@ fun AppNavigationRail(
                 contentAlignment = Alignment.Center,
             ) {
                 Image(
-                    painter = painterResource(Res.drawable.mono),
+                    painter = painterResource(Res.drawable.circle_app_icon),
                     contentDescription = null,
                     modifier =
                         Modifier

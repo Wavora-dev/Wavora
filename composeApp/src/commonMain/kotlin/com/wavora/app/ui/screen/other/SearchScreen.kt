@@ -343,7 +343,16 @@ fun SearchScreen(
                             vertical = 10.dp,
                         ),
                     ) {
-                        items(searchScreenState.suggestYTItems) { item ->
+                        items(searchScreenState.suggestYTItems, key = { item ->
+                            when (item) {
+                                is SongsResult    -> "song_${item.videoId}"
+                                is VideosResult   -> "video_${item.videoId}"
+                                is ArtistsResult  -> "artist_${item.browseId}"
+                                is PlaylistsResult -> "playlist_${item.browseId}"
+                                is AlbumsResult   -> "album_${item.browseId}"
+                                else              -> item.hashCode()
+                            }
+                        }) { item ->
                             SuggestItemRow(
                                 searchResult = item,
                                 onItemClick = { item ->
@@ -386,7 +395,7 @@ fun SearchScreen(
                                 },
                             )
                         }
-                        items(searchScreenState.suggestQueries) { suggestion ->
+                        items(searchScreenState.suggestQueries, key = { it }) { suggestion ->
                             Row(
                                 modifier =
                                     Modifier
@@ -476,7 +485,7 @@ fun SearchScreen(
                                     }
                                 }
                             }
-                            items(searchHistory) { historyItem ->
+                            items(searchHistory, key = { it }) { historyItem ->
                                 Row(
                                     modifier =
                                         Modifier
@@ -661,7 +670,16 @@ fun SearchScreen(
                                                         contentPadding = PaddingValues(horizontal = 4.dp),
                                                         state = rememberLazyListState(),
                                                     ) {
-                                                        items(currentResults) { result ->
+                                                        items(currentResults, key = { result ->
+                                            when (result) {
+                                                is SongsResult    -> "song_${result.videoId}"
+                                                is VideosResult   -> "video_${result.videoId}"
+                                                is ArtistsResult  -> "artist_${result.browseId}"
+                                                is PlaylistsResult -> "playlist_${result.browseId}"
+                                                is AlbumsResult   -> "album_${result.browseId}"
+                                                else              -> result.hashCode()
+                                            }
+                                        }) { result ->
                                                             when (result) {
                                                                 is SongsResult -> {
                                                                     SongFullWidthItems(

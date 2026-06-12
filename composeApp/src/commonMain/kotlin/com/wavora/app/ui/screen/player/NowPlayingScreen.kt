@@ -170,6 +170,8 @@ import com.wavora.app.ui.theme.blackMoreOverlay
 import com.wavora.app.ui.theme.md_theme_dark_background
 import com.wavora.app.ui.theme.overlay
 import com.wavora.app.ui.theme.typo
+import com.wavora.app.ui.theme.wavoraPrimary
+import com.wavora.app.ui.theme.wavoraBorder
 import com.wavora.app.viewModel.LyricsProvider
 import com.wavora.app.viewModel.NowPlayingBottomSheetUIEvent
 import com.wavora.app.viewModel.NowPlayingBottomSheetViewModel
@@ -1192,7 +1194,7 @@ fun NowPlayingScreenContent(
                                                                 Icon(
                                                                     painter = painterResource(Res.drawable.baseline_fullscreen_24),
                                                                     contentDescription = "",
-                                                                    tint = Color.White,
+                                                                    tint = wavoraPrimary,
                                                                 )
                                                             }
                                                             Row(
@@ -1217,7 +1219,7 @@ fun NowPlayingScreenContent(
                                                                 ) {
                                                                     Icon(
                                                                         imageVector = Icons.Rounded.Replay5,
-                                                                        tint = Color.White,
+                                                                        tint = wavoraPrimary,
                                                                         contentDescription = "",
                                                                         modifier =
                                                                             Modifier
@@ -1241,7 +1243,7 @@ fun NowPlayingScreenContent(
                                                                 ) {
                                                                     Icon(
                                                                         imageVector = Icons.Rounded.Forward5,
-                                                                        tint = Color.White,
+                                                                        tint = wavoraPrimary,
                                                                         contentDescription = "",
                                                                         modifier =
                                                                             Modifier
@@ -1265,7 +1267,7 @@ fun NowPlayingScreenContent(
                                                                                 Icons.Filled.Subtitles
                                                                             },
                                                                         contentDescription = "",
-                                                                        tint = Color.White,
+                                                                        tint = wavoraPrimary,
                                                                     )
                                                                 }
                                                             }
@@ -1390,7 +1392,7 @@ fun NowPlayingScreenContent(
                             Icon(
                                 imageVector = dismissIcon,
                                 contentDescription = "",
-                                tint = Color.White,
+                                tint = wavoraPrimary,
                             )
                         }
                     },
@@ -1401,7 +1403,7 @@ fun NowPlayingScreenContent(
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
                                     contentDescription = "Mini Player",
-                                    tint = Color.White,
+                                    tint = wavoraPrimary,
                                 )
                             }
                         }
@@ -1411,7 +1413,7 @@ fun NowPlayingScreenContent(
                             Icon(
                                 painter = painterResource(Res.drawable.baseline_more_vert_24),
                                 contentDescription = "",
-                                tint = Color.White,
+                                tint = wavoraPrimary,
                             )
                         }
                     },
@@ -1593,7 +1595,7 @@ fun NowPlayingScreenContent(
                                                             sharedViewModel.addToYouTubeLiked()
                                                         },
                                                     ) {
-                                                        Icon(imageVector = Icons.Rounded.CheckCircle, tint = Color.White, contentDescription = "")
+                                                        Icon(imageVector = Icons.Rounded.CheckCircle, tint = wavoraPrimary, contentDescription = "")
                                                     }
                                                 } else {
                                                     IconButton(
@@ -1610,7 +1612,7 @@ fun NowPlayingScreenContent(
                                                     ) {
                                                         Icon(
                                                             imageVector = Icons.Rounded.AddCircleOutline,
-                                                            tint = Color.White,
+                                                            tint = wavoraPrimary,
                                                             contentDescription = "",
                                                         )
                                                     }
@@ -1816,7 +1818,7 @@ fun NowPlayingScreenContent(
                                                 showInfoBottomSheet = true
                                             },
                                         ) {
-                                            Icon(imageVector = Icons.Outlined.Info, tint = Color.White, contentDescription = "")
+                                            Icon(imageVector = Icons.Outlined.Info, tint = wavoraPrimary, contentDescription = "")
                                         }
 
                                         Row(
@@ -1836,7 +1838,7 @@ fun NowPlayingScreenContent(
                                             ) {
                                                 Icon(
                                                     painter = painterResource(Res.drawable.baseline_playlist_add_24),
-                                                    tint = Color.White,
+                                                    tint = wavoraPrimary,
                                                     contentDescription = "Add to Playlist",
                                                 )
                                             }
@@ -1854,7 +1856,7 @@ fun NowPlayingScreenContent(
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.AutoMirrored.Rounded.QueueMusic,
-                                                    tint = Color.White,
+                                                    tint = wavoraPrimary,
                                                     contentDescription = "",
                                                 )
                                             }
@@ -2087,7 +2089,7 @@ fun NowPlayingScreenContent(
                                                             ) {
                                                                 Icon(
                                                                     imageVector = Icons.Rounded.CheckCircle,
-                                                                    tint = Color.White,
+                                                                    tint = wavoraPrimary,
                                                                     contentDescription = "",
                                                                 )
                                                             }
@@ -2106,7 +2108,7 @@ fun NowPlayingScreenContent(
                                                             ) {
                                                                 Icon(
                                                                     imageVector = Icons.Rounded.AddCircleOutline,
-                                                                    tint = Color.White,
+                                                                    tint = wavoraPrimary,
                                                                     contentDescription = "",
                                                                 )
                                                             }
@@ -2177,7 +2179,7 @@ fun NowPlayingScreenContent(
                                                     Icon(
                                                         imageVector = Icons.Rounded.ThumbsUpDown,
                                                         contentDescription = stringResource(Res.string.rate_lyrics),
-                                                        tint = Color.White,
+                                                        tint = wavoraPrimary,
                                                         modifier = Modifier.size(16.dp),
                                                     )
                                                 }
@@ -2568,8 +2570,8 @@ fun NowPlayingScreenContent(
                                         color = Color.Transparent,
                                         shape = RoundedCornerShape(4.dp),
                                     ),
-                            color = Color.White,
-                            trackColor = Color.Gray.copy(alpha = 0.4f),
+                            color = wavoraPrimary,
+                            trackColor = wavoraBorder,
                             strokeCap = StrokeCap.Round,
                             drawStopIndicator = {},
                         )

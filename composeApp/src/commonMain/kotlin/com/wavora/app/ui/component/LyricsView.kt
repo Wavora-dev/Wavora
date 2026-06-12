@@ -292,7 +292,7 @@ fun LyricsView(
             state = listState,
             modifier = Modifier.fillMaxSize(),
         ) {
-            items(lyricsData.lyrics.lines?.size ?: 0) { index ->
+            items(lyricsData.lyrics.lines?.size ?: 0, key = { it }) { index ->
                 val line = lyricsData.lyrics.lines?.getOrNull(index)
                 // Translated lyrics: synced -> precomputed map by line index, unsynced -> by index.
                 val translatedWords =

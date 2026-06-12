@@ -48,6 +48,8 @@ import com.wavora.domain.model.entities.PodcastsEntity
 import com.wavora.domain.model.entities.SongEntity
 import com.wavora.domain.model.model.browse.album.Track
 import com.wavora.domain.model.model.searchResult.playlists.PlaylistsResult
+import com.wavora.domain.model.model.searchResult.albums.AlbumsResult
+import com.wavora.domain.model.type.ChartItem
 import com.wavora.domain.model.type.LibraryType
 import com.wavora.domain.model.type.PlaylistType
 import com.wavora.domain.model.type.RecentlyType
@@ -233,7 +235,7 @@ fun LibraryItem(
                                 top = 10.dp,
                             ),
                         ) {
-                            items(state.data) { item ->
+                            items(state.data, key = { (it as? SongEntity)?.videoId ?: it.hashCode() }) { item ->
                                 val song = item as? SongEntity ?: return@items
                                 Box(
                                     Modifier
@@ -332,7 +334,18 @@ fun LibraryItem(
                     } else {
                         if (state.data.isNotEmpty()) {
                             LazyRow {
-                                items(items = state.data) { item ->
+                                items(items = state.data, key = { item ->
+                                    when (item) {
+                                        is LocalPlaylistEntity -> "local_${item.id}"
+                                        is PlaylistEntity      -> "yt_${item.id}"
+                                        is AlbumEntity         -> "album_${item.browseId}"
+                                        is PodcastsEntity      -> "podcast_${item.podcastId}"
+                                        is PlaylistsResult     -> "result_${item.browseId}"
+                                        is AlbumsResult        -> "albumresult_${item.browseId}"
+                                        is ChartItem           -> "chart_${item.ytPlaylistId}"
+                                        else                   -> item.hashCode()
+                                    }
+                                }) { item ->
                                     Box(modifier = Modifier.animateItem()) {
                                         HomeItemContentPlaylist(
                                             onClick = {

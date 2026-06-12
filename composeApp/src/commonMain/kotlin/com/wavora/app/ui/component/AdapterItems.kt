@@ -189,7 +189,7 @@ fun HomeItem(
             state = lazyListState,
             flingBehavior = snapperFlingBehavior,
         ) {
-            items(data.contents) { temp ->
+            items(data.contents, key = { it?.videoId ?: it?.playlistId ?: it?.browseId ?: it.hashCode() }) { temp ->
                 if (temp != null) {
                     val browseId = temp.browseId
                     val playlistId = temp.playlistId
@@ -1264,7 +1264,13 @@ fun MoodAndGenresContentItem(
                     is Item -> (data).contents
                     else -> listOf()
                 }
-            items(itemList) { item ->
+            items(itemList, key = { item ->
+                when (item) {
+                    is com.wavora.domain.model.model.mood.genre.Content -> item.playlistBrowseId
+                    is com.wavora.domain.model.model.mood.moodmoments.Content -> item.playlistBrowseId
+                    else -> item.hashCode()
+                }
+            }) { item ->
                 HomeItemContentPlaylist(onClick = {
                     navController.navigate(
                         PlaylistDestination(

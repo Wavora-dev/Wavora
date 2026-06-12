@@ -46,6 +46,7 @@ import com.wavora.domain.model.entities.LocalPlaylistEntity
 import com.wavora.domain.model.entities.PlaylistEntity
 import com.wavora.domain.model.entities.PodcastsEntity
 import com.wavora.domain.model.model.searchResult.playlists.PlaylistsResult
+import com.wavora.domain.model.model.searchResult.albums.AlbumsResult
 import com.wavora.domain.model.type.ChartItem
 import com.wavora.domain.model.type.PlaylistType
 import com.wavora.domain.utils.LocalResource
@@ -174,7 +175,18 @@ internal inline fun <reified T> GridLibraryPlaylist(
                             }
                         }
                     }
-                    items(list) { item ->
+                    items(list, key = { item ->
+                        when (item) {
+                            is LocalPlaylistEntity -> "local_${item.id}"
+                            is PlaylistEntity      -> "yt_${item.id}"
+                            is AlbumEntity         -> "album_${item.browseId}"
+                            is PodcastsEntity      -> "podcast_${item.podcastId}"
+                            is PlaylistsResult     -> "result_${item.browseId}"
+                            is AlbumsResult        -> "albumresult_${item.browseId}"
+                            is ChartItem           -> "chart_${item.ytPlaylistId}"
+                            else                   -> item.hashCode()
+                        }
+                    }) { item ->
                         if (item !is PlaylistType) {
                             return@items
                         }

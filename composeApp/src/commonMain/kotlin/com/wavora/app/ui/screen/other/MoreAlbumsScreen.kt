@@ -101,7 +101,7 @@ fun MoreAlbumsScreen(
                                 ),
                         )
                     }
-                    items(data) { album ->
+                    items(data, key = { it.browseId }) { album ->
                         val data = album
                         HomeItemContentPlaylist(
                             data = data,

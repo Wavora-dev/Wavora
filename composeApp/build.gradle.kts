@@ -114,6 +114,7 @@ kotlin {
             api(projects.common)
             api(projects.domain)
             implementation(projects.data)
+            implementation(projects.kizzy)
 
             // Navigation Compose
             implementation(libs.navigation.compose)
