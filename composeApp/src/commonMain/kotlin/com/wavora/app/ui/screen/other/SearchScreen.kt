@@ -348,8 +348,8 @@ fun SearchScreen(
                                 is SongsResult    -> "song_${item.videoId}"
                                 is VideosResult   -> "video_${item.videoId}"
                                 is ArtistsResult  -> "artist_${item.browseId}"
-                                is PlaylistsResult -> "playlist_${item.browseId}"
-                                is AlbumsResult   -> "album_${item.browseId}"
+                                is PlaylistsResult -> "playlist_${item.browseId}_${item.hashCode()}"
+                                is AlbumsResult   -> "album_${item.browseId}_${item.hashCode()}"
                                 else              -> item.hashCode()
                             }
                         }) { item ->
@@ -395,7 +395,7 @@ fun SearchScreen(
                                 },
                             )
                         }
-                        items(searchScreenState.suggestQueries, key = { it }) { suggestion ->
+                        items(searchScreenState.suggestQueries, key = { it.hashCode() }) { suggestion ->
                             Row(
                                 modifier =
                                     Modifier
@@ -485,7 +485,7 @@ fun SearchScreen(
                                     }
                                 }
                             }
-                            items(searchHistory, key = { it }) { historyItem ->
+                            items(searchHistory, key = { it.hashCode() }) { historyItem ->
                                 Row(
                                     modifier =
                                         Modifier
@@ -675,8 +675,8 @@ fun SearchScreen(
                                                 is SongsResult    -> "song_${result.videoId}"
                                                 is VideosResult   -> "video_${result.videoId}"
                                                 is ArtistsResult  -> "artist_${result.browseId}"
-                                                is PlaylistsResult -> "playlist_${result.browseId}"
-                                                is AlbumsResult   -> "album_${result.browseId}"
+                                                is PlaylistsResult -> "playlist_${result.browseId}_${result.hashCode()}"
+                                                is AlbumsResult   -> "album_${result.browseId}_${result.hashCode()}"
                                                 else              -> result.hashCode()
                                             }
                                         }) { result ->

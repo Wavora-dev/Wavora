@@ -538,6 +538,23 @@
     <string name="spotify_setup_connect">Connect</string>
     <string name="spotify_setup_success">Connected to Spotify</string>
     <string name="spotify_setup_error">Invalid cookie. Make sure you copied the sp_dc value correctly.</string>
+    <string name="youtube_setup_title">Connect YouTube Music</string>
+    <string name="youtube_setup_subtitle">Sign in to access your playlists, history and personalized recommendations</string>
+    <string name="youtube_setup_step1_title">Step 1 — Open YouTube Music in your browser</string>
+    <string name="youtube_setup_step1_desc">Go to music.youtube.com and log in with your Google account normally.</string>
+    <string name="youtube_setup_step1_button">Open YouTube Music</string>
+    <string name="youtube_setup_step2_title">Step 2 — Open DevTools</string>
+    <string name="youtube_setup_step2_desc">Press F12 (or Ctrl+Shift+I) to open DevTools, then go to the Application tab.</string>
+    <string name="youtube_setup_step3_title">Step 3 — Copy your cookies</string>
+    <string name="youtube_setup_step3_desc">Go to Application → Cookies → https://music.youtube.com. Then open the Console tab and run this command to get all cookies as a single string:</string>
+    <string name="youtube_setup_step3_copy_command">Copy command</string>
+    <string name="youtube_setup_step4_title">Step 4 — Paste your cookies here</string>
+    <string name="youtube_setup_step4_placeholder">Paste your YouTube Music cookies…</string>
+    <string name="youtube_setup_connect">Connect</string>
+    <string name="youtube_setup_connecting">Validating…</string>
+    <string name="youtube_setup_success">Connected to YouTube Music</string>
+    <string name="youtube_setup_error">Invalid cookies. Make sure you copied them correctly from music.youtube.com.</string>
+    <string name="youtube_setup_command" translatable="false">document.cookie</string>
     <string name="discord_integration">Discord integration</string>
     <string name="log_in_to_discord">Log in to Discord</string>
     <string name="intro_login_to_discord">Log in to enable Discord Rich Presence</string>

@@ -2669,7 +2669,7 @@ fun ArtistModalBottomSheet(
                     ) {}
                     Spacer(modifier = Modifier.height(5.dp))
                     LazyColumn {
-                        items(artists, key = { it.id ?: it.name }) { artist ->
+                        items(artists, key = { it.id?.takeIf { id -> id.isNotEmpty() } ?: it.name.ifEmpty { it.hashCode() } }) { artist ->
                             Box(
                                 modifier =
                                     Modifier

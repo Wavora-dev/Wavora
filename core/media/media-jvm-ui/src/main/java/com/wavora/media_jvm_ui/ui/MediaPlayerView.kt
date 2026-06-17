@@ -111,6 +111,7 @@ fun MediaPlayerViewWithUrl(
                     factory = {
                         JPanel(java.awt.BorderLayout()).apply {
                             background = java.awt.Color.BLACK
+                            isOpaque = true
                             add(panel, java.awt.BorderLayout.CENTER)
                         }
                     },
@@ -118,7 +119,6 @@ fun MediaPlayerViewWithUrl(
                         Modifier
                             .fillMaxSize()
                             .align(Alignment.Center),
-                    background = Color.Transparent,
                 )
             }
         }
@@ -154,45 +154,50 @@ fun MediaPlayerViewWithSubtitleJvm(
     var currentLineIndex by rememberSaveable { mutableIntStateOf(-1) }
     var currentTranslatedLineIndex by rememberSaveable { mutableIntStateOf(-1) }
 
-    LaunchedEffect(key1 = timelineState) {
-        val lines = lyricsData?.lines ?: return@LaunchedEffect
+    // Key on timelineState.current (Long) instead of the full TimeLine object.
+    // TimeLine is a data class — a new instance is emitted every 100ms even when current
+    // hasn't changed, causing unnecessary re-launches. Keying on the Long skips those.
+    // Binary search replaces forEach so lookup is O(log n) instead of O(n).
+    LaunchedEffect(key1 = timelineState.current) {
+        val currentMs = timelineState.current
+        val lines = lyricsData?.lines
         val translatedLines = translatedLyricsData?.lines
-        if (timelineState.current > 0L) {
-            lines.indices.forEach { i ->
-                val sentence = lines[i]
-                val startTimeMs = sentence.startTimeMs.toLong()
-                val endTimeMs =
-                    if (i < lines.size - 1) {
-                        lines[i + 1].startTimeMs.toLong()
-                    } else {
-                        startTimeMs + 60000
-                    }
-                if (timelineState.current in startTimeMs..endTimeMs) {
-                    currentLineIndex = i
-                }
-            }
-            translatedLines?.indices?.forEach { i ->
-                val sentence = translatedLines[i]
-                val startTimeMs = sentence.startTimeMs.toLong()
-                val endTimeMs =
-                    if (i < translatedLines.size - 1) {
-                        translatedLines[i + 1].startTimeMs.toLong()
-                    } else {
-                        startTimeMs + 60000
-                    }
-                if (timelineState.current in startTimeMs..endTimeMs) {
-                    currentTranslatedLineIndex = i
-                }
-            }
-            if (lines.isNotEmpty() &&
-                (timelineState.current in (0..(lines.getOrNull(0)?.startTimeMs ?: "0").toLong()))
-            ) {
-                currentLineIndex = -1
-                currentTranslatedLineIndex = -1
-            }
-        } else {
+
+        if (currentMs <= 0L || lines.isNullOrEmpty()) {
             currentLineIndex = -1
             currentTranslatedLineIndex = -1
+            return@LaunchedEffect
+        }
+
+        // Binary search: find last line whose startTimeMs <= currentMs
+        fun findLineIndex(lyricLines: List<com.wavora.domain.model.model.metadata.Line>): Int {
+            var lo = 0
+            var hi = lyricLines.size - 1
+            var result = -1
+            while (lo <= hi) {
+                val mid = (lo + hi) ushr 1
+                val startMs = lyricLines[mid].startTimeMs.toLong()
+                if (startMs <= currentMs) {
+                    result = mid
+                    lo = mid + 1
+                } else {
+                    hi = mid - 1
+                }
+            }
+            // Check the found line hasn't ended yet
+            if (result != -1) {
+                val endMs = if (result < lyricLines.size - 1)
+                    lyricLines[result + 1].startTimeMs.toLong()
+                else
+                    lyricLines[result].startTimeMs.toLong() + 60_000L
+                if (currentMs > endMs) result = -1
+            }
+            return result
+        }
+
+        currentLineIndex = findLineIndex(lines)
+        if (translatedLines != null) {
+            currentTranslatedLineIndex = findLineIndex(translatedLines)
         }
     }
 
@@ -244,7 +249,6 @@ fun MediaPlayerViewWithSubtitleJvm(
                         modifier =
                             Modifier
                                 .fillMaxSize(),
-                        background = Color.Black,
                     )
                 }
             }

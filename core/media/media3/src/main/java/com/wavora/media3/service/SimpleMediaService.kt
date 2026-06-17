@@ -160,12 +160,9 @@ internal class SimpleMediaService :
                                         startForeground(notificationId, notification)
                                     }
                                 }
-                                coroutineScope.launch {
-                                    while (coroutineScope.isActive) {
-                                        startFg()
-                                        delay(30.seconds)
-                                    }
-                                }
+                                // Call startForeground once when the notification is first posted.
+                                // Repeating it in a loop is unnecessary and wastes battery.
+                                startFg()
                             }
                         },
                     ).setMediaDescriptionAdapter(DefaultMediaDescriptionAdapter(mediaSession?.sessionActivity))

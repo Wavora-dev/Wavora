@@ -109,6 +109,7 @@ import dev.chrisbanes.haze.materials.CupertinoMaterials
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
@@ -738,18 +739,16 @@ fun FullscreenLyricsSheet(
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
         shape = RectangleShape,
     ) {
-        // Crossfade: RGB rainbow color cycling when transitioning between tracks
-        val infiniteTransition = rememberInfiniteTransition(label = "crossfadeRainbow")
-        val rainbowHue by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec =
-                infiniteRepeatable(
-                    animation = tween(1000, easing = LinearEasing),
-                    repeatMode = RepeatMode.Restart,
-                ),
-            label = "rainbowHue",
-        )
+        // Crossfade: RGB rainbow — only animate when crossfading (same fix as NowPlayingScreen)
+        var rainbowHue by remember { mutableFloatStateOf(0f) }
+        LaunchedEffect(timelineState.isCrossfading) {
+            if (timelineState.isCrossfading) {
+                while (isActive) {
+                    rainbowHue = (rainbowHue + 3f) % 360f
+                    delay(8)
+                }
+            }
+        }
         val rainbowColor = hsvToColor(rainbowHue, 1f, 1f)
         val sliderTrackColor by animateColorAsState(
             targetValue = if (timelineState.isCrossfading) rainbowColor else Color.White,

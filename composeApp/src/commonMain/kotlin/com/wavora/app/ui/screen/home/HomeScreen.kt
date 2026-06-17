@@ -520,8 +520,8 @@ fun HomeScreen(
                         state = scrollState,
                         verticalArrangement = Arrangement.spacedBy(28.dp),
                     ) {
-                        itemsIndexed(homeData, key = { _, item ->
-                            item.hashCode().toString() + (mainHomeThumbnail ?: "nothumb")
+                        itemsIndexed(homeData, key = { idx, item ->
+                            idx.toString() + "_" + item.hashCode().toString() + (mainHomeThumbnail ?: "nothumb")
                         }) { index, item ->
                             Box {
                                 if (index == 0) {
@@ -634,7 +634,7 @@ fun HomeScreen(
                             }
                         }
                         if (homeListState == ListState.PAGINATION_EXHAUST) {
-                            items(newRelease, key = { it.hashCode() }) {
+                            items(newRelease, key = { it.title + (it.channelId ?: it.hashCode().toString()) }) {
                                 AnimatedVisibility(
                                     visible = newRelease.isNotEmpty(),
                                 ) {
@@ -984,7 +984,7 @@ fun QuickPicks(
             state = lazyListState,
             flingBehavior = snapperFlingBehavior,
         ) {
-            items(homeItem.contents, key = { it.hashCode() }) {
+            items(homeItem.contents, key = { it?.videoId?.takeIf { v -> v.isNotEmpty() } ?: it?.browseId?.takeIf { b -> b.isNotEmpty() } ?: it.hashCode() }) {
                 if (it != null) {
                     QuickPicksItem(
                         onClick = {
@@ -1048,7 +1048,7 @@ fun MoodMomentAndGenre(
             state = lazyListState1,
             flingBehavior = snapperFlingBehavior1,
         ) {
-            items(mood.moodsMoments, key = { it.title }) {
+            items(mood.moodsMoments, key = { it.title + it.params }) {
                 MoodMomentAndGenreHomeItem(title = it.title) {
                     navController.navigate(
                         MoodDestination(
@@ -1074,7 +1074,7 @@ fun MoodMomentAndGenre(
             state = lazyListState2,
             flingBehavior = snapperFlingBehavior2,
         ) {
-            items(mood.genres, key = { it.title }) {
+            items(mood.genres, key = { it.title + it.params }) {
                 MoodMomentAndGenreHomeItem(title = it.title) {
                     navController.navigate(
                         MoodDestination(

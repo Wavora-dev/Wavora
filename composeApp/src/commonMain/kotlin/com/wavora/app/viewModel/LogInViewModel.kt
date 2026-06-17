@@ -3,6 +3,7 @@ package com.wavora.app.viewModel
 import androidx.lifecycle.viewModelScope
 import com.wavora.domain.manager.DataStoreManager
 import com.wavora.app.viewModel.base.BaseViewModel
+import com.wavora.app.viewModel.SettingsViewModel
 import com.my.kizzy.rpc.KizzyRPC
 import com.my.kizzy.rpc.UserInfo
 import io.ktor.client.HttpClient
@@ -137,5 +138,43 @@ class LogInViewModel(
 
     fun resetSpdcValidation() {
         _spdcValidation.value = SpdcValidationState.Idle
+    }
+
+    // ── YouTube cookie validation ─────────────────────────────────────────
+    sealed class CookieValidationState {
+        object Idle : CookieValidationState()
+        object Loading : CookieValidationState()
+        object Success : CookieValidationState()
+        object Error : CookieValidationState()
+    }
+
+    private val _cookieValidation = MutableStateFlow<CookieValidationState>(CookieValidationState.Idle)
+    val cookieValidation: StateFlow<CookieValidationState> = _cookieValidation.asStateFlow()
+
+    private val _youtubeAccountName = MutableStateFlow<String?>(null)
+    val youtubeAccountName: StateFlow<String?> = _youtubeAccountName.asStateFlow()
+
+    fun validateAndSaveYouTubeCookie(
+        cookie: String,
+        settingsViewModel: SettingsViewModel,
+    ) {
+        viewModelScope.launch {
+            _cookieValidation.value = CookieValidationState.Loading
+            runCatching {
+                settingsViewModel.addAccount(cookie.trim())
+            }.onSuccess { success ->
+                if (success) {
+                    _cookieValidation.value = CookieValidationState.Success
+                } else {
+                    _cookieValidation.value = CookieValidationState.Error
+                }
+            }.onFailure {
+                _cookieValidation.value = CookieValidationState.Error
+            }
+        }
+    }
+
+    fun resetCookieValidation() {
+        _cookieValidation.value = CookieValidationState.Idle
     }
 }

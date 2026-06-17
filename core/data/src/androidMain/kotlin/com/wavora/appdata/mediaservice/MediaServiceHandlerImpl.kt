@@ -697,11 +697,21 @@ internal class MediaServiceHandlerImpl(
     override fun startProgressUpdate() {
         progressJob =
             coroutineScope.launch {
+                var discordTickMs = 0L
                 while (true) {
                     delay(100)
                     _simpleMediaState.value = SimpleMediaState.Progress(player.currentPosition)
-                    nowPlayingState.value.songEntity?.let {
-                        updateDiscordRpc(it)
+                    // Throttle Discord RPC updates to once every 5 seconds and only
+                    // when RPC is actually connected. Calling it at 100ms spawned
+                    // 10 IO coroutines/sec and was the primary cause of battery drain.
+                    if (discordRPC != null) {
+                        discordTickMs += 100
+                        if (discordTickMs >= 5_000L) {
+                            discordTickMs = 0L
+                            nowPlayingState.value.songEntity?.let { updateDiscordRpc(it) }
+                        }
+                    } else {
+                        discordTickMs = 0L
                     }
                 }
             }

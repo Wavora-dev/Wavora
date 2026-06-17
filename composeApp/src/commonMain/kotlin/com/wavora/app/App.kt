@@ -587,7 +587,7 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                                 onClick = {
                                     shouldShowUpdateDialog = false
                                     viewModel.showedUpdateDialog = false
-                                    openUrl("https://wavora.org/download")
+                                    openUrl("https://github.com/Wavora-dev/Wavora/releases")
                                 },
                             ) {
                                 Text(

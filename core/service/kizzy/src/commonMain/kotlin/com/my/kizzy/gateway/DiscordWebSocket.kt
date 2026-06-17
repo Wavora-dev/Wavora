@@ -96,8 +96,8 @@ open class DiscordWebSocket(
                             header("Cache-Control", "no-cache")
                             header("Pragma", "no-cache")
                         }
-                    connected = true
-                    Logger.i(TAG, "Successfully connected to Discord Gateway.")
+                    connected = false // will be set to true only after READY is received
+                    Logger.i(TAG, "Successfully connected to Discord Gateway TCP layer.")
                     currentReconnectDelay = INITIAL_RECONNECT_DELAY
                     // start receiving messages
                     websocket!!
@@ -264,7 +264,12 @@ open class DiscordWebSocket(
             }
     }
 
-    private fun isSocketConnectedToAccount(): Boolean = connected && websocket?.isActive == true
+    // Returns true only after Discord has sent READY (sessionId is set), meaning
+    // IDENTIFY has been processed and the session is authenticated. Sending presence
+    // before this causes Discord to silently ignore it, which is why Rich Presence
+    // was not showing even when the token was correct.
+    private fun isSocketConnectedToAccount(): Boolean =
+        connected && websocket?.isActive == true && !sessionId.isNullOrBlank()
 
     @OptIn(DelicateCoroutinesApi::class)
     fun isWebSocketConnected(): Boolean = websocket?.incoming != null && websocket?.outgoing?.isClosedForSend == false

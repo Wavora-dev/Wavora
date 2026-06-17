@@ -62,7 +62,7 @@ fun MoodScreen(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
             ) {
-                items(moodData?.items ?: emptyList(), key = { it.header }) { item ->
+                items(moodData?.items ?: emptyList(), key = { it.header.ifEmpty { it.hashCode() } }) { item ->
                     MoodAndGenresContentItem(
                         data = item,
                         navController = navController,

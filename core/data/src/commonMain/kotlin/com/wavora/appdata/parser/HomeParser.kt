@@ -334,8 +334,8 @@ internal fun parseMixedContent(
                                                 ?.get(0)
                                                 ?.text
                                                 ?: "",
-                                        videoId = "",
-                                        views = "",
+                                        videoId = null,
+                                        views = null,
                                     ),
                                 )
                             } else if (musicTwoRowItemRenderer.isPlaylist) {
@@ -379,8 +379,8 @@ internal fun parseMixedContent(
                                                     ?.get(
                                                         0,
                                                     )?.text ?: "",
-                                            videoId = "",
-                                            views = "",
+                                            videoId = null,
+                                            views = null,
                                         ),
                                     )
                                 } else {
@@ -508,7 +508,7 @@ internal fun parseMixedContent(
                                             ?.runs
                                             ?.get(0)
                                             ?.text ?: "",
-                                    videoId = multiRow.onTap?.watchEndpoint?.videoId ?: "",
+                                    videoId = multiRow.onTap?.watchEndpoint?.videoId?.takeIf { it.isNotEmpty() },
                                     album = null,
                                     artists = emptyList(),
                                     isExplicit = false,

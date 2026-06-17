@@ -552,7 +552,7 @@ fun ArtistScreen(
                                     item {
                                         Spacer(Modifier.size(10.dp))
                                     }
-                                    items(state.data.video?.video ?: emptyList(), key = { it.videoId }) { video ->
+                                    items(state.data.video?.video ?: emptyList(), key = { it.videoId.ifEmpty { it.hashCode() } }) { video ->
                                         HomeItemVideo(
                                             onClick = {
                                                 val firstQueue: Track = video

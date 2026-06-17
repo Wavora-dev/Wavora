@@ -2,6 +2,7 @@ package com.wavora.app.di
 
 import com.wavora.app.viewModel.AlbumViewModel
 import com.wavora.app.viewModel.AnalyticsViewModel
+import com.wavora.app.viewModel.AppViewModel
 import com.wavora.app.viewModel.ArtistViewModel
 import com.wavora.app.viewModel.HomeViewModel
 import com.wavora.app.viewModel.LibraryDynamicPlaylistViewModel
@@ -12,6 +13,8 @@ import com.wavora.app.viewModel.MoodViewModel
 import com.wavora.app.viewModel.MoreAlbumsViewModel
 import com.wavora.app.viewModel.NotificationViewModel
 import com.wavora.app.viewModel.NowPlayingBottomSheetViewModel
+import com.wavora.app.viewModel.NowPlayingViewModel
+import com.wavora.app.viewModel.PlayerViewModel
 import com.wavora.app.viewModel.PlaylistViewModel
 import com.wavora.app.viewModel.PodcastViewModel
 import com.wavora.app.viewModel.RecentlySongsViewModel
@@ -23,19 +26,41 @@ import org.koin.dsl.module
 
 val viewModelModule =
     module {
+        // ── Sub-ViewModels (singletons so they survive across screens) ────
         single {
-            SharedViewModel(
-                get(),
-                get(),
-                get(),
-                get(),
-                get(),
-                get(),
-                get(),
-                get(),
-                get(),
+            PlayerViewModel(
+                get(), // DataStoreManager
+                get(), // SongRepository
+                get(), // StreamRepository
             )
         }
+        single {
+            NowPlayingViewModel(
+                get(), // DataStoreManager
+                get(), // SongRepository
+                get(), // LyricsCanvasRepository
+                get(), // StreamRepository
+            )
+        }
+        single {
+            AppViewModel(
+                get(), // DataStoreManager
+                get(), // UpdateRepository
+            )
+        }
+
+        // ── SharedViewModel: thin coordinator, depends on sub-VMs ─────────
+        single {
+            SharedViewModel(
+                get(), // DataStoreManager
+                get(), // SongRepository
+                get(), // AlbumRepository
+                get(), // LocalPlaylistRepository
+                get(), // PlaylistRepository
+            )
+        }
+
+        // ── Screen ViewModels ─────────────────────────────────────────────
         single {
             SearchViewModel(
                 get(),

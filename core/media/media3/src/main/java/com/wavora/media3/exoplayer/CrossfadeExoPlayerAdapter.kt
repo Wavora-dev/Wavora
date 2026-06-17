@@ -327,8 +327,13 @@ internal class CrossfadeExoPlayerAdapter(
                     DefaultLoadControl
                         .Builder()
                         .setBufferDurationsMs(
-                            DefaultLoadControl.DEFAULT_MIN_BUFFER_MS * 4,
-                            DefaultLoadControl.DEFAULT_MAX_BUFFER_MS * 4,
+                            // MIN: keep default (15s) — enough to handle brief network hiccups.
+                            // MAX: 2x default (100s) instead of 4x (200s). With up to 4
+                            // simultaneous ExoPlayer instances (active + crossfade + 2 precached),
+                            // 4x was downloading up to 800s of audio in parallel, causing
+                            // sustained high network + CPU activity and battery drain.
+                            DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
+                            DefaultLoadControl.DEFAULT_MAX_BUFFER_MS * 2,
                             0,
                             0,
                         ).build(),

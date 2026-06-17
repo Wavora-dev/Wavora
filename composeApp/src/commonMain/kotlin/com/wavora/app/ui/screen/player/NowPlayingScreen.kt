@@ -183,6 +183,7 @@ import dev.chrisbanes.haze.materials.CupertinoMaterials
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
@@ -533,17 +534,18 @@ fun NowPlayingScreenContent(
     }
 
     // Crossfade: RGB rainbow color cycling when transitioning between tracks
-    val infiniteTransition = rememberInfiniteTransition(label = "crossfadeRainbow")
-    val rainbowHue by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec =
-            infiniteRepeatable(
-                animation = tween(1000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart,
-            ),
-        label = "rainbowHue",
-    )
+    // Crossfade: RGB rainbow color cycling — only animate when a crossfade is active.
+    // rememberInfiniteTransition runs continuously even when invisible, wasting GPU.
+    // By gating it behind isCrossfading we stop the animation when it's not needed.
+    var rainbowHue by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(timelineState.isCrossfading) {
+        if (timelineState.isCrossfading) {
+            while (isActive) {
+                rainbowHue = (rainbowHue + 3f) % 360f
+                delay(8) // ~120fps equivalent hue sweep
+            }
+        }
+    }
     val rainbowColor = hsvToColor(rainbowHue, 1f, 1f)
     val sliderTrackColor by animateColorAsState(
         targetValue = if (timelineState.isCrossfading) rainbowColor else Color(0xFFA259FF),

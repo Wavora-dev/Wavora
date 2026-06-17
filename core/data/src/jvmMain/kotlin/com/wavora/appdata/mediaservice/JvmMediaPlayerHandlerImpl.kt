@@ -770,7 +770,8 @@ class JvmMediaPlayerHandlerImpl(
                 while (true) {
                     delay(500)
                     _simpleMediaState.value =
-                        SimpleMediaState.Loading(100, player.duration)
+                        // Was hardcoded to 100 — use actual value like the Android implementation.
+                        SimpleMediaState.Loading(player.bufferedPercentage, player.duration)
                 }
             }
     }
