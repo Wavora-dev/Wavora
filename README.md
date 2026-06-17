@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="composeApp/src/commonMain/composeResources/drawable/ic_launcher.xml" alt="Wavora" width="200"/>
+<img src="composeApp/appimage/wavora.png" alt="Wavora" width="200"/>
 
 # Wavora
 
