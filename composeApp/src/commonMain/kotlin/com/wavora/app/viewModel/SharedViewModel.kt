@@ -8,7 +8,10 @@ import com.wavora.domain.mediaservice.handler.DownloadHandler
 import com.wavora.domain.mediaservice.handler.NowPlayingTrackState
 import com.wavora.domain.model.entities.AlbumEntity
 import com.wavora.domain.model.entities.DownloadState
+import com.wavora.domain.model.entities.LocalPlaylistEntity
 import com.wavora.domain.model.entities.PlaylistEntity
+import com.wavora.domain.repository.CacheRepository
+import com.wavora.common.Config.DOWNLOAD_CACHE
 import com.wavora.domain.manager.DataStoreManager.Values.TRUE
 import com.wavora.domain.model.entities.NewFormatEntity
 import com.wavora.domain.model.model.canvas.CanvasResult
@@ -64,6 +67,7 @@ class SharedViewModel(
     private val albumRepository: AlbumRepository,
     private val localPlaylistRepository: LocalPlaylistRepository,
     private val playlistRepository: PlaylistRepository,
+    private val cacheRepository: CacheRepository,
 ) : BaseViewModel() {
 
     // ── Sub-ViewModels injected via Koin ──────────────────────────────────
@@ -190,6 +194,43 @@ class SharedViewModel(
         checkAllDownloadingSongs()
         checkAllDownloadingPlaylists()
         checkAllDownloadingLocalPlaylists()
+    }
+
+    // ── Download state restore (called from MainActivity on Android) ──────
+    fun checkIsRestoring() {
+        viewModelScope.launch {
+            val downloadedCacheKeys = cacheRepository.getAllCacheKeys(DOWNLOAD_CACHE)
+            songRepository.getDownloadedSongs().first()?.forEach { song ->
+                if (!downloadedCacheKeys.contains(song.videoId)) {
+                    songRepository.updateDownloadState(song.videoId, DownloadState.STATE_NOT_DOWNLOADED)
+                }
+            }
+            playlistRepository.getAllDownloadedPlaylist().first().forEach { data ->
+                when (data) {
+                    is AlbumEntity -> {
+                        val tracks = data.tracks ?: emptyList()
+                        if (tracks.isEmpty() || !downloadedCacheKeys.containsAll(tracks)) {
+                            albumRepository.updateAlbumDownloadState(data.browseId, DownloadState.STATE_NOT_DOWNLOADED)
+                        }
+                    }
+                    is PlaylistEntity -> {
+                        val tracks = data.tracks ?: emptyList()
+                        if (tracks.isEmpty() || !downloadedCacheKeys.containsAll(tracks)) {
+                            playlistRepository.updatePlaylistDownloadState(data.id, DownloadState.STATE_NOT_DOWNLOADED)
+                        }
+                    }
+                    is LocalPlaylistEntity -> {
+                        val tracks = data.tracks ?: emptyList()
+                        if (tracks.isEmpty() || !downloadedCacheKeys.containsAll(tracks)) {
+                            localPlaylistRepository.updateLocalPlaylistDownloadState(
+                                DownloadState.STATE_NOT_DOWNLOADED,
+                                data.id,
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // ── Download reset (startup one-shot) ─────────────────────────────────

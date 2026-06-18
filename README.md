@@ -237,17 +237,24 @@ Requirements: JDK 17+, Android SDK (for the Android target), VLC (for desktop te
 git clone https://github.com/Wavora-dev/Wavora
 cd Wavora
 
+# VLC natives
+
+gradlew.bat :composeApp:vlcSetup 
+
 # Android APK
-./gradlew :composeApp:assembleRelease
+gradlew.bat :composeApp:assembleRelease
 
 # Windows installer
-./gradlew :desktopApp:packageMsi
+gradlew.bat :desktopApp:packageMsi
 
 # macOS DMG
-./gradlew :desktopApp:packageDmg
+gradlew.bat :desktopApp:packageDmg
 
 # Linux DEB
-./gradlew :desktopApp:packageDeb
+gradlew.bat :desktopApp:packageDeb
+
+
+
 ```
 
 ---

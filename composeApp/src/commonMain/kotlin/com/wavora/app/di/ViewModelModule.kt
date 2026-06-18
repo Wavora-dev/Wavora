@@ -57,6 +57,7 @@ val viewModelModule =
                 get(), // AlbumRepository
                 get(), // LocalPlaylistRepository
                 get(), // PlaylistRepository
+                get(), // CacheRepository
             )
         }
 
