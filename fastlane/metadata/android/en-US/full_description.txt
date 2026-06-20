@@ -1,0 +1,15 @@
+Wavora is a modern YouTube Music client for Android and Desktop.
+
+Stream music from YouTube Music and YouTube for free, without ads and in the background.
+
+Features:
+• High quality audio up to 256kbps
+• Synced lyrics with AI translation
+• Crossfade with DJ-style transitions
+• Spotify Canvas support
+• SponsorBlock and Return YouTube Dislike
+• Discord Rich Presence
+• Offline playback and caching
+• Android Auto support
+• Sleep Timer
+• And much more!
