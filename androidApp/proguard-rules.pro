@@ -63,16 +63,6 @@
 -keep class com.wavora.app.extension.AllExtKt$* { *; }
 -keep class com.wavora.scraper.extension.MapExtKt$* { *; }
 
-<<<<<<< HEAD
-## Removes all Logs as they cause perfomance issues in prod
-#-assumenosideeffects class android.util.Log {
-#    public static int w(...);
-#    public static int e(...);
-#    public static int i(...);
-#    public static int d(...);
-#    public static int v(...);
-#}
-=======
 ## Strip debug/verbose logs in release builds — these are the high-frequency, high-volume
 ## calls (network responses, lyrics sync, playback ticks) that cause real overhead.
 ## warn/error/info are kept on purpose: Sentry uses Logcat breadcrumbs to help diagnose
@@ -81,7 +71,6 @@
     public static int d(...);
     public static int v(...);
 }
->>>>>>> 56d2aea (fix)
 ## Rules for NewPipeExtractor
 -keep class org.schabi.newpipe.extractor.timeago.patterns.** { *; }
 -keep class dev.wavora.pipepipe.extractor.timeago.patterns.** { *; }

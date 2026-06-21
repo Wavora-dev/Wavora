@@ -43,17 +43,11 @@ class WavoraLyrics {
             expectSuccess = false
             followRedirects = true
             install(HttpCache)
-<<<<<<< HEAD
-            install(CurlLogger) {
-                logger = { Logger.d("WavoraLyrics", it) }
-            }
-=======
             // CurlLogger logs a full curl command (including body) for every request.
             // Disabled in production; uncomment for local debugging only.
             // install(CurlLogger) {
             //     logger = { Logger.d("WavoraLyrics", it) }
             // }
->>>>>>> 56d2aea (fix)
             install(HttpSend) {
                 maxSendCount = 100
             }

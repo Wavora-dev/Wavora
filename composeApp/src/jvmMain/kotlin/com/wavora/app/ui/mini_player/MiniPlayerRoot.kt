@@ -18,32 +18,20 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-<<<<<<< HEAD
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-=======
-import androidx.compose.runtime.remember
->>>>>>> 56d2aea (fix)
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
-<<<<<<< HEAD
-=======
 import androidx.compose.ui.platform.LocalDensity
->>>>>>> 56d2aea (fix)
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wavora.app.viewModel.SharedViewModel
 import java.awt.Cursor
-<<<<<<< HEAD
-import java.awt.MouseInfo
-=======
->>>>>>> 56d2aea (fix)
+
 
 /**
  * Root composable for the mini player window content.
@@ -71,14 +59,8 @@ fun MiniPlayerRoot(
         }
     }
 
-<<<<<<< HEAD
-    // Track mouse position for dragging
-    var dragStartMousePos by remember { mutableStateOf<Pair<Int, Int>?>(null) }
-    var dragStartWindowPos by remember { mutableStateOf<Pair<Float, Float>?>(null) }
-=======
     // Used to convert the drag gesture's pixel delta into Dp for windowState.position.
     val density = LocalDensity.current
->>>>>>> 56d2aea (fix)
 
     // Check if there's any track playing
     val hasTrack = nowPlayingData.nowPlayingTitle.isNotBlank()
@@ -166,36 +148,6 @@ fun MiniPlayerRoot(
                         .height(28.dp)
                         .pointerInput(Unit) {
                             detectDragGestures(
-<<<<<<< HEAD
-                                onDragStart = {
-                                    // Store initial mouse and window positions
-                                    val mousePos = MouseInfo.getPointerInfo().location
-                                    dragStartMousePos = Pair(mousePos.x, mousePos.y)
-                                    val currentPos = windowState.position
-                                    if (currentPos is androidx.compose.ui.window.WindowPosition.Absolute) {
-                                        dragStartWindowPos = Pair(currentPos.x.value, currentPos.y.value)
-                                    }
-                                },
-                                onDrag = { change, _ ->
-                                    change.consume()
-                                    val startMouse = dragStartMousePos
-                                    val startWindow = dragStartWindowPos
-                                    if (startMouse != null && startWindow != null) {
-                                        val currentMousePos = MouseInfo.getPointerInfo().location
-                                        val deltaX = currentMousePos.x - startMouse.first
-                                        val deltaY = currentMousePos.y - startMouse.second
-                                        windowState.position =
-                                            androidx.compose.ui.window.WindowPosition(
-                                                (startWindow.first + deltaX).dp,
-                                                (startWindow.second + deltaY).dp,
-                                            )
-                                    }
-                                },
-                                onDragEnd = {
-                                    dragStartMousePos = null
-                                    dragStartWindowPos = null
-                                },
-=======
                                 onDrag = { change, _ ->
                                     change.consume()
                                     // Use the gesture's own per-frame delta instead of querying
@@ -214,7 +166,6 @@ fun MiniPlayerRoot(
                                         }
                                     }
                                 },
->>>>>>> 56d2aea (fix)
                             )
                         }.pointerHoverIcon(PointerIcon(Cursor(Cursor.MOVE_CURSOR))),
             )

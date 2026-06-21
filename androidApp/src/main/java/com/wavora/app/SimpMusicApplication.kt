@@ -18,11 +18,8 @@ import coil3.request.crossfade
 import com.wavora.appdata.di.loader.loadAllModules
 import com.wavora.domain.manager.DataStoreManager
 import com.wavora.logger.Logger
-<<<<<<< HEAD
-=======
 import co.touchlab.kermit.Logger as KermitLogger
 import co.touchlab.kermit.Severity
->>>>>>> 56d2aea (fix)
 import com.wavora.app.di.viewModelModule
 import com.wavora.app.service.backup.AutoBackupScheduler
 import kotlinx.coroutines.CoroutineScope
@@ -30,13 +27,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import multiplatform.network.cmptoast.AppContext
-<<<<<<< HEAD
-import okhttp3.OkHttpClient
-=======
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
->>>>>>> 56d2aea (fix)
 import okio.FileSystem
 import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
@@ -59,8 +52,6 @@ class WavoraApplication :
 
     override fun onCreate() {
         super.onCreate()
-<<<<<<< HEAD
-=======
         // Kermit defaults to logging everything (Severity.Verbose) regardless of build type.
         // The ProGuard rule for android.util.Log only strips calls made directly through that
         // class — it has no effect on Kermit, which formats and dispatches every Logger.d()
@@ -68,7 +59,6 @@ class WavoraApplication :
         // unless told otherwise. Debug keeps full logs for development; release keeps only
         // warnings/errors so Sentry breadcrumbs still work.
         KermitLogger.setMinSeverity(if (BuildConfig.DEBUG) Severity.Verbose else Severity.Warn)
->>>>>>> 56d2aea (fix)
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
         configCrashlytics(this, BuildKonfig.sentryDsn)
         startKoin {
@@ -129,10 +119,6 @@ class WavoraApplication :
             .components {
                 add(
                     OkHttpNetworkFetcherFactory(
-<<<<<<< HEAD
-                        callFactory = {
-                            OkHttpClient()
-=======
                         // A single shared OkHttpClient with an explicit connection pool,
                         // instead of OkHttp's bare defaults. Coil caches this factory's
                         // result, so this client lives for the lifetime of the ImageLoader.
@@ -140,7 +126,6 @@ class WavoraApplication :
                             OkHttpClient.Builder()
                                 .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
                                 .build()
->>>>>>> 56d2aea (fix)
                         },
                     ),
                 )

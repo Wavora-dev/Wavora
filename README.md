@@ -75,11 +75,7 @@ No account is required for basic playback. Log in with your Google account to un
 - Synced lyrics and Spotify Canvas work without any manual browser configuration on desktop
 
 ### 🔴 YouTube Account
-<<<<<<< HEAD
-- Fixed desktop login flow: replaced the dead wavora.org blog-post redirect with a built-in step-by-step cookie guide including a one-click copy of the `document.cookie` command
-=======
 - Built-in step-by-step desktop login guide, including a one-click copy of the `document.cookie` command
->>>>>>> 56d2aea (fix)
 - Cookie validation confirms account info before saving
 - Multiple accounts supported
 
@@ -90,15 +86,12 @@ No account is required for basic playback. Log in with your Google account to un
 - **Rainbow crossfade animation** changed from `rememberInfiniteTransition` (always running) to a `LaunchedEffect` that only starts when a crossfade is actually in progress
 - Lyrics timeline key changed from the full `TimeLine` data class (new object every 100 ms → unnecessary recomposition) to `timelineState.current` (Long, only changes when position actually changes)
 - `updateLyrics()` made `suspend` — removes the `runBlocking` call that was blocking a coroutine dispatcher thread every time lyrics were updated
-<<<<<<< HEAD
-=======
 - **Network request logging disabled in production** — `CurlLogger` and `LogLevel.ALL` were active on all 5 HTTP clients (YouTube Music, Spotify, Discord, Kizzy, lyrics service), formatting full request/response bodies — including auth cookies and tokens — on every single API call, in release builds too
 - **Kermit log level gated by build type on Android** — logging defaulted to `Severity.Verbose` regardless of build type; release builds now use `Severity.Warn`, while debug builds keep full verbosity
 - **Shared OkHttpClient with an explicit connection pool for Coil** (Android + Desktop) — image loading previously created a bare default `OkHttpClient()`, separate from the rest of the app's networking
 - **Miniplayer drag (Desktop)** — dragging the floating window queried `MouseInfo.getPointerInfo()` (a JNI call to the OS) on every frame; now uses the drag gesture's own per-frame delta
 - **AI Suggest button shimmer/rotation** — two `rememberInfiniteTransition` animations ran continuously for the entire lifetime of the Local Playlist screen; now only animate while the button is actually visible
 - **Room indices added** for `liked`, `downloadState`, `totalPlayTime`, and `inLibrary` on `song`, `album`, and `playlist` tables — these back the Liked, Downloaded, and Most Played library filters, which previously did a full table scan on every query
->>>>>>> 56d2aea (fix)
 
 ### 🐛 Bug Fixes
 - **Android crash** (`Key "" was already used`) in `LazyColumn`/`LazyRow`: fixed across all affected screens — home carousel, mood items, playlist lists, artist videos, library analytics, now playing screen — by treating empty strings the same as null and always including a uniqueness-guaranteed fallback
@@ -106,10 +99,7 @@ No account is required for basic playback. Log in with your Google account to un
 - **Crossfade state flag** (`isCrossfading`) was being set on TCP connect instead of after Discord READY — caused the UI rainbow animation to show incorrectly
 - **`checkAllDownloadingSongs`** used `collect {}` (permanent observer) instead of `first()` — caused the startup cleanup to re-run every time any song's download state changed
 - **JVM buffered update** was hardcoded to emit 100% buffer level regardless of actual VLC buffer state — now reads `player.bufferedPercentage`
-<<<<<<< HEAD
-- **Update redirect** pointed to `wavora.org/download` (does not exist) — fixed to redirect to the GitHub Releases page
-=======
->>>>>>> 56d2aea (fix)
+
 
 ### 🎨 Visual & UI
 - **Liquid Glass effect** on Android 16+ (blur + refraction on navigation bar and player)
@@ -254,10 +244,6 @@ git clone https://github.com/Wavora-dev/Wavora
 cd Wavora
 
 # VLC natives
-<<<<<<< HEAD
-
-=======
->>>>>>> 56d2aea (fix)
 gradlew.bat :composeApp:vlcSetup 
 
 # Android APK
@@ -272,11 +258,6 @@ gradlew.bat :desktopApp:packageDmg
 # Linux DEB
 gradlew.bat :desktopApp:packageDeb
 
-<<<<<<< HEAD
-
-
-=======
->>>>>>> 56d2aea (fix)
 ```
 
 ---

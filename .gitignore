@@ -1,7 +1,4 @@
-<<<<<<< HEAD
-=======
 *hprof
->>>>>>> 56d2aea (fix)
 *.iml
 .gradle
 /local.properties

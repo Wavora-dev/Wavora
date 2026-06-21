@@ -1,19 +1,13 @@
 package com.wavora.domain.model.entities
 
 import androidx.room.Entity
-<<<<<<< HEAD
-=======
 import androidx.room.Index
->>>>>>> 56d2aea (fix)
 import androidx.room.PrimaryKey
 import com.wavora.domain.model.entities.DownloadState.STATE_NOT_DOWNLOADED
 import com.wavora.domain.model.type.RecentlyType
 import com.wavora.domain.extension.now
 import kotlinx.datetime.LocalDateTime
 
-<<<<<<< HEAD
-@Entity(tableName = "song")
-=======
 // Indices added for: "liked songs" filter, "downloaded songs" filter, and the
 // totalPlayTime/inLibrary sort orders used by Most Played / Library screens.
 // Without these, every one of those queries does a full table scan over `song`.
@@ -26,7 +20,6 @@ import kotlinx.datetime.LocalDateTime
         Index(value = ["inLibrary"]),
     ],
 )
->>>>>>> 56d2aea (fix)
 data class SongEntity(
     @PrimaryKey(autoGenerate = false) val videoId: String = "",
     val albumId: String? = null,

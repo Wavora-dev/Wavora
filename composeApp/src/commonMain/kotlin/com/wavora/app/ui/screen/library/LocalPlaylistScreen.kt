@@ -4,14 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutLinearInEasing
-<<<<<<< HEAD
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-=======
->>>>>>> 56d2aea (fix)
+
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -68,10 +61,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-<<<<<<< HEAD
-=======
 import androidx.compose.runtime.mutableFloatStateOf
->>>>>>> 56d2aea (fix)
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -163,10 +153,7 @@ import io.github.alexzhirkevich.compottie.rememberLottiePainter
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-<<<<<<< HEAD
-=======
 import kotlinx.coroutines.isActive
->>>>>>> 56d2aea (fix)
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -231,30 +218,6 @@ fun LocalPlaylistScreen(
 
     val aiPainter = painterResource(Res.drawable.baseline_tips_and_updates_24)
     val limit = 1.5f
-<<<<<<< HEAD
-    val transition = rememberInfiniteTransition(label = "shimmer")
-    val progressAnimated by transition.animateFloat(
-        initialValue = -limit,
-        targetValue = limit,
-        animationSpec =
-            infiniteRepeatable(
-                animation = tween(5000, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-        label = "shimmer",
-    )
-    val infiniteTransition = rememberInfiniteTransition(label = "rotation")
-    val angle by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec =
-            infiniteRepeatable(
-                animation = tween(5000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart,
-            ),
-        label = "rotation",
-    )
-=======
     // The shimmer/rotation values used to come from rememberInfiniteTransition declared
     // here unconditionally, which keeps both animations running for as long as this screen
     // is composed — even when the AI Suggest button (the only thing that uses them) isn't
@@ -262,7 +225,6 @@ fun LocalPlaylistScreen(
     // declared further below once that flag exists.
     var progressAnimated by remember { mutableFloatStateOf(-limit) }
     var angle by remember { mutableFloatStateOf(0f) }
->>>>>>> 56d2aea (fix)
 
     val lazyState = rememberLazyListState()
     val firstItemVisible by remember {
@@ -277,8 +239,6 @@ fun LocalPlaylistScreen(
     var shouldShowSuggestions by rememberSaveable { mutableStateOf(false) }
     var shouldShowSuggestButton by rememberSaveable { mutableStateOf(false) }
 
-<<<<<<< HEAD
-=======
     // Drives the shimmer (progressAnimated) and rotation (angle) used by the AI Suggest
     // button's icon. Only runs while the button is actually shown — previously this ran
     // continuously via rememberInfiniteTransition for the entire lifetime of the screen.
@@ -307,7 +267,6 @@ fun LocalPlaylistScreen(
         }
     }
 
->>>>>>> 56d2aea (fix)
     val playingTrack by sharedViewModel.nowPlayingState
         .mapLatest {
             it?.songEntity

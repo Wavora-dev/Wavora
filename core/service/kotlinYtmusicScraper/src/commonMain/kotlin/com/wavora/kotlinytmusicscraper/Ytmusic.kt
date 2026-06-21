@@ -155,11 +155,6 @@ class Ytmusic {
     private fun createClient() =
         HttpClient(getEngine()) {
             expectSuccess = true
-<<<<<<< HEAD
-            install(CurlLogger) {
-                logger = { Logger.d(TAG, it) }
-            }
-=======
             // CurlLogger and LogLevel.ALL build a full curl command + log every request/response
             // body on EVERY API call. Left enabled, this ran in production builds too, formatting
             // large strings (YouTube Music responses can be hundreds of KB) on every request.
@@ -167,18 +162,13 @@ class Ytmusic {
             // install(CurlLogger) {
             //     logger = { Logger.d(TAG, it) }
             // }
->>>>>>> 56d2aea (fix)
             install(HttpRedirect) {
                 checkHttpMethod = false
                 allowHttpsDowngrade = true
             }
             install(Logging) {
                 logger = io.ktor.client.plugins.logging.Logger.DEFAULT
-<<<<<<< HEAD
-                level = LogLevel.ALL
-=======
                 level = LogLevel.NONE
->>>>>>> 56d2aea (fix)
             }
             install(ContentNegotiation) {
                 protobuf()

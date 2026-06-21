@@ -45,13 +45,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import multiplatform.network.cmptoast.ToastHost
 import multiplatform.network.cmptoast.showToast
-<<<<<<< HEAD
-import okhttp3.OkHttpClient
-=======
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
->>>>>>> 56d2aea (fix)
 import okio.FileSystem
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
@@ -295,17 +291,12 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
                         .components {
                             add(
                                 OkHttpNetworkFetcherFactory(
-<<<<<<< HEAD
-                                    callFactory = {
-                                        OkHttpClient()
-=======
                                     // A single shared OkHttpClient with an explicit
                                     // connection pool instead of OkHttp's bare defaults.
                                     callFactory = {
                                         OkHttpClient.Builder()
                                             .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
                                             .build()
->>>>>>> 56d2aea (fix)
                                     },
                                 ),
                             )

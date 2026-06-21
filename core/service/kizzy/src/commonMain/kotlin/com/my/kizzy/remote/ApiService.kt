@@ -39,17 +39,11 @@ class ApiService {
                 encodeDefaults = true
             })
         }
-<<<<<<< HEAD
-        install(CurlLogger) {
-            logger = { Logger.d("KizzyApi", it) }
-        }
-=======
         // CurlLogger logs a full curl command (including Discord auth headers) for every
         // request. Disabled in production; uncomment for local debugging only.
         // install(CurlLogger) {
         //     logger = { Logger.d("KizzyApi", it) }
         // }
->>>>>>> 56d2aea (fix)
         install(HttpTimeout) {
             connectTimeoutMillis = 30_000
             requestTimeoutMillis = 30_000

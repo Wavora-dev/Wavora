@@ -58,13 +58,6 @@ class SpotifyClient {
             install(HttpCache)
             install(Logging) {
                 logger = Logger.DEFAULT
-<<<<<<< HEAD
-                level = LogLevel.ALL
-            }
-            install(CurlLogger) {
-                logger = { Logger.DEFAULT.log(it) }
-            }
-=======
                 level = LogLevel.NONE
             }
             // CurlLogger would log the sp_dc cookie and full response bodies on every
@@ -72,7 +65,6 @@ class SpotifyClient {
             // install(CurlLogger) {
             //     logger = { Logger.DEFAULT.log(it) }
             // }
->>>>>>> 56d2aea (fix)
             install(HttpSend) {
                 maxSendCount = 100
             }

@@ -35,11 +35,7 @@ import com.wavora.domain.model.entities.analytics.PlaybackEventEntity
         NotificationEntity::class, TranslatedLyricsEntity::class, PodcastsEntity::class, EpisodeEntity::class,
         YourYouTubePlaylistList::class, PlaybackEventEntity::class, EventArtistEntity::class
     ],
-<<<<<<< HEAD
-    version = 22,
-=======
     version = 23,
->>>>>>> 56d2aea (fix)
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 2, to = 3), AutoMigration(
@@ -74,14 +70,11 @@ import com.wavora.domain.model.entities.analytics.PlaybackEventEntity
         AutoMigration(21, 22),
         AutoMigration(20, 22),
         AutoMigration(19, 22),
-<<<<<<< HEAD
-=======
         // New: adds Index on song(liked, downloadState, totalPlayTime, inLibrary),
         // album(liked, downloadState) and playlist(liked, downloadState). Pure index
         // additions are schema-additive — Room's AutoMigration handles them with no
         // manual Migration class needed.
         AutoMigration(22, 23),
->>>>>>> 56d2aea (fix)
     ],
 )
 @TypeConverters(Converters::class)
