@@ -47,14 +47,18 @@ fun AppTheme(
         @Composable()
         () -> Unit,
 ) {
+    // Compute Typography once here; distribute via CompositionLocal so all
+    // child composables can read it without re-creating FontFamily each call.
+    val typography = typo()
     MaterialExpressiveTheme(
         colorScheme = DarkColors,
         content = {
             CompositionLocalProvider(
-                LocalContentColor provides DarkColors.onSurface, // White #FFFFFF for primary text
+                LocalContentColor provides DarkColors.onSurface,
+                LocalAppTypography provides typography,
                 content,
             )
         },
-        typography = typo(),
+        typography = typography,
     )
 }

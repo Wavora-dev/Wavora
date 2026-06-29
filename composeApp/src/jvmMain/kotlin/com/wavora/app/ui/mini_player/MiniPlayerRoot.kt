@@ -31,6 +31,10 @@ import androidx.compose.ui.window.WindowState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wavora.app.viewModel.SharedViewModel
 import java.awt.Cursor
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.background
 
 
 /**
@@ -139,21 +143,17 @@ fun MiniPlayerRoot(
                 )
             }
 
-            // Drag handle (top center area for moving window - narrower to avoid resize corners)
+            // Drag handle (top center area — 75% width avoids the resize corners)
             Box(
                 modifier =
                     Modifier
                         .align(Alignment.TopCenter)
-                        .fillMaxWidth(0.5f)
+                        .fillMaxWidth(0.75f)
                         .height(28.dp)
                         .pointerInput(Unit) {
                             detectDragGestures(
                                 onDrag = { change, _ ->
                                     change.consume()
-                                    // Use the gesture's own per-frame delta instead of querying
-                                    // MouseInfo.getPointerInfo() — that's a JNI call to the OS
-                                    // on every single drag frame, which was the main source of
-                                    // the CPU spike while dragging this window around.
                                     val deltaPx = change.position - change.previousPosition
                                     val currentPos = windowState.position
                                     if (currentPos is androidx.compose.ui.window.WindowPosition.Absolute) {
@@ -168,7 +168,23 @@ fun MiniPlayerRoot(
                                 },
                             )
                         }.pointerHoverIcon(PointerIcon(Cursor(Cursor.MOVE_CURSOR))),
-            )
+                contentAlignment = Alignment.Center,
+            ) {
+                // Visual drag indicator — three dots so the user knows this area is draggable
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    repeat(3) {
+                        Box(
+                            modifier = Modifier
+                                .size(4.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.3f))
+                        )
+                    }
+                }
+            }
         }
     }
 }

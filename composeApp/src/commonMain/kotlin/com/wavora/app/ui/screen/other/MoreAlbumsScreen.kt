@@ -48,6 +48,7 @@ import dev.chrisbanes.haze.rememberHazeState
 import org.koin.compose.viewmodel.koinViewModel
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.baseline_arrow_back_ios_new_24
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -129,7 +130,7 @@ fun MoreAlbumsScreen(
                     title = {
                         Text(
                             text = state.title,
-                            style = typo().titleMedium,
+                            style = LocalAppTypography.current.titleMedium,
                             maxLines = 1,
                             modifier =
                                 Modifier

@@ -2,6 +2,8 @@ package com.wavora.app.ui.component
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -219,4 +221,139 @@ fun ShimmerSearchItem() {
 @Composable
 fun ShimmerSearchItemPreview() {
     ShimmerSearchItem()
+}
+
+
+@Composable
+fun ArtistScreenShimmer() {
+    Column(Modifier.fillMaxSize()) {
+        // Header / hero image shimmer
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(280.dp)
+                .background(shimmerBackground)
+                .shimmer(),
+        )
+        Spacer(Modifier.height(16.dp))
+        Column(Modifier.padding(horizontal = 16.dp)) {
+            // Artist name
+            Box(
+                Modifier
+                    .width(180.dp)
+                    .height(28.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(shimmerBackground)
+                    .shimmer(),
+            )
+            Spacer(Modifier.height(8.dp))
+            // Subscriber count
+            Box(
+                Modifier
+                    .width(100.dp)
+                    .height(16.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(shimmerBackground)
+                    .shimmer(),
+            )
+            Spacer(Modifier.height(24.dp))
+            // Song list
+            repeat(5) {
+                QuickPicksShimmerItem()
+            }
+        }
+    }
+}
+
+@Composable
+fun AlbumScreenShimmer() {
+    Column(Modifier.fillMaxSize()) {
+        // Album art hero
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(260.dp)
+                .background(shimmerBackground)
+                .shimmer(),
+        )
+        Spacer(Modifier.height(16.dp))
+        Column(Modifier.padding(horizontal = 16.dp)) {
+            Box(
+                Modifier
+                    .width(200.dp)
+                    .height(24.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(shimmerBackground)
+                    .shimmer(),
+            )
+            Spacer(Modifier.height(8.dp))
+            Box(
+                Modifier
+                    .width(130.dp)
+                    .height(16.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(shimmerBackground)
+                    .shimmer(),
+            )
+            Spacer(Modifier.height(24.dp))
+            repeat(6) {
+                QuickPicksShimmerItem()
+            }
+        }
+    }
+}
+
+@Composable
+fun LibraryGridShimmer() {
+    Column(Modifier.padding(horizontal = 16.dp)) {
+        Spacer(Modifier.height(12.dp))
+        // Section header shimmer
+        Box(
+            Modifier
+                .width(140.dp)
+                .height(22.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(shimmerBackground)
+                .shimmer(),
+        )
+        Spacer(Modifier.height(12.dp))
+        // 2-column grid
+        repeat(3) {
+            Row {
+                repeat(2) {
+                    Box(Modifier.weight(1f).padding(4.dp)) {
+                        Column {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(140.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(shimmerBackground)
+                                    .shimmer(),
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Box(
+                                Modifier
+                                    .fillMaxWidth(0.75f)
+                                    .height(14.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(shimmerBackground)
+                                    .shimmer(),
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Box(
+                                Modifier
+                                    .fillMaxWidth(0.5f)
+                                    .height(12.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(shimmerBackground)
+                                    .shimmer(),
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+    }
 }

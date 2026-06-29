@@ -96,7 +96,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedbackFilter
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.pointer.pointerInput
@@ -155,7 +159,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import multiplatform.network.cmptoast.ToastGravity
 import multiplatform.network.cmptoast.showToast
 import org.jetbrains.compose.resources.StringResource
@@ -277,6 +280,7 @@ import wavora.composeapp.generated.resources.your_youtube_cookie
 import wavora.composeapp.generated.resources.your_youtube_playlists
 import wavora.composeapp.generated.resources.youtube_transcript
 import wavora.composeapp.generated.resources.youtube_url
+import com.wavora.app.ui.theme.LocalAppTypography
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sentinel value used by SleepTimerBottomSheet to signal "end of current song"
@@ -326,7 +330,7 @@ fun InfoPlayerBottomSheet(
                     ) {
                         Text(
                             stringResource(Res.string.downloading),
-                            style = typo().headlineMedium,
+                            style = LocalAppTypography.current.headlineMedium,
                         )
                         Row(Modifier.padding(top = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (!downloadProgress.isDone && !downloadProgress.isError) {
@@ -338,20 +342,20 @@ fun InfoPlayerBottomSheet(
                                     Text(
                                         text = stringResource(Res.string.merging_audio_and_video),
                                         modifier = Modifier.padding(vertical = 5.dp),
-                                        style = typo().bodyMedium,
+                                        style = LocalAppTypography.current.bodyMedium,
                                     )
                                 } else if (it.isError) {
                                     Column {
                                         Text(
                                             text = stringResource(Res.string.error_occurred),
                                             modifier = Modifier.padding(vertical = 5.dp),
-                                            style = typo().bodyMedium,
+                                            style = LocalAppTypography.current.bodyMedium,
                                         )
                                         Text(
                                             text = downloadProgress.errorMessage,
                                             modifier = Modifier.padding(bottom = 5.dp),
                                             maxLines = 2,
-                                            style = typo().bodyMedium,
+                                            style = LocalAppTypography.current.bodyMedium,
                                         )
                                     }
                                 } else if (it.isDone) {
@@ -361,7 +365,7 @@ fun InfoPlayerBottomSheet(
                                                 stringResource(Res.string.to_download_folder)
                                                     .replace("\"", ""),
                                         modifier = Modifier.padding(vertical = 5.dp),
-                                        style = typo().bodyMedium,
+                                        style = LocalAppTypography.current.bodyMedium,
                                     )
                                 } else {
                                     Column {
@@ -373,7 +377,7 @@ fun InfoPlayerBottomSheet(
                                                         (downloadProgress.audioDownloadProgress * 100).toString() + "%",
                                                     ),
                                                 modifier = Modifier.padding(vertical = 5.dp),
-                                                style = typo().bodyMedium,
+                                                style = LocalAppTypography.current.bodyMedium,
                                             )
                                         }
                                         if (it.videoDownloadProgress != 0f) {
@@ -384,7 +388,7 @@ fun InfoPlayerBottomSheet(
                                                         (downloadProgress.videoDownloadProgress * 100).toString() + "%",
                                                     ),
                                                 modifier = Modifier.padding(vertical = 5.dp),
-                                                style = typo().bodyMedium,
+                                                style = LocalAppTypography.current.bodyMedium,
                                             )
                                         }
                                         if (downloadProgress.downloadSpeed != 0) {
@@ -395,7 +399,7 @@ fun InfoPlayerBottomSheet(
                                                         downloadProgress.downloadSpeed.toString() + " kb/s",
                                                     ),
                                                 modifier = Modifier.padding(vertical = 5.dp),
-                                                style = typo().bodyMedium,
+                                                style = LocalAppTypography.current.bodyMedium,
                                             )
                                         }
                                     }
@@ -472,12 +476,12 @@ fun InfoPlayerBottomSheet(
                         ) {
                             Text(
                                 text = stringResource(Res.string.now_playing_upper),
-                                style = typo().bodyMedium,
+                                style = LocalAppTypography.current.bodyMedium,
                                 color = Color.White,
                             )
                             Text(
                                 text = screenDataState.nowPlayingTitle,
-                                style = typo().labelMedium,
+                                style = LocalAppTypography.current.labelMedium,
                                 color = Color.White,
                                 textAlign = TextAlign.Center,
                                 maxLines = 1,
@@ -521,7 +525,7 @@ fun InfoPlayerBottomSheet(
                             .fillMaxWidth()
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                 )
                 Text(
@@ -536,7 +540,7 @@ fun InfoPlayerBottomSheet(
                                 animationMode = MarqueeAnimationMode.Immediately,
                             ).focusable()
                             .padding(horizontal = 10.dp),
-                    style = typo().bodyMedium,
+                    style = LocalAppTypography.current.bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
                 )
@@ -547,7 +551,7 @@ fun InfoPlayerBottomSheet(
                             .fillMaxWidth()
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                 )
                 Text(
@@ -561,7 +565,7 @@ fun InfoPlayerBottomSheet(
                                 animationMode = MarqueeAnimationMode.Immediately,
                             ).focusable()
                             .padding(horizontal = 10.dp),
-                    style = typo().bodyMedium,
+                    style = LocalAppTypography.current.bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
                 )
@@ -572,7 +576,7 @@ fun InfoPlayerBottomSheet(
                             .fillMaxWidth()
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                 )
                 Text(
@@ -586,7 +590,7 @@ fun InfoPlayerBottomSheet(
                                 animationMode = MarqueeAnimationMode.Immediately,
                             ).focusable()
                             .padding(horizontal = 10.dp),
-                    style = typo().bodyMedium,
+                    style = LocalAppTypography.current.bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
                 )
@@ -597,7 +601,7 @@ fun InfoPlayerBottomSheet(
                             .fillMaxWidth()
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                 )
                 Text(
@@ -611,7 +615,7 @@ fun InfoPlayerBottomSheet(
                                 animationMode = MarqueeAnimationMode.Immediately,
                             ).focusable()
                             .padding(horizontal = 10.dp),
-                    style = typo().bodyMedium,
+                    style = LocalAppTypography.current.bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
                 )
@@ -622,7 +626,7 @@ fun InfoPlayerBottomSheet(
                             .fillMaxWidth()
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                 )
                 Text(
@@ -636,7 +640,7 @@ fun InfoPlayerBottomSheet(
                                 animationMode = MarqueeAnimationMode.Immediately,
                             ).focusable()
                             .padding(horizontal = 10.dp),
-                    style = typo().bodyMedium,
+                    style = LocalAppTypography.current.bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
                 )
@@ -647,7 +651,7 @@ fun InfoPlayerBottomSheet(
                             .fillMaxWidth()
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                 )
                 Text(
@@ -661,7 +665,7 @@ fun InfoPlayerBottomSheet(
                                 animationMode = MarqueeAnimationMode.Immediately,
                             ).focusable()
                             .padding(horizontal = 10.dp),
-                    style = typo().bodyMedium,
+                    style = LocalAppTypography.current.bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
                 )
@@ -672,7 +676,7 @@ fun InfoPlayerBottomSheet(
                             .fillMaxWidth()
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                 )
                 Text(
@@ -686,7 +690,7 @@ fun InfoPlayerBottomSheet(
                                 animationMode = MarqueeAnimationMode.Immediately,
                             ).focusable()
                             .padding(horizontal = 10.dp),
-                    style = typo().bodyMedium,
+                    style = LocalAppTypography.current.bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
                 )
@@ -697,7 +701,7 @@ fun InfoPlayerBottomSheet(
                             .fillMaxWidth()
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                 )
                 Text(
@@ -711,7 +715,7 @@ fun InfoPlayerBottomSheet(
                                 animationMode = MarqueeAnimationMode.Immediately,
                             ).focusable()
                             .padding(horizontal = 10.dp),
-                    style = typo().bodyMedium,
+                    style = LocalAppTypography.current.bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
                 )
@@ -722,7 +726,7 @@ fun InfoPlayerBottomSheet(
                             .fillMaxWidth()
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                 )
                 Text(
@@ -736,7 +740,7 @@ fun InfoPlayerBottomSheet(
                                 animationMode = MarqueeAnimationMode.Immediately,
                             ).focusable()
                             .padding(horizontal = 10.dp),
-                    style = typo().bodyMedium,
+                    style = LocalAppTypography.current.bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
                 )
@@ -747,7 +751,7 @@ fun InfoPlayerBottomSheet(
                             .fillMaxWidth()
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                 )
                 Text(
@@ -761,7 +765,7 @@ fun InfoPlayerBottomSheet(
                                 animationMode = MarqueeAnimationMode.Immediately,
                             ).focusable()
                             .padding(horizontal = 10.dp),
-                    style = typo().bodyMedium,
+                    style = LocalAppTypography.current.bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
                 )
@@ -773,7 +777,7 @@ fun InfoPlayerBottomSheet(
                             .fillMaxWidth()
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                 )
                 Text(
@@ -787,7 +791,7 @@ fun InfoPlayerBottomSheet(
                                 animationMode = MarqueeAnimationMode.Immediately,
                             ).focusable()
                             .padding(horizontal = 10.dp),
-                    style = typo().bodyMedium,
+                    style = LocalAppTypography.current.bodyMedium,
                     maxLines = 1,
                     textAlign = TextAlign.Center,
                 )
@@ -798,7 +802,7 @@ fun InfoPlayerBottomSheet(
                             .fillMaxWidth()
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                 )
                 Text(
@@ -817,7 +821,7 @@ fun InfoPlayerBottomSheet(
                                 animationMode = MarqueeAnimationMode.Immediately,
                             ).focusable()
                             .padding(horizontal = 10.dp),
-                    style = typo().bodyMedium,
+                    style = LocalAppTypography.current.bodyMedium,
                     textAlign = TextAlign.Center,
                 )
                 Text(
@@ -827,7 +831,7 @@ fun InfoPlayerBottomSheet(
                             .fillMaxWidth()
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                 )
                 Text(
@@ -837,7 +841,7 @@ fun InfoPlayerBottomSheet(
                             .fillMaxWidth()
                             .wrapContentHeight(align = Alignment.CenterVertically)
                             .padding(horizontal = 10.dp),
-                    style = typo().bodyMedium,
+                    style = LocalAppTypography.current.bodyMedium,
                     textAlign = TextAlign.Center,
                 )
                 Text(
@@ -847,7 +851,7 @@ fun InfoPlayerBottomSheet(
                             .fillMaxWidth()
                             .padding(vertical = 10.dp),
                     textAlign = TextAlign.Center,
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                 )
                 Text(
@@ -855,11 +859,11 @@ fun InfoPlayerBottomSheet(
                         buildAnnotatedString {
                             withLink(
                                 LinkAnnotation.Url(
-                                    "https://wavora.org/app/watch?v=${songEntity?.videoId}",
+                                    "https://music.youtube.com/watch?v=${songEntity?.videoId}",
                                     TextLinkStyles(style = SpanStyle(textDecoration = TextDecoration.Underline)),
                                 ),
                             ) {
-                                append("https://wavora.org/app/watch?v=${songEntity?.videoId}")
+                                append("https://music.youtube.com/watch?v=${songEntity?.videoId}")
                             }
                         },
                     modifier =
@@ -870,7 +874,7 @@ fun InfoPlayerBottomSheet(
                                 iterations = Int.MAX_VALUE,
                                 animationMode = MarqueeAnimationMode.Immediately,
                             ).focusable(),
-                    style = typo().bodyMedium,
+                    style = LocalAppTypography.current.bodyMedium,
                     textAlign = TextAlign.Center,
                 )
                 OutlinedButton(
@@ -1027,12 +1031,12 @@ fun QueueBottomSheet(
                         ) {
                             Text(
                                 text = stringResource(Res.string.now_playing_upper),
-                                style = typo().bodyMedium,
+                                style = LocalAppTypography.current.bodyMedium,
                                 color = Color.White,
                             )
                             Text(
                                 text = screenDataState.playlistName,
-                                style = typo().labelMedium,
+                                style = LocalAppTypography.current.labelMedium,
                                 color = Color.White,
                                 textAlign = TextAlign.Center,
                                 maxLines = 1,
@@ -1071,7 +1075,7 @@ fun QueueBottomSheet(
                 Spacer(modifier = Modifier.height(20.dp))
                 Text(
                     text = stringResource(Res.string.now_playing),
-                    style = typo().titleMedium,
+                    style = LocalAppTypography.current.titleMedium,
                     modifier = Modifier.padding(horizontal = 20.dp),
                 )
                 SongFullWidthItems(
@@ -1086,7 +1090,7 @@ fun QueueBottomSheet(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = stringResource(Res.string.queue),
-                        style = typo().titleMedium,
+                        style = LocalAppTypography.current.titleMedium,
                         modifier =
                             Modifier
                                 .padding(horizontal = 20.dp)
@@ -1095,7 +1099,7 @@ fun QueueBottomSheet(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = stringResource(Res.string.endless_queue),
-                            style = typo().bodySmall,
+                            style = LocalAppTypography.current.bodySmall,
                             modifier = Modifier.padding(horizontal = 8.dp),
                         )
                         Switch(
@@ -1371,7 +1375,7 @@ fun QueueItemBottomSheet(
                                                 QueueItemAction.DELETE -> Res.string.delete
                                             },
                                         ),
-                                    style = typo().labelSmall,
+                                    style = LocalAppTypography.current.labelSmall,
                                 )
                             }
                         }
@@ -1395,6 +1399,7 @@ fun NowPlayingBottomSheet(
     setSleepTimerEnable: Boolean = false,
     changeMainLyricsProviderEnable: Boolean = false,
     onNavigateToOtherScreen: () -> Unit = {},
+    val radioString = stringResource(Res.string.radio)
     onDelete: (() -> Unit)? = null,
     onLibraryDelete: (() -> Unit)? = null,
     dataStoreManager: DataStoreManager = koinInject<DataStoreManager>(),
@@ -1500,19 +1505,19 @@ fun NowPlayingBottomSheet(
                         ),
                     )
                 }) {
-                    Text(text = stringResource(Res.string.yes), style = typo().labelSmall)
+                    Text(text = stringResource(Res.string.yes), style = LocalAppTypography.current.labelSmall)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { sleepTimerWarning = false }) {
-                    Text(text = stringResource(Res.string.cancel), style = typo().labelSmall)
+                    Text(text = stringResource(Res.string.cancel), style = LocalAppTypography.current.labelSmall)
                 }
             },
             title = {
-                Text(text = stringResource(Res.string.warning), style = typo().labelSmall)
+                Text(text = stringResource(Res.string.warning), style = LocalAppTypography.current.labelSmall)
             },
             text = {
-                Text(text = stringResource(Res.string.sleep_timer_warning), style = typo().bodyMedium)
+                Text(text = stringResource(Res.string.sleep_timer_warning), style = LocalAppTypography.current.bodyMedium)
             },
         )
     }
@@ -1536,7 +1541,7 @@ fun NowPlayingBottomSheet(
             title = {
                 Text(
                     text = stringResource(Res.string.main_lyrics_provider),
-                    style = typo().titleMedium,
+                    style = LocalAppTypography.current.titleMedium,
                 )
             },
             text = {
@@ -1551,7 +1556,7 @@ fun NowPlayingBottomSheet(
                     ) {
                         RadioButton(selected = selected == 0, onClick = { selected = 0 })
                         Spacer(modifier = Modifier.size(10.dp))
-                        Text(text = stringResource(Res.string.wavora_lyrics), style = typo().labelSmall)
+                        Text(text = stringResource(Res.string.wavora_lyrics), style = LocalAppTypography.current.labelSmall)
                     }
                     Row(
                         modifier =
@@ -1563,7 +1568,7 @@ fun NowPlayingBottomSheet(
                     ) {
                         RadioButton(selected = selected == 1, onClick = { selected = 1 })
                         Spacer(modifier = Modifier.size(10.dp))
-                        Text(text = stringResource(Res.string.lrclib), style = typo().labelSmall)
+                        Text(text = stringResource(Res.string.lrclib), style = LocalAppTypography.current.labelSmall)
                     }
                     Row(
                         modifier =
@@ -1575,7 +1580,7 @@ fun NowPlayingBottomSheet(
                     ) {
                         RadioButton(selected = selected == 2, onClick = { selected = 2 })
                         Spacer(modifier = Modifier.size(10.dp))
-                        Text(text = stringResource(Res.string.youtube_transcript), style = typo().labelSmall)
+                        Text(text = stringResource(Res.string.youtube_transcript), style = LocalAppTypography.current.labelSmall)
                     }
                     Row(
                         modifier =
@@ -1587,7 +1592,7 @@ fun NowPlayingBottomSheet(
                     ) {
                         RadioButton(selected = selected == 3, onClick = { selected = 3 })
                         Spacer(modifier = Modifier.size(10.dp))
-                        Text(text = stringResource(Res.string.better_lyrics), style = typo().labelSmall)
+                        Text(text = stringResource(Res.string.better_lyrics), style = LocalAppTypography.current.labelSmall)
                     }
                 }
             },
@@ -1608,12 +1613,12 @@ fun NowPlayingBottomSheet(
                         mainLyricsProvider = false
                     },
                 ) {
-                    Text(text = stringResource(Res.string.yes), style = typo().labelSmall)
+                    Text(text = stringResource(Res.string.yes), style = LocalAppTypography.current.labelSmall)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { mainLyricsProvider = false }) {
-                    Text(text = stringResource(Res.string.cancel), style = typo().labelSmall)
+                    Text(text = stringResource(Res.string.cancel), style = LocalAppTypography.current.labelSmall)
                 }
             },
         )
@@ -1686,7 +1691,7 @@ fun NowPlayingBottomSheet(
                         Column(verticalArrangement = Arrangement.Center) {
                             Text(
                                 text = uiState.songUIState.title,
-                                style = typo().labelMedium,
+                                style = LocalAppTypography.current.labelMedium,
                                 maxLines = 1,
                                 modifier =
                                     Modifier
@@ -1699,7 +1704,7 @@ fun NowPlayingBottomSheet(
                                     uiState.songUIState.listArtists
                                         .toListName()
                                         .connectArtists(),
-                                style = typo().bodyMedium,
+                                style = LocalAppTypography.current.bodyMedium,
                                 maxLines = 1,
                                 modifier =
                                     Modifier
@@ -1807,7 +1812,7 @@ fun NowPlayingBottomSheet(
                         viewModel.onUIEvent(
                             NowPlayingBottomSheetUIEvent.StartRadio(
                                 videoId = uiState.songUIState.videoId,
-                                name = "\"${uiState.songUIState.title}\" ${runBlocking { getString(Res.string.radio) }}",
+                                name = "\"${uiState.songUIState.title}\" ${radioString}",
                             ),
                         )
                         hideModalBottomSheet()
@@ -1924,7 +1929,7 @@ fun ActionButton(
             )
             Text(
                 text = if (text != null) stringResource(text) else textString ?: "",
-                style = typo().labelSmall,
+                style = LocalAppTypography.current.labelSmall,
                 color = if (enable) textColor ?: Color.Unspecified else Color.Gray,
                 modifier =
                     Modifier
@@ -1942,11 +1947,13 @@ fun CheckBoxActionButton(
     onChangeListener: (checked: Boolean) -> Unit,
 ) {
     var stateChecked by remember { mutableStateOf(defaultChecked) }
+    val haptic = LocalHapticFeedback.current
     Box(
         modifier =
             Modifier
                 .wrapContentSize(align = Alignment.Center)
                 .clickable {
+                    if (isHeartIcon) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     stateChecked = !stateChecked
                     onChangeListener(stateChecked)
                 },
@@ -1978,7 +1985,7 @@ fun CheckBoxActionButton(
                     } else {
                         stringResource(Res.string.like)
                     },
-                style = typo().labelSmall,
+                style = LocalAppTypography.current.labelSmall,
                 modifier =
                     Modifier
                         .padding(start = 10.dp)
@@ -2085,7 +2092,7 @@ fun PlaybackSpeedPitchBottomSheet(
                     }
                     Text(
                         text = "x${String.format("%.1f", playbackSpeed)}",
-                        style = typo().titleMedium,
+                        style = LocalAppTypography.current.titleMedium,
                         color = Color(0xFFD0D0C0),
                         modifier = Modifier.widthIn(min = 60.dp),
                         textAlign = TextAlign.Center,
@@ -2134,7 +2141,7 @@ fun PlaybackSpeedPitchBottomSheet(
                         }
                         Text(
                             text = "$pitch",
-                            style = typo().titleMedium,
+                            style = LocalAppTypography.current.titleMedium,
                             color = Color(0xFFD0D0C0),
                             modifier = Modifier.widthIn(min = 60.dp),
                             textAlign = TextAlign.Center,
@@ -2170,6 +2177,7 @@ fun SleepTimerBottomSheet(
     onDismiss: () -> Unit,
     onSetTimer: (minutes: Int) -> Unit,
 ) {
+    val sleepTimerError = stringResource(Res.string.sleep_timer_set_error)
     val coroutineScope = rememberCoroutineScope()
     val modelBottomSheetState =
         rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -2246,7 +2254,7 @@ fun SleepTimerBottomSheet(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = stringResource(Res.string.sleep_timer_off),
-                        style = typo().titleMedium,
+                        style = LocalAppTypography.current.titleMedium,
                         color = Color.White,
                     )
                 }
@@ -2283,7 +2291,7 @@ fun SleepTimerBottomSheet(
                             ) {
                                 Text(
                                     text = preset.label,
-                                    style = typo().bodySmall,
+                                    style = LocalAppTypography.current.bodySmall,
                                     color = if (isSelected) seed else Color(0xFFCCCCCC),
                                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                                 )
@@ -2321,7 +2329,7 @@ fun SleepTimerBottomSheet(
                     ) {
                         Text(
                             text = "End of song",
-                            style = typo().bodySmall,
+                            style = LocalAppTypography.current.bodySmall,
                             color = if (isEndSelected) seed else Color(0xFFCCCCCC),
                             fontWeight = if (isEndSelected) FontWeight.SemiBold else FontWeight.Normal,
                         )
@@ -2349,7 +2357,7 @@ fun SleepTimerBottomSheet(
                     ) {
                         Text(
                             text = "Custom",
-                            style = typo().bodySmall,
+                            style = LocalAppTypography.current.bodySmall,
                             color = if (isCustomSelected) seed else Color(0xFFCCCCCC),
                             fontWeight = if (isCustomSelected) FontWeight.SemiBold else FontWeight.Normal,
                         )
@@ -2370,13 +2378,13 @@ fun SleepTimerBottomSheet(
                             label = {
                                 Text(
                                     text = stringResource(Res.string.sleep_minutes),
-                                    style = typo().bodySmall,
+                                    style = LocalAppTypography.current.bodySmall,
                                 )
                             },
                             suffix = {
                                 Text(
                                     text = "min",
-                                    style = typo().bodySmall,
+                                    style = LocalAppTypography.current.bodySmall,
                                     color = Color.Gray,
                                 )
                             },
@@ -2411,7 +2419,7 @@ fun SleepTimerBottomSheet(
                                     }
                                 } else {
                                     showToast(
-                                        runBlocking { getString(Res.string.sleep_timer_set_error) },
+                                        sleepTimerError,
                                         ToastGravity.Bottom,
                                     )
                                 }
@@ -2425,7 +2433,7 @@ fun SleepTimerBottomSheet(
                             }
                             else -> {
                                 showToast(
-                                    runBlocking { getString(Res.string.sleep_timer_set_error) },
+                                    sleepTimerError,
                                     ToastGravity.Bottom,
                                 )
                             }
@@ -2442,7 +2450,7 @@ fun SleepTimerBottomSheet(
                 ) {
                     Text(
                         text = stringResource(Res.string.set),
-                        style = typo().labelSmall,
+                        style = LocalAppTypography.current.labelSmall,
                         color = Color.White,
                         modifier = Modifier.padding(vertical = 4.dp),
                     )
@@ -2539,7 +2547,7 @@ fun AddToPlaylistModalBottomSheet(
                     ) {
                         Text(
                             text = stringResource(Res.string.no_playlist_found),
-                            style = typo().labelSmall,
+                            style = LocalAppTypography.current.labelSmall,
                             modifier = Modifier.padding(20.dp),
                             color = Color.Gray,
                         )
@@ -2547,7 +2555,7 @@ fun AddToPlaylistModalBottomSheet(
                         Crossfade(isYouTubePlaylistClicked) { clicked ->
                             if (clicked) {
                                 LazyColumn {
-                                    items(listYouTubePlaylist, key = { it.browseId }) { playlist ->
+                                    items(listYouTubePlaylist, key = { "${it.browseId}_${it.hashCode()}" }) { playlist ->
                                         Box(
                                             modifier =
                                                 Modifier
@@ -2569,7 +2577,7 @@ fun AddToPlaylistModalBottomSheet(
                                                 Spacer(modifier = Modifier.width(10.dp))
                                                 Text(
                                                     text = playlist.title,
-                                                    style = typo().labelSmall,
+                                                    style = LocalAppTypography.current.labelSmall,
                                                     color = Color.White,
                                                 )
                                             }
@@ -2609,7 +2617,7 @@ fun AddToPlaylistModalBottomSheet(
                                                 Spacer(modifier = Modifier.width(10.dp))
                                                 Text(
                                                     text = playlist.title,
-                                                    style = typo().labelSmall,
+                                                    style = LocalAppTypography.current.labelSmall,
                                                     color = if (playlist.tracks?.contains(videoId) == true) Color.Gray else Color.White,
                                                 )
                                             }
@@ -2691,7 +2699,7 @@ fun ArtistModalBottomSheet(
                                         contentDescription = "",
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
-                                    Text(text = artist.name, style = typo().labelSmall)
+                                    Text(text = artist.name, style = LocalAppTypography.current.labelSmall)
                                 }
                             }
                         }
@@ -2850,7 +2858,7 @@ fun PlaylistBottomSheet(
                 }
                 val shareTitle = stringResource(Res.string.share)
                 ActionButton(icon = painterResource(Res.drawable.baseline_share_24), text = Res.string.share) {
-                    val url = "https://wavora.org/app/playlist?list=${playlistId.replaceFirst("VL", "")}"
+                    val url = "https://music.youtube.com/playlist?list=${playlistId.replaceFirst("VL", "")}"
                     shareUrl(shareTitle, url)
                 }
                 EndOfModalBottomSheet()
@@ -3013,7 +3021,7 @@ fun LocalPlaylistBottomSheet(
                         text = if (ytPlaylistId != null) Res.string.share else Res.string.sync_first,
                         enable = (ytPlaylistId != null),
                     ) {
-                        val url = "https://wavora.org/app/playlist?list=${ytPlaylistId?.replaceFirst("VL", "")}"
+                        val url = "https://music.youtube.com/playlist?list=${ytPlaylistId?.replaceFirst("VL", "")}"
                         shareUrl(shareTitle, url)
                     }
                     EndOfModalBottomSheet()
@@ -3065,7 +3073,7 @@ fun SortPlaylistBottomSheet(
                 ) {}
                 Text(
                     stringResource(Res.string.sort_by),
-                    style = typo().labelSmall,
+                    style = LocalAppTypography.current.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier =
                         Modifier
@@ -3086,7 +3094,7 @@ fun SortPlaylistBottomSheet(
                         ) {
                             Text(
                                 text = stringResource(filterOption.displayNameRes()),
-                                style = typo().labelMedium,
+                                style = LocalAppTypography.current.labelMedium,
                                 fontWeight = FontWeight.Medium,
                                 color = if (isSelected) seed else Color.White,
                             )
@@ -3117,6 +3125,8 @@ fun DevLogInBottomSheet(
     type: DevLogInType,
     onDone: (String) -> Unit,
 ) {
+    val processingString = stringResource(Res.string.processing)
+    val cannotBeEmptyString = stringResource(Res.string.can_not_be_empty)
     val coroutineScope = rememberCoroutineScope()
     val modelBottomSheetState =
         rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -3145,7 +3155,14 @@ fun DevLogInBottomSheet(
                     shape = RoundedCornerShape(50),
                 ) {}
                 Spacer(modifier = Modifier.height(10.dp))
-                Text(text = runBlocking { type.getTitle() }, style = typo().labelSmall)
+                Text(
+                    text = when (type) {
+                        is DevLogInType.Spotify -> stringResource(Res.string.your_sp_dc_param_of_spotify_cookie)
+                        is DevLogInType.YouTube -> stringResource(Res.string.your_youtube_cookie)
+                        is DevLogInType.Discord -> stringResource(Res.string.your_discord_token)
+                    },
+                    style = LocalAppTypography.current.labelSmall,
+                )
                 Spacer(modifier = Modifier.height(5.dp))
                 OutlinedTextField(
                     value = value,
@@ -3157,16 +3174,16 @@ fun DevLogInBottomSheet(
                 TextButton(
                     onClick = {
                         if (value.isNotEmpty() && value.isNotBlank()) {
-                            showToast(runBlocking { getString(Res.string.processing) }, ToastGravity.Bottom)
+                            showToast(processingString, ToastGravity.Bottom)
                             onDismiss()
                             onDone(value)
                         } else {
-                            showToast(runBlocking { getString(Res.string.can_not_be_empty) }, ToastGravity.Bottom)
+                            showToast(cannotBeEmptyString, ToastGravity.Bottom)
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                 ) {
-                    Text(text = stringResource(Res.string.set), style = typo().labelSmall)
+                    Text(text = stringResource(Res.string.set), style = LocalAppTypography.current.labelSmall)
                 }
                 Spacer(modifier = Modifier.height(5.dp))
                 EndOfModalBottomSheet()
@@ -3211,7 +3228,7 @@ fun DevCookieLogInBottomSheet(
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
                     text = stringResource(Res.string.list_all_cookies_of_this_page),
-                    style = typo().labelSmall,
+                    style = LocalAppTypography.current.labelSmall,
                 )
                 cookies.forEach { cookie ->
                     Row(
@@ -3219,9 +3236,9 @@ fun DevCookieLogInBottomSheet(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.padding(12.dp),
                     ) {
-                        Text(text = cookie.first, style = typo().bodyMedium, modifier = Modifier.weight(1f))
+                        Text(text = cookie.first, style = LocalAppTypography.current.bodyMedium, modifier = Modifier.weight(1f))
                         SelectionContainer(modifier = Modifier.weight(2f)) {
-                            Text(text = cookie.second ?: "", style = typo().bodyMedium)
+                            Text(text = cookie.second ?: "", style = LocalAppTypography.current.bodyMedium)
                         }
                         val copied = stringResource(Res.string.copied_to_clipboard)
                         IconButton(onClick = {

@@ -29,6 +29,7 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import wavora.composeapp.generated.resources.*
 import kotlin.reflect.KClass
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @Composable
 fun AppBottomNavigationBar(
@@ -115,9 +116,9 @@ fun AppBottomNavigationBar(
                             stringResource(screen.title),
                             style =
                                 if (selectedIndex == screen.ordinal) {
-                                    typo().bodySmall
+                                    LocalAppTypography.current.bodySmall
                                 } else {
-                                    typo().bodySmall.greyScale()
+                                    LocalAppTypography.current.bodySmall.greyScale()
                                 },
                         )
                     },
@@ -184,9 +185,9 @@ fun AppNavigationRail(
                         stringResource(screen.title),
                         style =
                             if (selectedIndex == screen.ordinal) {
-                                typo().bodySmall
+                                LocalAppTypography.current.bodySmall
                             } else {
-                                typo().bodySmall.greyScale()
+                                LocalAppTypography.current.bodySmall.greyScale()
                             },
                     )
                 },

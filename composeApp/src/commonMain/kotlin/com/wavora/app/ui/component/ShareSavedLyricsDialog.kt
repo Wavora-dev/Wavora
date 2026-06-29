@@ -41,6 +41,7 @@ import wavora.composeapp.generated.resources.help_build_lyrics_database_descript
 import wavora.composeapp.generated.resources.later
 import wavora.composeapp.generated.resources.ok
 import wavora.composeapp.generated.resources.use_anonymous
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @Composable
 @ExperimentalMaterial3Api
@@ -82,7 +83,7 @@ fun ShareSavedLyricsDialog(
             }) {
                 Text(
                     stringResource(Res.string.ok),
-                    style = typo().bodySmall,
+                    style = LocalAppTypography.current.bodySmall,
                 )
             }
         },
@@ -92,21 +93,21 @@ fun ShareSavedLyricsDialog(
             }) {
                 Text(
                     stringResource(Res.string.later),
-                    style = typo().bodySmall,
+                    style = LocalAppTypography.current.bodySmall,
                 )
             }
         },
         title = {
             Text(
                 stringResource(Res.string.help_build_lyrics_database),
-                style = typo().labelSmall,
+                style = LocalAppTypography.current.labelSmall,
             )
         },
         text = {
             Column {
                 Text(
                     stringResource(Res.string.help_build_lyrics_database_description),
-                    style = typo().bodySmall,
+                    style = LocalAppTypography.current.bodySmall,
                 )
                 Spacer(Modifier.height(8.dp))
                 AnimatedVisibility(
@@ -122,35 +123,35 @@ fun ShareSavedLyricsDialog(
                         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                             OutlinedTextField(
                                 value = contributorName,
-                                textStyle = typo().bodySmall,
+                                textStyle = LocalAppTypography.current.bodySmall,
                                 onValueChange = { contributorName = it },
                                 label = {
                                     Text(
                                         stringResource(Res.string.contributor_name),
                                         style =
-                                            typo().labelSmall.copy(
+                                            LocalAppTypography.current.labelSmall.copy(
                                                 fontSize = 8.sp,
                                             ),
                                     )
                                 },
-                                placeholder = { Text(stringResource(Res.string.contributor_name), style = typo().bodySmall) },
+                                placeholder = { Text(stringResource(Res.string.contributor_name), style = LocalAppTypography.current.bodySmall) },
                                 singleLine = true,
                             )
                             Spacer(Modifier.height(8.dp))
                             OutlinedTextField(
                                 value = contributorEmail,
-                                textStyle = typo().bodySmall,
+                                textStyle = LocalAppTypography.current.bodySmall,
                                 onValueChange = { contributorEmail = it },
                                 label = {
                                     Text(
                                         stringResource(Res.string.contributor_email),
                                         style =
-                                            typo().labelSmall.copy(
+                                            LocalAppTypography.current.labelSmall.copy(
                                                 fontSize = 8.sp,
                                             ),
                                     )
                                 },
-                                placeholder = { Text(stringResource(Res.string.contributor_email), style = typo().bodySmall) },
+                                placeholder = { Text(stringResource(Res.string.contributor_email), style = LocalAppTypography.current.bodySmall) },
                                 singleLine = true,
                                 isError = contributorEmail.isNotEmpty() && !contributorEmail.contains("@"),
                             )
@@ -174,7 +175,7 @@ fun ShareSavedLyricsDialog(
                     Spacer(Modifier.width(8.dp))
                     Text(
                         stringResource(Res.string.use_anonymous),
-                        style = typo().bodySmall,
+                        style = LocalAppTypography.current.bodySmall,
                     )
                 }
             }

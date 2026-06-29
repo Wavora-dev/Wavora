@@ -61,6 +61,8 @@ import com.wavora.domain.utils.toTrack
 import com.wavora.app.expect.ui.MediaPlayerView
 import com.wavora.app.extension.getStringBlocking
 import com.wavora.app.extension.rgbFactor
+import com.wavora.app.ui.component.ArtistScreenShimmer
+import com.wavora.app.ui.component.OfflineErrorState
 import com.wavora.app.ui.component.CenterLoadingBox
 import com.wavora.app.ui.component.CollapsingToolbarParallaxEffect
 import com.wavora.app.ui.component.DescriptionView
@@ -81,7 +83,6 @@ import com.wavora.app.viewModel.ArtistScreenState
 import com.wavora.app.viewModel.ArtistViewModel
 import com.wavora.app.viewModel.SharedViewModel
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
@@ -101,6 +102,7 @@ import wavora.composeapp.generated.resources.singles
 import wavora.composeapp.generated.resources.start_radio
 import wavora.composeapp.generated.resources.unknown
 import wavora.composeapp.generated.resources.videos
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @Composable
 @ExperimentalMaterial3Api
@@ -110,6 +112,7 @@ fun ArtistScreen(
     sharedViewModel: SharedViewModel = koinInject(),
     navController: NavController,
 ) {
+    val errorString = stringResource(Res.string.error)
     val artistScreenState by viewModel.artistScreenState.collectAsStateWithLifecycle()
     val isFollowed by viewModel.followed.collectAsStateWithLifecycle()
     val canvasUrl by viewModel.canvasUrl.collectAsStateWithLifecycle()
@@ -133,12 +136,7 @@ fun ArtistScreen(
     Crossfade(artistScreenState) { state ->
         when (state) {
             is ArtistScreenState.Loading -> {
-                Box(Modifier.fillMaxSize()) {
-                    CenterLoadingBox(
-                        Modifier
-                            .align(Alignment.Center),
-                    )
-                }
+                ArtistScreenShimmer()
             }
 
             is ArtistScreenState.Success -> {
@@ -160,14 +158,14 @@ fun ArtistScreen(
                             Row {
                                 Text(
                                     text = state.data.subscribers ?: stringResource(Res.string.unknown),
-                                    style = typo().bodySmall,
+                                    style = LocalAppTypography.current.bodySmall,
                                     color = Color.White,
                                     textAlign = TextAlign.Start,
                                     modifier = Modifier.weight(1f),
                                 )
                                 Text(
                                     text = state.data.playCount ?: stringResource(Res.string.unknown),
-                                    style = typo().bodySmall,
+                                    style = LocalAppTypography.current.bodySmall,
                                     color = Color.White,
                                     textAlign = TextAlign.End,
                                     modifier = Modifier.weight(1f),
@@ -269,7 +267,7 @@ fun ArtistScreen(
                                         if (state.data.shuffleParam != null) {
                                             viewModel.onShuffleClick(state.data.shuffleParam)
                                         } else {
-                                            viewModel.makeToast(runBlocking { getString(Res.string.error) })
+                                            viewModel.makeToast(errorString)
                                         }
                                     },
                                 ) {
@@ -281,7 +279,7 @@ fun ArtistScreen(
                                         if (state.data.radioParam != null) {
                                             viewModel.onRadioClick(state.data.radioParam)
                                         } else {
-                                            viewModel.makeToast(runBlocking { getString(Res.string.error) })
+                                            viewModel.makeToast(errorString)
                                         }
                                     },
                                     colors =
@@ -313,7 +311,7 @@ fun ArtistScreen(
                                 ) {
                                     Text(
                                         text = stringResource(Res.string.popular),
-                                        style = typo().labelMedium,
+                                        style = LocalAppTypography.current.labelMedium,
                                         color = Color.White,
                                         modifier = Modifier.weight(1f),
                                     )
@@ -323,7 +321,7 @@ fun ArtistScreen(
                                             if (id != null) {
                                                 navController.navigate(PlaylistDestination(id))
                                             } else {
-                                                viewModel.makeToast(runBlocking { getString(Res.string.error) })
+                                                viewModel.makeToast(errorString)
                                             }
                                         },
                                         colors =
@@ -333,7 +331,7 @@ fun ArtistScreen(
                                                     contentColor = Color.White,
                                                 ),
                                     ) {
-                                        Text(stringResource(Res.string.more), style = typo().bodySmall)
+                                        Text(stringResource(Res.string.more), style = LocalAppTypography.current.bodySmall)
                                     }
                                 }
                                 state.data.popularSongs.forEach { song ->
@@ -385,7 +383,7 @@ fun ArtistScreen(
                                 ) {
                                     Text(
                                         text = stringResource(Res.string.singles),
-                                        style = typo().labelMedium,
+                                        style = LocalAppTypography.current.labelMedium,
                                         color = Color.White,
                                         modifier = Modifier.weight(1f),
                                     )
@@ -410,7 +408,7 @@ fun ArtistScreen(
                                                     contentColor = Color.White,
                                                 ),
                                     ) {
-                                        Text(stringResource(Res.string.more), style = typo().bodySmall)
+                                        Text(stringResource(Res.string.more), style = LocalAppTypography.current.bodySmall)
                                     }
                                 }
                                 LazyRow(
@@ -452,7 +450,7 @@ fun ArtistScreen(
                                 ) {
                                     Text(
                                         text = stringResource(Res.string.albums),
-                                        style = typo().labelMedium,
+                                        style = LocalAppTypography.current.labelMedium,
                                         color = Color.White,
                                         modifier = Modifier.weight(1f),
                                     )
@@ -477,7 +475,7 @@ fun ArtistScreen(
                                                     contentColor = Color.White,
                                                 ),
                                     ) {
-                                        Text(stringResource(Res.string.more), style = typo().bodySmall)
+                                        Text(stringResource(Res.string.more), style = LocalAppTypography.current.bodySmall)
                                     }
                                 }
                                 LazyRow(
@@ -519,7 +517,7 @@ fun ArtistScreen(
                                 ) {
                                     Text(
                                         text = stringResource(Res.string.videos),
-                                        style = typo().labelMedium,
+                                        style = LocalAppTypography.current.labelMedium,
                                         color = Color.White,
                                         modifier = Modifier.weight(1f),
                                     )
@@ -543,7 +541,7 @@ fun ArtistScreen(
                                                     contentColor = Color.White,
                                                 ),
                                     ) {
-                                        Text(stringResource(Res.string.more), style = typo().bodySmall)
+                                        Text(stringResource(Res.string.more), style = LocalAppTypography.current.bodySmall)
                                     }
                                 }
                                 LazyRow(
@@ -606,7 +604,7 @@ fun ArtistScreen(
                                 ) {
                                     Text(
                                         text = stringResource(Res.string.featured_inArtist),
-                                        style = typo().labelMedium,
+                                        style = LocalAppTypography.current.labelMedium,
                                         color = Color.White,
                                         modifier =
                                             Modifier
@@ -653,7 +651,7 @@ fun ArtistScreen(
                                 ) {
                                     Text(
                                         text = stringResource(Res.string.related_artists),
-                                        style = typo().labelMedium,
+                                        style = LocalAppTypography.current.labelMedium,
                                         color = Color.White,
                                         modifier =
                                             Modifier
@@ -712,7 +710,7 @@ fun ArtistScreen(
                         ) {
                             Text(
                                 text = stringResource(Res.string.description),
-                                style = typo().labelMedium,
+                                style = LocalAppTypography.current.labelMedium,
                                 color = Color.White,
                                 modifier =
                                     Modifier
@@ -755,8 +753,11 @@ fun ArtistScreen(
             }
 
             is ArtistScreenState.Error -> {
-                viewModel.makeToast(state.message ?: stringResource(Res.string.error))
-                navController.navigateUp()
+                OfflineErrorState(
+                    modifier = Modifier.fillMaxSize(),
+                    onRetry = { viewModel.browseArtist(channelId) },
+                    onOpenDownloaded = { navController.navigate(LibraryDestination) },
+                )
             }
         }
     }

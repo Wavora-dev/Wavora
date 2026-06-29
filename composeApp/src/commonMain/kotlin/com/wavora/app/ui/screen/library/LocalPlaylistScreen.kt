@@ -159,7 +159,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.format
 import kotlinx.datetime.format.MonthNames
@@ -192,6 +191,7 @@ import wavora.composeapp.generated.resources.unsync_playlist_warning
 import wavora.composeapp.generated.resources.warning
 import wavora.composeapp.generated.resources.yes
 import wavora.composeapp.generated.resources.your_playlist
+import com.wavora.app.ui.theme.LocalAppTypography
 
 private const val TAG = "LocalPlaylistScreen"
 
@@ -208,6 +208,8 @@ fun LocalPlaylistScreen(
     viewModel: LocalPlaylistViewModel = koinViewModel(),
     navController: NavController,
 ) {
+    val downloadedString = stringResource(Res.string.downloaded)
+    val downloadingString = stringResource(Res.string.downloading)
     val composition by rememberLottieComposition {
         LottieCompositionSpec.JsonString(
             Res.readBytes("files/downloading_animation.json").decodeToString(),
@@ -590,9 +592,9 @@ fun LocalPlaylistScreen(
                                                 .memoryCacheKey(uiState.thumbnail)
                                                 .crossfade(false)
                                                 .build(),
-                                        placeholder = painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp),
-                                        error = painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp),
-                                        fallback = painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp),
+                                        placeholder = painterPlaylistThumbnail(uiState.title, style = LocalAppTypography.current.labelMedium, 250.dp to 250.dp),
+                                        error = painterPlaylistThumbnail(uiState.title, style = LocalAppTypography.current.labelMedium, 250.dp to 250.dp),
+                                        fallback = painterPlaylistThumbnail(uiState.title, style = LocalAppTypography.current.labelMedium, 250.dp to 250.dp),
                                         contentDescription = null,
                                         contentScale = ContentScale.Crop,
                                         onSuccess = {
@@ -628,7 +630,7 @@ fun LocalPlaylistScreen(
                                     ) {
                                         Text(
                                             text = uiState.title,
-                                            style = typo().titleLarge,
+                                            style = LocalAppTypography.current.titleLarge,
                                             color = Color.White,
                                             maxLines = 2,
                                             textAlign = TextAlign.Center,
@@ -636,7 +638,7 @@ fun LocalPlaylistScreen(
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Text(
                                             text = stringResource(Res.string.your_playlist),
-                                            style = typo().titleSmall,
+                                            style = LocalAppTypography.current.titleSmall,
                                             color = Color.White,
                                             textAlign = TextAlign.Center,
                                         )
@@ -661,7 +663,7 @@ fun LocalPlaylistScreen(
                                                         },
                                                     ) ?: "",
                                                 ),
-                                            style = typo().bodyMedium,
+                                            style = LocalAppTypography.current.bodyMedium,
                                             color = Color(0xC4FFFFFF),
                                             textAlign = TextAlign.Center,
                                         )
@@ -758,9 +760,9 @@ fun LocalPlaylistScreen(
                                         .diskCacheKey(uiState.thumbnail)
                                         .crossfade(550)
                                         .build(),
-                                placeholder = painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp),
-                                error = painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp),
-                                fallback = painterPlaylistThumbnail(uiState.title, style = typo().labelMedium, 250.dp to 250.dp),
+                                placeholder = painterPlaylistThumbnail(uiState.title, style = LocalAppTypography.current.labelMedium, 250.dp to 250.dp),
+                                error = painterPlaylistThumbnail(uiState.title, style = LocalAppTypography.current.labelMedium, 250.dp to 250.dp),
+                                fallback = painterPlaylistThumbnail(uiState.title, style = LocalAppTypography.current.labelMedium, 250.dp to 250.dp),
                                 contentDescription = null,
                                 contentScale = ContentScale.FillHeight,
                                 onSuccess = {
@@ -787,7 +789,7 @@ fun LocalPlaylistScreen(
                                     Spacer(modifier = Modifier.size(25.dp))
                                     Text(
                                         text = uiState.title,
-                                        style = typo().titleMedium,
+                                        style = LocalAppTypography.current.titleMedium,
                                         color = Color.White,
                                     )
                                     Column(
@@ -795,7 +797,7 @@ fun LocalPlaylistScreen(
                                     ) {
                                         Text(
                                             text = stringResource(Res.string.your_playlist),
-                                            style = typo().titleSmall,
+                                            style = LocalAppTypography.current.titleSmall,
                                             color = Color.White,
                                         )
                                         Spacer(modifier = Modifier.height(8.dp))
@@ -819,7 +821,7 @@ fun LocalPlaylistScreen(
                                                         },
                                                     ) ?: "",
                                                 ),
-                                            style = typo().bodyMedium,
+                                            style = LocalAppTypography.current.bodyMedium,
                                             color = Color(0xC4FFFFFF),
                                         )
                                     }
@@ -891,7 +893,7 @@ fun LocalPlaylistScreen(
                                                 Text(
                                                     text = if (isThisPlaying) "Pause" else "Play",
                                                     color = Color.Black,
-                                                    style = typo().labelLarge,
+                                                    style = LocalAppTypography.current.labelLarge,
                                                 )
                                             }
                                         }
@@ -912,7 +914,7 @@ fun LocalPlaylistScreen(
                                                                     .fillMaxSize()
                                                                     .clickable {
                                                                         viewModel.makeToast(
-                                                                            runBlocking { getString(Res.string.downloaded) },
+                                                                            downloadedString,
                                                                         )
                                                                     },
                                                             contentAlignment = Alignment.Center,
@@ -933,7 +935,7 @@ fun LocalPlaylistScreen(
                                                                     .fillMaxSize()
                                                                     .clickable {
                                                                         viewModel.makeToast(
-                                                                            runBlocking { getString(Res.string.downloading) },
+                                                                            downloadingString,
                                                                         )
                                                                     },
                                                             contentAlignment = Alignment.Center,
@@ -1011,7 +1013,7 @@ fun LocalPlaylistScreen(
                                                                 .clip(
                                                                     CircleShape,
                                                                 ).clickable {
-                                                                    viewModel.makeToast(runBlocking { getString(Res.string.downloaded) })
+                                                                    viewModel.makeToast(downloadedString)
                                                                 },
                                                     ) {
                                                         Icon(
@@ -1034,7 +1036,7 @@ fun LocalPlaylistScreen(
                                                                 .clip(
                                                                     CircleShape,
                                                                 ).clickable {
-                                                                    viewModel.makeToast(runBlocking { getString(Res.string.downloading) })
+                                                                    viewModel.makeToast(downloadingString)
                                                                 },
                                                     ) {
                                                         Image(
@@ -1139,7 +1141,7 @@ fun LocalPlaylistScreen(
                                             "",
                                         ),
                                     color = Color.White,
-                                    style = typo().bodyMedium,
+                                    style = LocalAppTypography.current.bodyMedium,
                                     modifier = Modifier.padding(vertical = 8.dp),
                                 )
                                 AnimatedVisibility(visible = shouldShowSuggestions) {
@@ -1241,7 +1243,7 @@ fun LocalPlaylistScreen(
                                                             stringResource(
                                                                 uiState.filterState.displayNameRes(),
                                                             ),
-                                                    style = typo().bodySmall,
+                                                    style = LocalAppTypography.current.bodySmall,
                                                     color = Color.White,
                                                 )
                                             }
@@ -1269,7 +1271,7 @@ fun LocalPlaylistScreen(
                                                                 stringResource(
                                                                     uiState.filterState.displayNameRes(),
                                                                 ),
-                                                        style = typo().bodySmall,
+                                                        style = LocalAppTypography.current.bodySmall,
                                                         color = Color.Gray,
                                                     )
                                                 }
@@ -1294,7 +1296,7 @@ fun LocalPlaylistScreen(
                                                         } else {
                                                             "Change order"
                                                         },
-                                                    style = typo().bodySmall,
+                                                    style = LocalAppTypography.current.bodySmall,
                                                     color = if (isMobilePortrait) Color.White else Color.Gray,
                                                 )
                                             }
@@ -1500,7 +1502,7 @@ fun LocalPlaylistScreen(
             title = {
                 Text(
                     text = uiState.title,
-                    style = typo().titleMedium,
+                    style = LocalAppTypography.current.titleMedium,
                 )
             },
             navigationIcon = {

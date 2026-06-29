@@ -106,6 +106,7 @@ import com.wavora.app.extension.getScreenSizeInfo
 import com.wavora.app.extension.getStringBlocking
 import com.wavora.app.getPlatform
 import com.wavora.app.ui.component.CenterLoadingBox
+import com.wavora.app.ui.component.OfflineErrorState
 import com.wavora.app.ui.component.DescriptionView
 import com.wavora.app.ui.component.EndOfPage
 import com.wavora.app.ui.component.HeartCheckBox
@@ -164,6 +165,7 @@ import wavora.composeapp.generated.resources.playlist
 import wavora.composeapp.generated.resources.radio
 import wavora.composeapp.generated.resources.search
 import wavora.composeapp.generated.resources.unlimited
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @OptIn(ExperimentalCoroutinesApi::class, ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -527,7 +529,7 @@ fun PlaylistScreen(
                                                     ) {
                                                         Text(
                                                             text = data.title,
-                                                            style = typo().titleLarge,
+                                                            style = LocalAppTypography.current.titleLarge,
                                                             color = Color.White,
                                                             maxLines = 2,
                                                             textAlign = TextAlign.Center,
@@ -554,7 +556,7 @@ fun PlaylistScreen(
                                                             ) {
                                                                 Text(
                                                                     text = data.author.name,
-                                                                    style = typo().titleSmall,
+                                                                    style = LocalAppTypography.current.titleSmall,
                                                                     color = Color.White,
                                                                     textAlign = TextAlign.Center,
                                                                 )
@@ -569,7 +571,7 @@ fun PlaylistScreen(
                                                                     stringResource(Res.string.playlist)
                                                                 }
                                                             } • ${data.year}",
-                                                            style = typo().bodyMedium,
+                                                            style = LocalAppTypography.current.bodyMedium,
                                                             color = Color(0xC4FFFFFF),
                                                             textAlign = TextAlign.Center,
                                                         )
@@ -671,7 +673,7 @@ fun PlaylistScreen(
                                                     Spacer(modifier = Modifier.size(25.dp))
                                                     Text(
                                                         text = data.title,
-                                                        style = typo().titleMedium,
+                                                        style = LocalAppTypography.current.titleMedium,
                                                         color = Color.White,
                                                         maxLines = 2,
                                                     )
@@ -699,7 +701,7 @@ fun PlaylistScreen(
                                                             ) {
                                                                 Text(
                                                                     text = data.author.name,
-                                                                    style = typo().labelSmall,
+                                                                    style = LocalAppTypography.current.labelSmall,
                                                                     color = Color.White,
                                                                 )
                                                             }
@@ -713,7 +715,7 @@ fun PlaylistScreen(
                                                                     stringResource(Res.string.playlist)
                                                                 }
                                                             } • ${data.year}",
-                                                            style = typo().bodyMedium,
+                                                            style = LocalAppTypography.current.bodyMedium,
                                                         )
                                                     }
                                                 }
@@ -777,7 +779,7 @@ fun PlaylistScreen(
                                                                 Text(
                                                                     text = if (isThisPlaying) "Pause" else "Play",
                                                                     color = Color.Black,
-                                                                    style = typo().labelLarge,
+                                                                    style = LocalAppTypography.current.labelLarge,
                                                                 )
                                                             }
                                                         }
@@ -1024,7 +1026,7 @@ fun PlaylistScreen(
                                                             )
                                                         },
                                                     color = Color.White,
-                                                    style = typo().bodyMedium,
+                                                    style = LocalAppTypography.current.bodyMedium,
                                                     modifier = Modifier.padding(vertical = 8.dp),
                                                 )
                                             }
@@ -1130,7 +1132,7 @@ fun PlaylistScreen(
                                 ) {
                                     Text(
                                         text = stringResource(Res.string.error),
-                                        style = typo().bodyMedium,
+                                        style = LocalAppTypography.current.bodyMedium,
                                     )
                                 }
                             }
@@ -1193,7 +1195,7 @@ fun PlaylistScreen(
                                         containerColor = Color.Transparent,
                                     ),
                                 inputField = {
-                                    CompositionLocalProvider(LocalTextStyle provides typo().bodySmall) {
+                                    CompositionLocalProvider(LocalTextStyle provides LocalAppTypography.current.bodySmall) {
                                         SearchBarDefaults.InputField(
                                             query = query,
                                             onQueryChange = { query = it },
@@ -1203,7 +1205,7 @@ fun PlaylistScreen(
                                             placeholder = {
                                                 Text(
                                                     stringResource(Res.string.search),
-                                                    style = typo().bodyMedium,
+                                                    style = LocalAppTypography.current.bodyMedium,
                                                 )
                                             },
                                         )
@@ -1274,7 +1276,7 @@ fun PlaylistScreen(
                         title = {
                             Text(
                                 text = data.title,
-                                style = typo().titleMedium,
+                                style = LocalAppTypography.current.titleMedium,
                                 maxLines = 1,
                                 modifier =
                                     Modifier
@@ -1339,8 +1341,11 @@ fun PlaylistScreen(
             }
 
             is PlaylistUIState.Error -> {
-                viewModel.makeToast("Error: ${state.message}")
-                navController.navigateUp()
+                OfflineErrorState(
+                    modifier = Modifier.fillMaxSize(),
+                    onRetry = { viewModel.getData(playlistId) },
+                    onOpenDownloaded = { navController.navigateUp() },
+                )
             }
         }
     }

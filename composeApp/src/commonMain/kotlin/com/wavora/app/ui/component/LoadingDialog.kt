@@ -25,6 +25,7 @@ import com.wavora.app.ui.theme.typo
 import org.jetbrains.compose.resources.stringResource
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.loading
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,7 +54,7 @@ fun LoadingDialog(
                     ) {
                         Text(
                             stringResource(Res.string.loading),
-                            style = typo().headlineMedium,
+                            style = LocalAppTypography.current.headlineMedium,
                         )
                         Row(Modifier.padding(top = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                             CircularProgressIndicator()

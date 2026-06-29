@@ -340,6 +340,7 @@ import wavora.composeapp.generated.resources.youtube_transcript
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -355,6 +356,68 @@ fun SettingScreen(
     viewModel: SettingsViewModel = koinViewModel(),
     sharedViewModel: SharedViewModel = koinInject(),
 ) {
+    val checking = stringResource(Res.string.checking)
+    val language = stringResource(Res.string.language)
+    val change = stringResource(Res.string.change)
+    val warning = stringResource(Res.string.warning)
+    val changeLanguageWarning = stringResource(Res.string.change_language_warning)
+    val cancel = stringResource(Res.string.cancel)
+    val contentCountry = stringResource(Res.string.content_country)
+    val quality = stringResource(Res.string.quality)
+    val downloadQuality = stringResource(Res.string.download_quality)
+    val videoQuality = stringResource(Res.string.video_quality)
+    val videoDownloadQuality = stringResource(Res.string.video_download_quality)
+    val proxyType = stringResource(Res.string.proxy_type)
+    val socks = stringResource(Res.string.socks)
+    val proxyHost = stringResource(Res.string.proxy_host)
+    val proxyHostMessage = stringResource(Res.string.proxy_host_message)
+    val invalidHost = stringResource(Res.string.invalid_host)
+    val proxyPort = stringResource(Res.string.proxy_port)
+    val proxyPortMessage = stringResource(Res.string.proxy_port_message)
+    val invalidPort = stringResource(Res.string.invalid_port)
+    val proxyUsername = stringResource(Res.string.proxy_username)
+    val proxyUsernameMessage = stringResource(Res.string.proxy_username_message)
+    val proxyPassword = stringResource(Res.string.proxy_password)
+    val proxyPasswordMessage = stringResource(Res.string.proxy_password_message)
+    val crossfadeDuration = stringResource(Res.string.crossfade_duration)
+    val crossfadeAuto = stringResource(Res.string.crossfade_auto)
+    val mainLyricsProvider = stringResource(Res.string.main_lyrics_provider)
+    val wavoraLyrics = stringResource(Res.string.wavora_lyrics)
+    val youtubeTranscript = stringResource(Res.string.youtube_transcript)
+    val lrclib = stringResource(Res.string.lrclib)
+    val betterLyrics = stringResource(Res.string.better_lyrics)
+    val translationLanguage = stringResource(Res.string.translation_language)
+    val invalidLanguageCode = stringResource(Res.string.invalid_language_code)
+    val translationLanguageMessage = stringResource(Res.string.translation_language_message)
+    val youtubeSubtitleLanguage = stringResource(Res.string.youtube_subtitle_language)
+    val youtubeSubtitleLanguageMessage = stringResource(Res.string.youtube_subtitle_language_message)
+    val contributorName = stringResource(Res.string.contributor_name)
+    val set = stringResource(Res.string.set)
+    val contributorEmail = stringResource(Res.string.contributor_email)
+    val invalid = stringResource(Res.string.invalid)
+    val aiProvider = stringResource(Res.string.ai_provider)
+    val openai = stringResource(Res.string.openai)
+    val gemini = stringResource(Res.string.gemini)
+    val openaiApiCompatible = stringResource(Res.string.openai_api_compatible)
+    val aiApiKey = stringResource(Res.string.ai_api_key)
+    val invalidApiKey = stringResource(Res.string.invalid_api_key)
+    val customAiModelId = stringResource(Res.string.custom_ai_model_id)
+    val customModelIdMessages = stringResource(Res.string.custom_model_id_messages)
+    val categoriesSponsorBlock = stringResource(Res.string.categories_sponsor_block)
+    val save = stringResource(Res.string.save)
+    val clearPlayerCache = stringResource(Res.string.clear_player_cache)
+    val clear = stringResource(Res.string.clear)
+    val clearDownloadedCache = stringResource(Res.string.clear_downloaded_cache)
+    val clearThumbnailCache = stringResource(Res.string.clear_thumbnail_cache)
+    val clearCanvasCache = stringResource(Res.string.clear_canvas_cache)
+    val limitPlayerCache = stringResource(Res.string.limit_player_cache)
+    val backupFrequency = stringResource(Res.string.backup_frequency)
+    val daily = stringResource(Res.string.daily)
+    val weekly = stringResource(Res.string.weekly)
+    val monthly = stringResource(Res.string.monthly)
+    val keepBackups = stringResource(Res.string.keep_backups)
+    val logOutWarning = stringResource(Res.string.log_out_warning)
+    val logOut = stringResource(Res.string.log_out)
     val platformContext = LocalPlatformContext.current
     val pl = com.mohamedrejeb.calf.core.LocalPlatformContext.current
     val localDensity = LocalDensity.current
@@ -473,7 +536,7 @@ fun SettingScreen(
     val checkForUpdateSubtitle by remember {
         derivedStateOf {
             if (isCheckingUpdate) {
-                return@derivedStateOf runBlocking { getString(Res.string.checking) }
+                return@derivedStateOf checking
             } else {
                 val lastCheckLong = lastCheckUpdate?.toLong() ?: 0L
                 return@derivedStateOf runBlocking {
@@ -495,11 +558,8 @@ fun SettingScreen(
         mutableStateOf(false)
     }
 
-    LaunchedEffect(true) {
+    LaunchedEffect(Unit) {
         viewModel.getAllGoogleAccount()
-    }
-
-    LaunchedEffect(true) {
         viewModel.getData()
         viewModel.getThumbCacheSize(platformContext)
     }
@@ -517,7 +577,7 @@ fun SettingScreen(
         item(key = "user_interface") {
             Column {
                 Spacer(Modifier.height(16.dp))
-                Text(text = stringResource(Res.string.user_interface), style = typo().labelMedium, color = white)
+                Text(text = stringResource(Res.string.user_interface), style = LocalAppTypography.current.labelMedium, color = white)
                 SettingItem(
                     title = stringResource(Res.string.translucent_bottom_navigation_bar),
                     subtitle = stringResource(Res.string.you_can_see_the_content_below_the_bottom_bar),
@@ -551,7 +611,7 @@ fun SettingScreen(
             Column {
                 Text(
                     text = stringResource(Res.string.content),
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
@@ -569,7 +629,7 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = runBlocking { getString(Res.string.language) },
+                                title = language,
                                 selectOne =
                                     SettingAlertState.SelectData(
                                         listSelect =
@@ -578,23 +638,23 @@ fun SettingScreen(
                                             },
                                     ),
                                 confirm =
-                                    runBlocking { getString(Res.string.change) } to { state ->
+                                    change to { state ->
                                         val code = SUPPORTED_LANGUAGE.getCodeFromLanguage(state.selectOne?.getSelected() ?: "English")
                                         viewModel.setBasicAlertData(
                                             SettingBasicAlertState(
-                                                title = runBlocking { getString(Res.string.warning) },
-                                                message = runBlocking { getString(Res.string.change_language_warning) },
+                                                title = warning,
+                                                message = changeLanguageWarning,
                                                 confirm =
-                                                    runBlocking { getString(Res.string.change) } to {
+                                                    change to {
                                                         sharedViewModel.activityRecreate()
                                                         viewModel.setBasicAlertData(null)
                                                         viewModel.changeLanguage(code)
                                                     },
-                                                dismiss = runBlocking { getString(Res.string.cancel) },
+                                                dismiss = cancel,
                                             ),
                                         )
                                     },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
+                                dismiss = cancel,
                             ),
                         )
                     },
@@ -605,7 +665,7 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = runBlocking { getString(Res.string.content_country) },
+                                title = contentCountry,
                                 selectOne =
                                     SettingAlertState.SelectData(
                                         listSelect =
@@ -614,12 +674,12 @@ fun SettingScreen(
                                             },
                                     ),
                                 confirm =
-                                    runBlocking { getString(Res.string.change) } to { state ->
+                                    change to { state ->
                                         viewModel.changeLocation(
                                             state.selectOne?.getSelected() ?: "US",
                                         )
                                     },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
+                                dismiss = cancel,
                             ),
                         )
                     },
@@ -631,7 +691,7 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = runBlocking { getString(Res.string.quality) },
+                                title = quality,
                                 selectOne =
                                     SettingAlertState.SelectData(
                                         listSelect =
@@ -640,10 +700,10 @@ fun SettingScreen(
                                             },
                                     ),
                                 confirm =
-                                    runBlocking { getString(Res.string.change) } to { state ->
+                                    change to { state ->
                                         viewModel.changeQuality(state.selectOne?.getSelected())
                                     },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
+                                dismiss = cancel,
                             ),
                         )
                     },
@@ -655,7 +715,7 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = runBlocking { getString(Res.string.download_quality) },
+                                title = downloadQuality,
                                 selectOne =
                                     SettingAlertState.SelectData(
                                         listSelect =
@@ -664,10 +724,10 @@ fun SettingScreen(
                                             },
                                     ),
                                 confirm =
-                                    runBlocking { getString(Res.string.change) } to { state ->
+                                    change to { state ->
                                         state.selectOne?.getSelected()?.let { viewModel.setDownloadQuality(it) }
                                     },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
+                                dismiss = cancel,
                             ),
                         )
                     },
@@ -684,7 +744,7 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = runBlocking { getString(Res.string.video_quality) },
+                                title = videoQuality,
                                 selectOne =
                                     SettingAlertState.SelectData(
                                         listSelect =
@@ -693,10 +753,10 @@ fun SettingScreen(
                                             },
                                     ),
                                 confirm =
-                                    runBlocking { getString(Res.string.change) } to { state ->
+                                    change to { state ->
                                         viewModel.changeVideoQuality(state.selectOne?.getSelected() ?: "")
                                     },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
+                                dismiss = cancel,
                             ),
                         )
                     },
@@ -707,7 +767,7 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = runBlocking { getString(Res.string.video_download_quality) },
+                                title = videoDownloadQuality,
                                 selectOne =
                                     SettingAlertState.SelectData(
                                         listSelect =
@@ -716,10 +776,10 @@ fun SettingScreen(
                                             },
                                     ),
                                 confirm =
-                                    runBlocking { getString(Res.string.change) } to { state ->
+                                    change to { state ->
                                         viewModel.setVideoDownloadQuality(state.selectOne?.getSelected() ?: "")
                                     },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
+                                dismiss = cancel,
                             ),
                         )
                     },
@@ -777,25 +837,21 @@ fun SettingScreen(
                             onClick = {
                                 viewModel.setAlertData(
                                     SettingAlertState(
-                                        title = runBlocking { getString(Res.string.proxy_type) },
+                                        title = proxyType,
                                         selectOne =
                                             SettingAlertState.SelectData(
                                                 listSelect =
                                                     listOf(
                                                         (proxyType == DataStoreManager.ProxyType.PROXY_TYPE_HTTP) to
-                                                            runBlocking {
-                                                                getString(
-                                                                    Res.string.http,
-                                                                )
-                                                            },
+                                                            http,
                                                         (proxyType == DataStoreManager.ProxyType.PROXY_TYPE_SOCKS) to
-                                                            runBlocking { getString(Res.string.socks) },
+                                                            socks,
                                                     ),
                                             ),
                                         confirm =
-                                            runBlocking { getString(Res.string.change) } to { state ->
+                                            change to { state ->
                                                 viewModel.setProxy(
-                                                    if (state.selectOne?.getSelected() == runBlocking { getString(Res.string.socks) }) {
+                                                    if (state.selectOne?.getSelected() == socks) {
                                                         DataStoreManager.ProxyType.PROXY_TYPE_SOCKS
                                                     } else {
                                                         DataStoreManager.ProxyType.PROXY_TYPE_HTTP
@@ -804,7 +860,7 @@ fun SettingScreen(
                                                     proxyPort,
                                                 )
                                             },
-                                        dismiss = runBlocking { getString(Res.string.cancel) },
+                                        dismiss = cancel,
                                     ),
                                 )
                             },
@@ -815,25 +871,25 @@ fun SettingScreen(
                             onClick = {
                                 viewModel.setAlertData(
                                     SettingAlertState(
-                                        title = runBlocking { getString(Res.string.proxy_host) },
-                                        message = runBlocking { getString(Res.string.proxy_host_message) },
+                                        title = proxyHost,
+                                        message = proxyHostMessage,
                                         textField =
                                             SettingAlertState.TextFieldData(
-                                                label = runBlocking { getString(Res.string.proxy_host) },
+                                                label = proxyHost,
                                                 value = proxyHost,
                                                 verifyCodeBlock = {
-                                                    isValidProxyHost(it) to runBlocking { getString(Res.string.invalid_host) }
+                                                    isValidProxyHost(it) to invalidHost
                                                 },
                                             ),
                                         confirm =
-                                            runBlocking { getString(Res.string.change) } to { state ->
+                                            change to { state ->
                                                 viewModel.setProxy(
                                                     proxyType,
                                                     state.textField?.value ?: "",
                                                     proxyPort,
                                                 )
                                             },
-                                        dismiss = runBlocking { getString(Res.string.cancel) },
+                                        dismiss = cancel,
                                     ),
                                 )
                             },
@@ -844,25 +900,25 @@ fun SettingScreen(
                             onClick = {
                                 viewModel.setAlertData(
                                     SettingAlertState(
-                                        title = runBlocking { getString(Res.string.proxy_port) },
-                                        message = runBlocking { getString(Res.string.proxy_port_message) },
+                                        title = proxyPort,
+                                        message = proxyPortMessage,
                                         textField =
                                             SettingAlertState.TextFieldData(
-                                                label = runBlocking { getString(Res.string.proxy_port) },
+                                                label = proxyPort,
                                                 value = proxyPort.toString(),
                                                 verifyCodeBlock = {
-                                                    (it.toIntOrNull() != null) to runBlocking { getString(Res.string.invalid_port) }
+                                                    (it.toIntOrNull() != null) to invalidPort
                                                 },
                                             ),
                                         confirm =
-                                            runBlocking { getString(Res.string.change) } to { state ->
+                                            change to { state ->
                                                 viewModel.setProxy(
                                                     proxyType,
                                                     proxyHost,
                                                     state.textField?.value?.toIntOrNull() ?: 0,
                                                 )
                                             },
-                                        dismiss = runBlocking { getString(Res.string.cancel) },
+                                        dismiss = cancel,
                                     ),
                                 )
                             },
@@ -873,21 +929,21 @@ fun SettingScreen(
                             onClick = {
                                 viewModel.setAlertData(
                                     SettingAlertState(
-                                        title = runBlocking { getString(Res.string.proxy_username) },
-                                        message = runBlocking { getString(Res.string.proxy_username_message) },
+                                        title = proxyUsername,
+                                        message = proxyUsernameMessage,
                                         textField =
                                             SettingAlertState.TextFieldData(
-                                                label = runBlocking { getString(Res.string.proxy_username) },
+                                                label = proxyUsername,
                                                 value = proxyUsername,
                                             ),
                                         confirm =
-                                            runBlocking { getString(Res.string.change) } to { state ->
+                                            change to { state ->
                                                 viewModel.setProxyCredentials(
                                                     state.textField?.value ?: "",
                                                     proxyPassword,
                                                 )
                                             },
-                                        dismiss = runBlocking { getString(Res.string.cancel) },
+                                        dismiss = cancel,
                                     ),
                                 )
                             },
@@ -903,21 +959,21 @@ fun SettingScreen(
                             onClick = {
                                 viewModel.setAlertData(
                                     SettingAlertState(
-                                        title = runBlocking { getString(Res.string.proxy_password) },
-                                        message = runBlocking { getString(Res.string.proxy_password_message) },
+                                        title = proxyPassword,
+                                        message = proxyPasswordMessage,
                                         textField =
                                             SettingAlertState.TextFieldData(
-                                                label = runBlocking { getString(Res.string.proxy_password) },
+                                                label = proxyPassword,
                                                 value = proxyPassword,
                                             ),
                                         confirm =
-                                            runBlocking { getString(Res.string.change) } to { state ->
+                                            change to { state ->
                                                 viewModel.setProxyCredentials(
                                                     proxyUsername,
                                                     state.textField?.value ?: "",
                                                 )
                                             },
-                                        dismiss = runBlocking { getString(Res.string.cancel) },
+                                        dismiss = cancel,
                                     ),
                                 )
                             },
@@ -931,7 +987,7 @@ fun SettingScreen(
                 Column {
                     Text(
                         text = stringResource(Res.string.audio),
-                        style = typo().labelMedium,
+                        style = LocalAppTypography.current.labelMedium,
                         color = white,
                         modifier = Modifier.padding(vertical = 8.dp),
                     )
@@ -961,7 +1017,7 @@ fun SettingScreen(
             Column {
                 Text(
                     text = stringResource(Res.string.playback),
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
@@ -1011,13 +1067,13 @@ fun SettingScreen(
                             onClick = {
                                 viewModel.setAlertData(
                                     SettingAlertState(
-                                        title = runBlocking { getString(Res.string.crossfade_duration) },
+                                        title = crossfadeDuration,
                                         selectOne =
                                             SettingAlertState.SelectData(
                                                 listSelect =
                                                     listOf(
                                                         (crossfadeDuration == DataStoreManager.CROSSFADE_DURATION_AUTO) to
-                                                            runBlocking { getString(Res.string.crossfade_auto) },
+                                                            crossfadeAuto,
                                                         (crossfadeDuration == 1000) to "1s",
                                                         (crossfadeDuration == 2000) to "2s",
                                                         (crossfadeDuration == 3000) to "3s",
@@ -1031,14 +1087,10 @@ fun SettingScreen(
                                                     ),
                                             ),
                                         confirm =
-                                            runBlocking { getString(Res.string.change) } to { state ->
+                                            change to { state ->
                                                 val duration =
                                                     when (state.selectOne?.getSelected()) {
-                                                        runBlocking {
-                                                            getString(
-                                                                Res.string.crossfade_auto,
-                                                            )
-                                                        },
+                                                        crossfadeAuto,
                                                         -> DataStoreManager.CROSSFADE_DURATION_AUTO
                                                         "1s" -> 1000
                                                         "2s" -> 2000
@@ -1054,7 +1106,7 @@ fun SettingScreen(
                                                     }
                                                 viewModel.setCrossfadeDuration(duration)
                                             },
-                                        dismiss = runBlocking { getString(Res.string.cancel) },
+                                        dismiss = cancel,
                                     ),
                                 )
                             },
@@ -1075,7 +1127,7 @@ fun SettingScreen(
             Column {
                 Text(
                     text = stringResource(Res.string.lyrics),
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
@@ -1092,33 +1144,33 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = runBlocking { getString(Res.string.main_lyrics_provider) },
+                                title = mainLyricsProvider,
                                 selectOne =
                                     SettingAlertState.SelectData(
                                         listSelect =
                                             listOf(
                                                 (mainLyricsProvider == DataStoreManager.SIMPMUSIC) to
-                                                    runBlocking { getString(Res.string.wavora_lyrics) },
+                                                    wavoraLyrics,
                                                 (mainLyricsProvider == DataStoreManager.YOUTUBE) to
-                                                    runBlocking { getString(Res.string.youtube_transcript) },
-                                                (mainLyricsProvider == DataStoreManager.LRCLIB) to runBlocking { getString(Res.string.lrclib) },
+                                                    youtubeTranscript,
+                                                (mainLyricsProvider == DataStoreManager.LRCLIB) to lrclib,
                                                 (mainLyricsProvider == DataStoreManager.BETTER_LYRICS) to
-                                                    runBlocking { getString(Res.string.better_lyrics) },
+                                                    betterLyrics,
                                             ),
                                     ),
                                 confirm =
-                                    runBlocking { getString(Res.string.change) } to { state ->
+                                    change to { state ->
                                         viewModel.setLyricsProvider(
                                             when (state.selectOne?.getSelected()) {
-                                                runBlocking { getString(Res.string.wavora_lyrics) } -> DataStoreManager.SIMPMUSIC
-                                                runBlocking { getString(Res.string.youtube_transcript) } -> DataStoreManager.YOUTUBE
-                                                runBlocking { getString(Res.string.lrclib) } -> DataStoreManager.LRCLIB
-                                                runBlocking { getString(Res.string.better_lyrics) } -> DataStoreManager.BETTER_LYRICS
+                                                wavoraLyrics -> DataStoreManager.SIMPMUSIC
+                                                youtubeTranscript -> DataStoreManager.YOUTUBE
+                                                lrclib -> DataStoreManager.LRCLIB
+                                                betterLyrics -> DataStoreManager.BETTER_LYRICS
                                                 else -> DataStoreManager.SIMPMUSIC
                                             },
                                         )
                                     },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
+                                dismiss = cancel,
                             ),
                         )
                     },
@@ -1130,22 +1182,22 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = runBlocking { getString(Res.string.translation_language) },
+                                title = translationLanguage,
                                 textField =
                                     SettingAlertState.TextFieldData(
-                                        label = runBlocking { getString(Res.string.translation_language) },
+                                        label = translationLanguage,
                                         value = translationLanguage ?: "",
                                         verifyCodeBlock = {
                                             (it.length == 2 && it.isTwoLetterCode()) to
-                                                runBlocking { getString(Res.string.invalid_language_code) }
+                                                invalidLanguageCode
                                         },
                                     ),
-                                message = runBlocking { getString(Res.string.translation_language_message) },
+                                message = translationLanguageMessage,
                                 confirm =
-                                    runBlocking { getString(Res.string.change) } to { state ->
+                                    change to { state ->
                                         viewModel.setTranslationLanguage(state.textField?.value ?: "")
                                     },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
+                                dismiss = cancel,
                             ),
                         )
                     },
@@ -1157,22 +1209,22 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = runBlocking { getString(Res.string.youtube_subtitle_language) },
+                                title = youtubeSubtitleLanguage,
                                 textField =
                                     SettingAlertState.TextFieldData(
-                                        label = runBlocking { getString(Res.string.youtube_subtitle_language) },
+                                        label = youtubeSubtitleLanguage,
                                         value = youtubeSubtitleLanguage,
                                         verifyCodeBlock = {
                                             (it.length == 2 && it.isTwoLetterCode()) to
-                                                runBlocking { getString(Res.string.invalid_language_code) }
+                                                invalidLanguageCode
                                         },
                                     ),
-                                message = runBlocking { getString(Res.string.youtube_subtitle_language_message) },
+                                message = youtubeSubtitleLanguageMessage,
                                 confirm =
-                                    runBlocking { getString(Res.string.change) } to { state ->
+                                    change to { state ->
                                         viewModel.setYoutubeSubtitleLanguage(state.textField?.value ?: "")
                                     },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
+                                dismiss = cancel,
                             ),
                         )
                     },
@@ -1189,18 +1241,18 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = runBlocking { getString(Res.string.contributor_name) },
+                                title = contributorName,
                                 textField =
                                     SettingAlertState.TextFieldData(
-                                        label = runBlocking { getString(Res.string.contributor_name) },
+                                        label = contributorName,
                                         value = "",
                                     ),
                                 message = "",
                                 confirm =
-                                    runBlocking { getString(Res.string.set) } to { state ->
+                                    set to { state ->
                                         viewModel.setContributorName(state.textField?.value ?: "")
                                     },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
+                                dismiss = cancel,
                             ),
                         )
                     },
@@ -1212,14 +1264,14 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = runBlocking { getString(Res.string.contributor_email) },
+                                title = contributorEmail,
                                 textField =
                                     SettingAlertState.TextFieldData(
-                                        label = runBlocking { getString(Res.string.contributor_email) },
+                                        label = contributorEmail,
                                         value = "",
                                         verifyCodeBlock = {
                                             if (it.isNotEmpty()) {
-                                                (it.contains("@")) to runBlocking { getString(Res.string.invalid) }
+                                                (it.contains("@")) to invalid
                                             } else {
                                                 true to ""
                                             }
@@ -1227,10 +1279,10 @@ fun SettingScreen(
                                     ),
                                 message = "",
                                 confirm =
-                                    runBlocking { getString(Res.string.set) } to { state ->
+                                    set to { state ->
                                         viewModel.setContributorEmail(state.textField?.value ?: "")
                                     },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
+                                dismiss = cancel,
                             ),
                         )
                     },
@@ -1239,7 +1291,7 @@ fun SettingScreen(
         }
         item(key = "AI") {
             Column {
-                Text(text = stringResource(Res.string.ai), style = typo().labelMedium, color = white, modifier = Modifier.padding(vertical = 8.dp))
+                Text(text = stringResource(Res.string.ai), style = LocalAppTypography.current.labelMedium, color = white, modifier = Modifier.padding(vertical = 8.dp))
                 SettingItem(
                     title = stringResource(Res.string.ai_provider),
                     subtitle =
@@ -1252,37 +1304,33 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = runBlocking { getString(Res.string.ai_provider) },
+                                title = aiProvider,
                                 selectOne =
                                     SettingAlertState.SelectData(
                                         listSelect =
                                             listOf(
                                                 (mainLyricsProvider == DataStoreManager.AI_PROVIDER_OPENAI) to
-                                                    runBlocking { getString(Res.string.openai) },
+                                                    openai,
                                                 (mainLyricsProvider == DataStoreManager.AI_PROVIDER_GEMINI) to
-                                                    runBlocking { getString(Res.string.gemini) },
+                                                    gemini,
                                                 (mainLyricsProvider == DataStoreManager.AI_PROVIDER_CUSTOM_OPENAI) to
-                                                    runBlocking { getString(Res.string.openai_api_compatible) },
+                                                    openaiApiCompatible,
                                             ),
                                     ),
                                 confirm =
-                                    runBlocking { getString(Res.string.change) } to { state ->
+                                    change to { state ->
                                         viewModel.setAIProvider(
                                             when (state.selectOne?.getSelected()) {
-                                                runBlocking { getString(Res.string.openai) } -> DataStoreManager.AI_PROVIDER_OPENAI
-                                                runBlocking { getString(Res.string.gemini) } -> DataStoreManager.AI_PROVIDER_GEMINI
-                                                runBlocking {
-                                                    getString(
-                                                        Res.string.openai_api_compatible,
-                                                    )
-                                                },
+                                                openai -> DataStoreManager.AI_PROVIDER_OPENAI
+                                                gemini -> DataStoreManager.AI_PROVIDER_GEMINI
+                                                openaiApiCompatible,
                                                 -> DataStoreManager.AI_PROVIDER_CUSTOM_OPENAI
 
                                                 else -> DataStoreManager.AI_PROVIDER_OPENAI
                                             },
                                         )
                                     },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
+                                dismiss = cancel,
                             ),
                         )
                     },
@@ -1293,21 +1341,21 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = runBlocking { getString(Res.string.ai_api_key) },
+                                title = aiApiKey,
                                 textField =
                                     SettingAlertState.TextFieldData(
-                                        label = runBlocking { getString(Res.string.ai_api_key) },
+                                        label = aiApiKey,
                                         value = "",
                                         verifyCodeBlock = {
-                                            (it.isNotEmpty()) to runBlocking { getString(Res.string.invalid_api_key) }
+                                            (it.isNotEmpty()) to invalidApiKey
                                         },
                                     ),
                                 message = "",
                                 confirm =
-                                    runBlocking { getString(Res.string.set) } to { state ->
+                                    set to { state ->
                                         viewModel.setAIApiKey(state.textField?.value ?: "")
                                     },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
+                                dismiss = cancel,
                             ),
                         )
                     },
@@ -1318,21 +1366,21 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = runBlocking { getString(Res.string.custom_ai_model_id) },
+                                title = customAiModelId,
                                 textField =
                                     SettingAlertState.TextFieldData(
-                                        label = runBlocking { getString(Res.string.custom_ai_model_id) },
+                                        label = customAiModelId,
                                         value = "",
                                         verifyCodeBlock = {
-                                            (it.isNotEmpty() && !it.contains(" ")) to runBlocking { getString(Res.string.invalid) }
+                                            (it.isNotEmpty() && !it.contains(" ")) to invalid
                                         },
                                     ),
-                                message = runBlocking { getString(Res.string.custom_model_id_messages) },
+                                message = customModelIdMessages,
                                 confirm =
-                                    runBlocking { getString(Res.string.set) } to { state ->
+                                    set to { state ->
                                         viewModel.setCustomModelId(state.textField?.value ?: "")
                                     },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
+                                dismiss = cancel,
                             ),
                         )
                     },
@@ -1356,10 +1404,10 @@ fun SettingScreen(
                                         ),
                                     message = "Enter OpenAI-compatible API base URL (e.g., https://api.openai.com/v1/)",
                                     confirm =
-                                        runBlocking { getString(Res.string.set) } to { state ->
+                                        set to { state ->
                                             viewModel.setCustomOpenAIBaseUrl(state.textField?.value ?: "")
                                         },
-                                    dismiss = runBlocking { getString(Res.string.cancel) },
+                                    dismiss = cancel,
                                 ),
                             )
                         },
@@ -1391,10 +1439,10 @@ fun SettingScreen(
                                         ),
                                     message = "Enter custom headers in JSON format:\n{\"key1\":\"value1\",\"key2\":\"value2\"}",
                                     confirm =
-                                        runBlocking { getString(Res.string.set) } to { state ->
+                                        set to { state ->
                                             viewModel.setCustomOpenAIHeaders(state.textField?.value ?: "")
                                         },
-                                    dismiss = runBlocking { getString(Res.string.cancel) },
+                                    dismiss = cancel,
                                 ),
                             )
                         },
@@ -1417,7 +1465,7 @@ fun SettingScreen(
             Column {
                 Text(
                     text = stringResource(Res.string.spotify),
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
@@ -1465,7 +1513,7 @@ fun SettingScreen(
             Column {
                 Text(
                     text = stringResource(Res.string.discord_integration),
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
@@ -1502,7 +1550,7 @@ fun SettingScreen(
             Column {
                 Text(
                     text = stringResource(Res.string.sponsorBlock),
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
@@ -1519,7 +1567,7 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = runBlocking { getString(Res.string.categories_sponsor_block) },
+                                title = categoriesSponsorBlock,
                                 multipleSelect =
                                     SettingAlertState.SelectData(
                                         listSelect =
@@ -1536,7 +1584,7 @@ fun SettingScreen(
                                                 },
                                     ),
                                 confirm =
-                                    runBlocking { getString(Res.string.save) } to { state ->
+                                    save to { state ->
                                         viewModel.setSponsorBlockCategories(
                                             state.multipleSelect
                                                 ?.getListSelected()
@@ -1549,7 +1597,7 @@ fun SettingScreen(
                                                 }?.toCollection(ArrayList()) ?: arrayListOf(),
                                         )
                                     },
-                                dismiss = runBlocking { getString(Res.string.cancel) },
+                                dismiss = cancel,
                             ),
                         )
                     },
@@ -1570,7 +1618,7 @@ fun SettingScreen(
                         }
                         append(afterUrl)
                     },
-                    style = typo().bodySmall,
+                    style = LocalAppTypography.current.bodySmall,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
                 )
             }
@@ -1580,7 +1628,7 @@ fun SettingScreen(
                 Column {
                     Text(
                         text = stringResource(Res.string.storage),
-                        style = typo().labelMedium,
+                        style = LocalAppTypography.current.labelMedium,
                         color = white,
                         modifier = Modifier.padding(vertical = 8.dp),
                     )
@@ -1590,13 +1638,13 @@ fun SettingScreen(
                         onClick = {
                             viewModel.setBasicAlertData(
                                 SettingBasicAlertState(
-                                    title = runBlocking { getString(Res.string.clear_player_cache) },
+                                    title = clearPlayerCache,
                                     message = null,
                                     confirm =
-                                        runBlocking { getString(Res.string.clear) } to {
+                                        clear to {
                                             viewModel.clearPlayerCache()
                                         },
-                                    dismiss = runBlocking { getString(Res.string.cancel) },
+                                    dismiss = cancel,
                                 ),
                             )
                         },
@@ -1607,13 +1655,13 @@ fun SettingScreen(
                         onClick = {
                             viewModel.setBasicAlertData(
                                 SettingBasicAlertState(
-                                    title = runBlocking { getString(Res.string.clear_downloaded_cache) },
+                                    title = clearDownloadedCache,
                                     message = null,
                                     confirm =
-                                        runBlocking { getString(Res.string.clear) } to {
+                                        clear to {
                                             viewModel.clearDownloadedCache()
                                         },
-                                    dismiss = runBlocking { getString(Res.string.cancel) },
+                                    dismiss = cancel,
                                 ),
                             )
                         },
@@ -1624,13 +1672,13 @@ fun SettingScreen(
                         onClick = {
                             viewModel.setBasicAlertData(
                                 SettingBasicAlertState(
-                                    title = runBlocking { getString(Res.string.clear_thumbnail_cache) },
+                                    title = clearThumbnailCache,
                                     message = null,
                                     confirm =
-                                        runBlocking { getString(Res.string.clear) } to {
+                                        clear to {
                                             viewModel.clearThumbnailCache(platformContext)
                                         },
-                                    dismiss = runBlocking { getString(Res.string.cancel) },
+                                    dismiss = cancel,
                                 ),
                             )
                         },
@@ -1641,13 +1689,13 @@ fun SettingScreen(
                         onClick = {
                             viewModel.setBasicAlertData(
                                 SettingBasicAlertState(
-                                    title = runBlocking { getString(Res.string.clear_canvas_cache) },
+                                    title = clearCanvasCache,
                                     message = null,
                                     confirm =
-                                        runBlocking { getString(Res.string.clear) } to {
+                                        clear to {
                                             viewModel.clearCanvasCache()
                                         },
-                                    dismiss = runBlocking { getString(Res.string.cancel) },
+                                    dismiss = cancel,
                                 ),
                             )
                         },
@@ -1658,7 +1706,7 @@ fun SettingScreen(
                         onClick = {
                             viewModel.setAlertData(
                                 SettingAlertState(
-                                    title = runBlocking { getString(Res.string.limit_player_cache) },
+                                    title = limitPlayerCache,
                                     selectOne =
                                         SettingAlertState.SelectData(
                                             listSelect =
@@ -1667,12 +1715,12 @@ fun SettingScreen(
                                                 },
                                         ),
                                     confirm =
-                                        runBlocking { getString(Res.string.change) } to { state ->
+                                        change to { state ->
                                             viewModel.setPlayerCacheLimit(
                                                 LIMIT_CACHE_SIZE.getDataFromItem(state.selectOne?.getSelected()),
                                             )
                                         },
-                                    dismiss = runBlocking { getString(Res.string.cancel) },
+                                    dismiss = cancel,
                                 ),
                             )
                         },
@@ -1792,7 +1840,7 @@ fun SettingScreen(
                                 ),
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text(text = stringResource(Res.string.other_app), style = typo().bodySmall)
+                        Text(text = stringResource(Res.string.other_app), style = LocalAppTypography.current.bodySmall)
                     }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -1807,7 +1855,7 @@ fun SettingScreen(
                                 ),
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text(text = stringResource(Res.string.downloaded_cache), style = typo().bodySmall)
+                        Text(text = stringResource(Res.string.downloaded_cache), style = LocalAppTypography.current.bodySmall)
                     }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -1822,7 +1870,7 @@ fun SettingScreen(
                                 ),
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text(text = stringResource(Res.string.player_cache), style = typo().bodySmall)
+                        Text(text = stringResource(Res.string.player_cache), style = LocalAppTypography.current.bodySmall)
                     }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -1837,7 +1885,7 @@ fun SettingScreen(
                                 ),
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text(text = stringResource(Res.string.spotify_canvas_cache), style = typo().bodySmall)
+                        Text(text = stringResource(Res.string.spotify_canvas_cache), style = LocalAppTypography.current.bodySmall)
                     }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -1852,7 +1900,7 @@ fun SettingScreen(
                                 ),
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text(text = stringResource(Res.string.thumbnail_cache), style = typo().bodySmall)
+                        Text(text = stringResource(Res.string.thumbnail_cache), style = LocalAppTypography.current.bodySmall)
                     }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -1867,7 +1915,7 @@ fun SettingScreen(
                                 ),
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text(text = stringResource(Res.string.database), style = typo().bodySmall)
+                        Text(text = stringResource(Res.string.database), style = LocalAppTypography.current.bodySmall)
                     }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -1882,7 +1930,7 @@ fun SettingScreen(
                                 ),
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text(text = stringResource(Res.string.free_space), style = typo().bodySmall)
+                        Text(text = stringResource(Res.string.free_space), style = LocalAppTypography.current.bodySmall)
                     }
                 }
             }
@@ -1891,7 +1939,7 @@ fun SettingScreen(
             Column {
                 Text(
                     text = stringResource(Res.string.backup),
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
@@ -1921,46 +1969,34 @@ fun SettingScreen(
                                 onClick = {
                                     viewModel.setAlertData(
                                         SettingAlertState(
-                                            title = runBlocking { getString(Res.string.backup_frequency) },
+                                            title = backupFrequency,
                                             selectOne =
                                                 SettingAlertState.SelectData(
                                                     listSelect =
                                                         listOf(
                                                             (autoBackupFrequency == DataStoreManager.AUTO_BACKUP_FREQUENCY_DAILY) to
-                                                                runBlocking { getString(Res.string.daily) },
+                                                                daily,
                                                             (autoBackupFrequency == DataStoreManager.AUTO_BACKUP_FREQUENCY_WEEKLY) to
-                                                                runBlocking { getString(Res.string.weekly) },
+                                                                weekly,
                                                             (autoBackupFrequency == DataStoreManager.AUTO_BACKUP_FREQUENCY_MONTHLY) to
-                                                                runBlocking { getString(Res.string.monthly) },
+                                                                monthly,
                                                         ),
                                                 ),
                                             confirm =
-                                                runBlocking { getString(Res.string.change) } to { state ->
+                                                change to { state ->
                                                     val frequency =
                                                         when (state.selectOne?.getSelected()) {
-                                                            runBlocking {
-                                                                getString(
-                                                                    Res.string.daily,
-                                                                )
-                                                            },
+                                                            daily,
                                                             -> DataStoreManager.AUTO_BACKUP_FREQUENCY_DAILY
-                                                            runBlocking {
-                                                                getString(
-                                                                    Res.string.weekly,
-                                                                )
-                                                            },
+                                                            weekly,
                                                             -> DataStoreManager.AUTO_BACKUP_FREQUENCY_WEEKLY
-                                                            runBlocking {
-                                                                getString(
-                                                                    Res.string.monthly,
-                                                                )
-                                                            },
+                                                            monthly,
                                                             -> DataStoreManager.AUTO_BACKUP_FREQUENCY_MONTHLY
                                                             else -> DataStoreManager.AUTO_BACKUP_FREQUENCY_DAILY
                                                         }
                                                     viewModel.setAutoBackupFrequency(frequency)
                                                 },
-                                            dismiss = runBlocking { getString(Res.string.cancel) },
+                                            dismiss = cancel,
                                         ),
                                     )
                                 },
@@ -1971,7 +2007,7 @@ fun SettingScreen(
                                 onClick = {
                                     viewModel.setAlertData(
                                         SettingAlertState(
-                                            title = runBlocking { getString(Res.string.keep_backups) },
+                                            title = keepBackups,
                                             selectOne =
                                                 SettingAlertState.SelectData(
                                                     listSelect =
@@ -1983,11 +2019,11 @@ fun SettingScreen(
                                                         ),
                                                 ),
                                             confirm =
-                                                runBlocking { getString(Res.string.change) } to { state ->
+                                                change to { state ->
                                                     val maxFiles = state.selectOne?.getSelected()?.toIntOrNull() ?: 5
                                                     viewModel.setAutoBackupMaxFiles(maxFiles)
                                                 },
-                                            dismiss = runBlocking { getString(Res.string.cancel) },
+                                            dismiss = cancel,
                                         ),
                                     )
                                 },
@@ -2031,7 +2067,7 @@ fun SettingScreen(
             Column {
                 Text(
                     text = stringResource(Res.string.about_us),
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     color = white,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
@@ -2097,7 +2133,7 @@ fun SettingScreen(
             title = {
                 Text(
                     text = alertBasicState.title,
-                    style = typo().titleSmall,
+                    style = LocalAppTypography.current.titleSmall,
                 )
             },
             text = {
@@ -2174,7 +2210,7 @@ fun SettingScreen(
                             }
                             Text(
                                 stringResource(Res.string.youtube_account),
-                                style = typo().titleMedium,
+                                style = LocalAppTypography.current.titleMedium,
                                 modifier =
                                     Modifier
                                         .align(Alignment.Center)
@@ -2189,7 +2225,7 @@ fun SettingScreen(
                             item {
                                 Text(
                                     stringResource(Res.string.no_account),
-                                    style = typo().bodyMedium,
+                                    style = LocalAppTypography.current.bodyMedium,
                                     textAlign = TextAlign.Center,
                                     modifier =
                                         Modifier
@@ -2226,14 +2262,14 @@ fun SettingScreen(
                                     )
                                     Spacer(Modifier.width(12.dp))
                                     Column(Modifier.weight(1f)) {
-                                        Text(it.name, style = typo().labelMedium, color = white)
-                                        Text(it.email, style = typo().bodySmall)
+                                        Text(it.name, style = LocalAppTypography.current.labelMedium, color = white)
+                                        Text(it.email, style = LocalAppTypography.current.bodySmall)
                                     }
                                     Spacer(Modifier.width(12.dp))
                                     AnimatedVisibility(it.isUsed) {
                                         Text(
                                             stringResource(Res.string.signed_in),
-                                            style = typo().bodySmall,
+                                            style = LocalAppTypography.current.bodySmall,
                                             maxLines = 2,
                                             textAlign = TextAlign.Center,
                                             modifier = Modifier.widthIn(0.dp, 64.dp),
@@ -2267,14 +2303,14 @@ fun SettingScreen(
                             ) {
                                 viewModel.setBasicAlertData(
                                     SettingBasicAlertState(
-                                        title = runBlocking { getString(Res.string.warning) },
-                                        message = runBlocking { getString(Res.string.log_out_warning) },
+                                        title = warning,
+                                        message = logOutWarning,
                                         confirm =
-                                            runBlocking { getString(Res.string.log_out) } to {
+                                            logOut to {
                                                 viewModel.logOutAllYouTube()
                                                 showYouTubeAccountDialog = false
                                             },
-                                        dismiss = runBlocking { getString(Res.string.cancel) },
+                                        dismiss = cancel,
                                     ),
                                 )
                             }
@@ -2300,7 +2336,7 @@ fun SettingScreen(
             title = {
                 Text(
                     text = alertState.title,
-                    style = typo().titleSmall,
+                    style = LocalAppTypography.current.titleSmall,
                 )
             },
             text = {
@@ -2390,7 +2426,7 @@ fun SettingScreen(
                                 Spacer(Modifier.width(8.dp))
                                 Text(
                                     text = item.second,
-                                    style = typo().bodyMedium,
+                                    style = LocalAppTypography.current.bodyMedium,
                                     maxLines = 1,
                                     modifier =
                                         Modifier
@@ -2441,7 +2477,7 @@ fun SettingScreen(
                                     },
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                Text(text = item.second, style = typo().bodyMedium, maxLines = 1)
+                                Text(text = item.second, style = LocalAppTypography.current.bodyMedium, maxLines = 1)
                             }
                         }
                     }
@@ -2523,7 +2559,7 @@ fun SettingScreen(
                 lazyListState = lazyListState,
                 showDescription = true,
                 contentPadding = innerPadding,
-                typography = typo(),
+                typography = LocalAppTypography.current,
                 colors =
                     LibraryDefaults.libraryColors(
                         licenseChipColors =
@@ -2544,7 +2580,7 @@ fun SettingScreen(
                                         stringResource(
                                             Res.string.third_party_libraries,
                                         ),
-                                    style = typo().titleMedium,
+                                    style = LocalAppTypography.current.titleMedium,
                                 )
                             },
                             navigationIcon = {
@@ -2576,7 +2612,7 @@ fun SettingScreen(
                     stringResource(
                         Res.string.settings,
                     ),
-                style = typo().titleMedium,
+                style = LocalAppTypography.current.titleMedium,
             )
         },
         navigationIcon = {

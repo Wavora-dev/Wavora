@@ -93,7 +93,7 @@ internal class PlaylistRepositoryImpl(
     override suspend fun updatePlaylistLiked(
         playlistId: String,
         likeStatus: Int,
-    ) = withContext(Dispatchers.Main) {
+    ) = withContext(Dispatchers.IO) {
         localDataSource.updatePlaylistLiked(
             likeStatus,
             playlistId,
@@ -103,7 +103,7 @@ internal class PlaylistRepositoryImpl(
     override suspend fun updatePlaylistInLibrary(
         inLibrary: LocalDateTime,
         playlistId: String,
-    ) = withContext(Dispatchers.Main) {
+    ) = withContext(Dispatchers.IO) {
         localDataSource.updatePlaylistInLibrary(
             inLibrary,
             playlistId,
@@ -113,7 +113,7 @@ internal class PlaylistRepositoryImpl(
     override suspend fun updatePlaylistDownloadState(
         playlistId: String,
         downloadState: Int,
-    ) = withContext(Dispatchers.Main) {
+    ) = withContext(Dispatchers.IO) {
         localDataSource.updatePlaylistDownloadState(
             downloadState,
             playlistId,
@@ -771,21 +771,9 @@ internal class PlaylistRepositoryImpl(
 
     override fun getChartPlaylist(): Flow<Resource<List<ChartItem>>> =
         flow {
-            youTube
-                .getWavoraChart()
-                .onSuccess { response ->
-                    val data = response.data?.filterNotNull() ?: emptyList()
-                    val result =
-                        data.mapNotNull {
-                            ChartItem(
-                                name = it.name ?: return@mapNotNull null,
-                                ytPlaylistId = it.youtubePlaylistId ?: return@mapNotNull null,
-                            )
-                        }
-                    emit(Resource.Success(result))
-                }.onFailure { exception ->
-                    exception.printStackTrace()
-                    emit(Resource.Error<List<ChartItem>>(exception.message ?: "Unknown error"))
+            // chart.wavora.org is not available; return empty list
+            emit(Resource.Success(emptyList()))
+        }               emit(Resource.Error<List<ChartItem>>(exception.message ?: "Unknown error"))
                 }
         }.flowOn(Dispatchers.IO)
 }

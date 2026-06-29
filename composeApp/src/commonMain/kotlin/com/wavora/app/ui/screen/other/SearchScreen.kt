@@ -129,6 +129,7 @@ import wavora.composeapp.generated.resources.search_for_songs_artists_albums_pla
 import wavora.composeapp.generated.resources.song
 import wavora.composeapp.generated.resources.videos
 import wavora.composeapp.generated.resources.what_do_you_want_to_listen_to
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -292,7 +293,7 @@ fun SearchScreen(
                         ) { index ->
                             Text(
                                 text = placeholderTexts[index],
-                                style = typo().labelMedium,
+                                style = LocalAppTypography.current.labelMedium,
                             )
                         }
                     },
@@ -425,7 +426,7 @@ fun SearchScreen(
                             ) {
                                 Text(
                                     text = suggestion,
-                                    style = typo().bodyMedium,
+                                    style = LocalAppTypography.current.bodyMedium,
                                 )
                                 Spacer(modifier = Modifier.weight(1f))
                                 IconButton(
@@ -462,81 +463,85 @@ fun SearchScreen(
                                 ),
                     ) {
                         LazyColumn {
-                            stickyHeader {
-                                Crossfade(
-                                    targetState = searchHistory.isNotEmpty(),
-                                ) {
-                                    if (it) {
+                            item {
+                                // Recent searches as horizontal chip pills
+                                if (searchHistory.isNotEmpty()) {
+                                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                                         Row(
-                                            modifier =
-                                                Modifier
-                                                    .fillMaxWidth()
-                                                    .background(Color.Black),
+                                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween,
                                         ) {
-                                            TextButton(
-                                                onClick = { searchViewModel.deleteSearchHistory() },
-                                            ) {
+                                            Text(
+                                                text = "Recent",
+                                                style = LocalAppTypography.current.labelMedium,
+                                                color = Color.White.copy(alpha = 0.5f),
+                                            )
+                                            TextButton(onClick = { searchViewModel.deleteSearchHistory() }) {
                                                 Text(
                                                     text = stringResource(Res.string.clear_search_history),
-                                                    color = MaterialTheme.colorScheme.onBackground,
+                                                    style = LocalAppTypography.current.labelSmall,
+                                                    color = Color.White.copy(alpha = 0.4f),
+                                                )
+                                            }
+                                        }
+                                        androidx.compose.foundation.layout.FlowRow(
+                                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        ) {
+                                            searchHistory.forEach { historyItem ->
+                                                androidx.compose.material3.InputChip(
+                                                    selected = false,
+                                                    onClick = {
+                                                        searchText = historyItem
+                                                        focusManager.clearFocus()
+                                                        isSearchSubmitted = true
+                                                        searchViewModel.insertSearchHistory(historyItem)
+                                                        when (searchScreenState.searchType) {
+                                                            SearchType.ALL -> searchViewModel.searchAll(historyItem)
+                                                            SearchType.SONGS -> searchViewModel.searchSongs(historyItem)
+                                                            SearchType.VIDEOS -> searchViewModel.searchVideos(historyItem)
+                                                            SearchType.ALBUMS -> searchViewModel.searchAlbums(historyItem)
+                                                            SearchType.ARTISTS -> searchViewModel.searchArtists(historyItem)
+                                                            SearchType.PLAYLISTS -> searchViewModel.searchPlaylists(historyItem)
+                                                            SearchType.FEATURED_PLAYLISTS -> searchViewModel.searchFeaturedPlaylist(historyItem)
+                                                            SearchType.PODCASTS -> searchViewModel.searchPodcast(historyItem)
+                                                        }
+                                                    },
+                                                    label = {
+                                                        Text(
+                                                            text = historyItem,
+                                                            style = LocalAppTypography.current.bodySmall,
+                                                            color = Color.White,
+                                                            maxLines = 1,
+                                                        )
+                                                    },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            painter = painterResource(Res.drawable.baseline_history_24),
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(14.dp),
+                                                            tint = Color.White.copy(alpha = 0.6f),
+                                                        )
+                                                    },
+                                                    colors = androidx.compose.material3.InputChipDefaults.inputChipColors(
+                                                        containerColor = Color.White.copy(alpha = 0.08f),
+                                                        labelColor = Color.White,
+                                                        leadingIconColor = Color.White.copy(alpha = 0.6f),
+                                                    ),
+                                                    border = androidx.compose.material3.InputChipDefaults.inputChipBorder(
+                                                        enabled = true,
+                                                        selected = false,
+                                                        borderColor = Color.White.copy(alpha = 0.15f),
+                                                        selectedBorderColor = Color.Transparent,
+                                                    ),
                                                 )
                                             }
                                         }
                                     }
                                 }
-                            }
-                            items(searchHistory, key = { it.hashCode() }) { historyItem ->
-                                Row(
-                                    modifier =
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                searchText = historyItem
-                                                focusManager.clearFocus()
-                                                isSearchSubmitted = true
-                                                searchViewModel.insertSearchHistory(historyItem)
-                                                when (searchScreenState.searchType) {
-                                                    SearchType.ALL -> searchViewModel.searchAll(historyItem)
-                                                    SearchType.SONGS -> searchViewModel.searchSongs(historyItem)
-                                                    SearchType.VIDEOS -> searchViewModel.searchVideos(historyItem)
-                                                    SearchType.ALBUMS -> searchViewModel.searchAlbums(historyItem)
-                                                    SearchType.ARTISTS -> searchViewModel.searchArtists(historyItem)
-                                                    SearchType.PLAYLISTS -> searchViewModel.searchPlaylists(historyItem)
-                                                    SearchType.FEATURED_PLAYLISTS -> searchViewModel.searchFeaturedPlaylist(historyItem)
-                                                    SearchType.PODCASTS -> searchViewModel.searchPodcast(historyItem)
-                                                }
-                                            }.padding(horizontal = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Icon(
-                                        painter = painterResource(Res.drawable.baseline_history_24),
-                                        contentDescription = "Search history",
-                                        modifier = Modifier.size(24.dp),
-                                    )
-                                    Spacer(modifier = Modifier.padding(horizontal = 12.dp))
-                                    Text(
-                                        text = historyItem,
-                                        style = typo().bodyMedium,
-                                    )
-                                    Spacer(modifier = Modifier.weight(1f))
-                                    IconButton(
-                                        onClick = {
-                                            searchText = historyItem
-                                            focusRequester.requestFocus()
-                                        },
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(Res.drawable.baseline_arrow_outward_24),
-                                            contentDescription = "Search suggestion",
-                                            modifier = Modifier.size(24.dp),
-                                        )
-                                    }
-                                }
-                            }
-                            item {
-                                EndOfPage(
-                                    withoutCredit = true,
-                                )
+                                EndOfPage(withoutCredit = true)
                             }
                         }
                     }
@@ -555,7 +560,7 @@ fun SearchScreen(
                         ) {
                             Text(
                                 text = stringResource(Res.string.everything_you_need),
-                                style = typo().titleMedium,
+                                style = LocalAppTypography.current.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.fillMaxWidth(),
@@ -563,7 +568,7 @@ fun SearchScreen(
                             Spacer(modifier = Modifier.height(10.dp))
                             Text(
                                 text = stringResource(Res.string.search_for_songs_artists_albums_playlists_and_more),
-                                style = typo().bodyMedium,
+                                style = LocalAppTypography.current.bodyMedium,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.fillMaxWidth(),
                             )
@@ -809,7 +814,7 @@ fun SearchScreen(
                                                     ) {
                                                         Text(
                                                             text = stringResource(Res.string.no_results_found),
-                                                            style = typo().titleMedium,
+                                                            style = LocalAppTypography.current.titleMedium,
                                                             textAlign = TextAlign.Center,
                                                             modifier = Modifier.fillMaxWidth(),
                                                         )
@@ -828,7 +833,7 @@ fun SearchScreen(
                                             ) {
                                                 Text(
                                                     text = stringResource(Res.string.error_occurred),
-                                                    style = typo().titleMedium,
+                                                    style = LocalAppTypography.current.titleMedium,
                                                     fontWeight = FontWeight.Bold,
                                                     textAlign = TextAlign.Center,
                                                     modifier = Modifier.fillMaxWidth(),
@@ -853,7 +858,7 @@ fun SearchScreen(
                                         ) {
                                             Text(
                                                 text = stringResource(Res.string.no_results_found),
-                                                style = typo().titleMedium,
+                                                style = LocalAppTypography.current.titleMedium,
                                                 textAlign = TextAlign.Center,
                                                 modifier = Modifier.fillMaxWidth(),
                                             )
@@ -973,7 +978,7 @@ fun SuggestItemRow(
 
             Text(
                 text = title,
-                style = typo().labelSmall,
+                style = LocalAppTypography.current.labelSmall,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -992,7 +997,7 @@ fun SuggestItemRow(
             if (subtitle.isNotEmpty()) {
                 Text(
                     text = subtitle,
-                    style = typo().bodySmall,
+                    style = LocalAppTypography.current.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

@@ -24,6 +24,7 @@ import com.wavora.app.ui.theme.typo
 import org.jetbrains.compose.resources.stringResource
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.ai
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @Composable
 fun ExplicitBadge(modifier: Modifier = Modifier) {
@@ -54,7 +55,7 @@ fun AIBadge() {
             color = { Color.Black },
             maxLines = 1,
             autoSize = TextAutoSize.StepBased(minFontSize = 6.sp),
-            style = typo().labelSmall,
+            style = LocalAppTypography.current.labelSmall,
             modifier = Modifier.padding(horizontal = 4.dp)
         )
     }

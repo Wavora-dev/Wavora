@@ -32,6 +32,7 @@ import wavora.composeapp.generated.resources.rate_lyrics
 import wavora.composeapp.generated.resources.rate_translated_lyrics
 import wavora.composeapp.generated.resources.upvote
 import wavora.composeapp.generated.resources.vote_for_lyrics
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @Composable
 fun VoteLyricsDialog(
@@ -50,14 +51,14 @@ fun VoteLyricsDialog(
             TextButton(onClick = onDismiss) {
                 Text(
                     stringResource(Res.string.cancel),
-                    style = typo().bodySmall,
+                    style = LocalAppTypography.current.bodySmall,
                 )
             }
         },
         title = {
             Text(
                 stringResource(Res.string.vote_for_lyrics),
-                style = typo().labelSmall,
+                style = LocalAppTypography.current.labelSmall,
             )
         },
         text = {
@@ -101,11 +102,11 @@ private fun VoteRow(
         Column {
             Text(
                 text = label,
-                style = typo().bodySmall,
+                style = LocalAppTypography.current.bodySmall,
             )
             Text(
                 text = "ID: ${voteState.id}",
-                style = typo().bodySmall,
+                style = LocalAppTypography.current.bodySmall,
             )
         }
         Column(
@@ -115,7 +116,7 @@ private fun VoteRow(
         ) {
             Text(
                 text = "Vote: ${voteState.vote}",
-                style = typo().bodySmall,
+                style = LocalAppTypography.current.bodySmall,
             )
             when (voteState.state) {
                 is VoteState.Loading -> {
@@ -137,7 +138,7 @@ private fun VoteRow(
                 is VoteState.Error -> {
                     Text(
                         text = voteState.state.message,
-                        style = typo().bodySmall,
+                        style = LocalAppTypography.current.bodySmall,
                         color = Color.Red,
                     )
                 }

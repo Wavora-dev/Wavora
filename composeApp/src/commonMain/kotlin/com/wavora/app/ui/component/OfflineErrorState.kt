@@ -34,6 +34,7 @@ import wavora.composeapp.generated.resources.home_offline_subtitle
 import wavora.composeapp.generated.resources.home_offline_title
 import wavora.composeapp.generated.resources.listen_to_downloaded
 import wavora.composeapp.generated.resources.retry
+import com.wavora.app.ui.theme.LocalAppTypography
 
 /**
  * Spotify-style minimal offline / error state shown on the Home tab when
@@ -75,14 +76,14 @@ fun OfflineErrorState(
             Spacer(modifier = Modifier.height(20.dp))
             Text(
                 text = stringResource(Res.string.home_offline_title),
-                style = typo().titleLarge,
+                style = LocalAppTypography.current.titleLarge,
                 color = Color.White,
                 textAlign = TextAlign.Center,
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = stringResource(Res.string.home_offline_subtitle),
-                style = typo().bodyMedium,
+                style = LocalAppTypography.current.bodyMedium,
                 color = Color.White.copy(alpha = 0.6f),
                 textAlign = TextAlign.Center,
             )

@@ -31,6 +31,7 @@ import org.jetbrains.compose.resources.stringResource
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.less
 import wavora.composeapp.generated.resources.more
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @Composable
 fun DescriptionView(
@@ -136,7 +137,7 @@ fun DescriptionView(
                     },
             maxLines = maxLineAnimated,
             onTextLayout = { layoutResult = it },
-            style = typo().bodyMedium,
+            style = LocalAppTypography.current.bodyMedium,
         )
         Spacer(modifier = Modifier.height(8.dp))
         androidx.compose.animation.AnimatedVisibility(!shouldHideExpandButton) {
@@ -147,7 +148,7 @@ fun DescriptionView(
                     Modifier.clickable {
                         expanded = !expanded
                     },
-                style = typo().labelSmall,
+                style = LocalAppTypography.current.labelSmall,
             )
         }
     }

@@ -28,6 +28,7 @@ import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.wavora.app.ui.theme.typo
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @Composable
 fun FiveImagesComponent(
@@ -89,7 +90,7 @@ fun FiveImagesComponent(
             ) {
                 Text(
                     text = images.first().title,
-                    style = typo().labelSmall,
+                    style = LocalAppTypography.current.labelSmall,
                     color = Color.White,
                     maxLines = 1,
                     modifier =
@@ -103,7 +104,7 @@ fun FiveImagesComponent(
                 )
                 Text(
                     text = images.first().subtitle,
-                    style = typo().bodySmall,
+                    style = LocalAppTypography.current.bodySmall,
                     color = Color.White,
                     maxLines = 1,
                     modifier =
@@ -118,7 +119,7 @@ fun FiveImagesComponent(
                 images.first().thirdTitle?.let {
                     Text(
                         text = it,
-                        style = typo().bodySmall,
+                        style = LocalAppTypography.current.bodySmall,
                         maxLines = 1,
                         modifier =
                             Modifier
@@ -189,7 +190,7 @@ fun FiveImagesComponent(
                     ) {
                         Text(
                             text = image.title,
-                            style = typo().labelSmall,
+                            style = LocalAppTypography.current.labelSmall,
                             color = Color.White,
                             maxLines = 1,
                             modifier =
@@ -203,7 +204,7 @@ fun FiveImagesComponent(
                         )
                         Text(
                             text = image.subtitle,
-                            style = typo().bodySmall,
+                            style = LocalAppTypography.current.bodySmall,
                             color = Color.White,
                             maxLines = 1,
                             modifier =
@@ -218,7 +219,7 @@ fun FiveImagesComponent(
                         image.thirdTitle?.let {
                             Text(
                                 text = it,
-                                style = typo().bodySmall,
+                                style = LocalAppTypography.current.bodySmall,
                                 maxLines = 1,
                                 modifier =
                                     Modifier
@@ -291,7 +292,7 @@ fun FiveImagesComponent(
                     ) {
                         Text(
                             text = image.title,
-                            style = typo().labelSmall,
+                            style = LocalAppTypography.current.labelSmall,
                             color = Color.White,
                             maxLines = 1,
                             modifier =
@@ -305,7 +306,7 @@ fun FiveImagesComponent(
                         )
                         Text(
                             text = image.subtitle,
-                            style = typo().bodySmall,
+                            style = LocalAppTypography.current.bodySmall,
                             color = Color.White,
                             maxLines = 1,
                             modifier =
@@ -320,7 +321,7 @@ fun FiveImagesComponent(
                         image.thirdTitle?.let {
                             Text(
                                 text = it,
-                                style = typo().bodySmall,
+                                style = LocalAppTypography.current.bodySmall,
                                 maxLines = 1,
                                 modifier =
                                     Modifier

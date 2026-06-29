@@ -20,6 +20,7 @@ import com.wavora.app.ui.theme.typo
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import wavora.composeapp.generated.resources.*
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @Composable
 @ExperimentalMaterial3Api
@@ -44,7 +45,7 @@ fun ReviewDialog(
             }) {
                 Text(
                     stringResource(Res.string.give_a_star),
-                    style = typo().bodySmall,
+                    style = LocalAppTypography.current.bodySmall,
                 )
             }
         },
@@ -54,7 +55,7 @@ fun ReviewDialog(
             }) {
                 Text(
                     stringResource(Res.string.later),
-                    style = typo().bodySmall,
+                    style = LocalAppTypography.current.bodySmall,
                 )
             }
         },
@@ -64,7 +65,7 @@ fun ReviewDialog(
         title = {
             Text(
                 stringResource(Res.string.enjoying_wavora),
-                style = typo().labelSmall,
+                style = LocalAppTypography.current.labelSmall,
             )
         },
         text = {
@@ -99,7 +100,7 @@ fun ReviewDialog(
                     }
                 },
                 textAlign = TextAlign.Center,
-                style = typo().bodySmall,
+                style = LocalAppTypography.current.bodySmall,
             )
         },
     )

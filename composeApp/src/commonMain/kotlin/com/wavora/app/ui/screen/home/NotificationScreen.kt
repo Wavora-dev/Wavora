@@ -60,6 +60,7 @@ import wavora.composeapp.generated.resources.new_release
 import wavora.composeapp.generated.resources.no_notification
 import wavora.composeapp.generated.resources.notification
 import wavora.composeapp.generated.resources.singles
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,7 +74,7 @@ fun NotificationScreen(
             title = {
                 Text(
                     text = stringResource(Res.string.notification),
-                    style = typo().titleMedium,
+                    style = LocalAppTypography.current.titleMedium,
                 )
             },
             navigationIcon = {
@@ -107,7 +108,7 @@ fun NotificationScreen(
                 ) {
                     Text(
                         text = stringResource(Res.string.no_notification),
-                        style = typo().titleMedium,
+                        style = LocalAppTypography.current.titleMedium,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.align(Alignment.Center),
                     )
@@ -162,9 +163,9 @@ fun NotificationItem(
                 )
                 Spacer(modifier = Modifier.padding(5.dp))
                 Column {
-                    Text(text = stringResource(Res.string.new_release), style = typo().titleSmall)
+                    Text(text = stringResource(Res.string.new_release), style = LocalAppTypography.current.titleSmall)
                     Spacer(modifier = Modifier.padding(3.dp))
-                    Text(text = notification.name, style = typo().headlineMedium)
+                    Text(text = notification.name, style = LocalAppTypography.current.headlineMedium)
                 }
             }
             LazyRow(
@@ -193,7 +194,7 @@ fun NotificationItem(
         }
         Text(
             text = notification.time.formatTimeAgo(),
-            style = typo().titleSmall,
+            style = LocalAppTypography.current.titleSmall,
             modifier =
                 Modifier
                     .align(Alignment.TopEnd)
@@ -247,7 +248,7 @@ fun ItemAlbumNotification(
             )
             Text(
                 text = title,
-                style = typo().titleSmall,
+                style = LocalAppTypography.current.titleSmall,
                 color = Color.White,
                 maxLines = 1,
                 modifier =
@@ -262,7 +263,7 @@ fun ItemAlbumNotification(
             )
             Text(
                 text = if (isAlbum) stringResource(Res.string.album) else stringResource(Res.string.singles),
-                style = typo().bodySmall,
+                style = LocalAppTypography.current.bodySmall,
                 maxLines = 1,
                 modifier =
                     Modifier

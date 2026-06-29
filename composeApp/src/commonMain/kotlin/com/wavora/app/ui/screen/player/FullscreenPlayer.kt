@@ -93,6 +93,7 @@ import wavora.composeapp.generated.resources.baseline_arrow_back_ios_new_24
 import wavora.composeapp.generated.resources.baseline_more_vert_24
 import wavora.composeapp.generated.resources.five_seconds
 import kotlin.math.roundToLong
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -192,8 +193,8 @@ fun FullscreenPlayer(
             lyricsData = nowPlayingState.lyricsData?.lyrics,
             translatedLyricsData = nowPlayingState.lyricsData?.translatedLyrics?.first,
             isInPipMode = isInPipMode,
-            mainTextStyle = typo().bodyLarge,
-            translatedTextStyle = typo().bodyMedium,
+            mainTextStyle = LocalAppTypography.current.bodyLarge,
+            translatedTextStyle = LocalAppTypography.current.bodyMedium,
         )
         if (!isInPipMode) {
             Row(Modifier.fillMaxSize()) {
@@ -244,7 +245,7 @@ fun FullscreenPlayer(
                                 Text(
                                     stringResource(Res.string.five_seconds),
                                     color = Color.White,
-                                    style = typo().bodyMedium,
+                                    style = LocalAppTypography.current.bodyMedium,
                                 )
                             }
                         }
@@ -290,7 +291,7 @@ fun FullscreenPlayer(
                                 Text(
                                     stringResource(Res.string.five_seconds),
                                     color = Color.White,
-                                    style = typo().bodyMedium,
+                                    style = LocalAppTypography.current.bodyMedium,
                                 )
                                 Spacer(Modifier.width(4.dp))
                                 Icon(
@@ -340,7 +341,7 @@ fun FullscreenPlayer(
                             title = {
                                 Text(
                                     text = nowPlayingState.nowPlayingTitle,
-                                    style = typo().titleMedium,
+                                    style = LocalAppTypography.current.titleMedium,
                                     maxLines = 1,
                                     modifier =
                                         Modifier
@@ -636,7 +637,7 @@ fun FullscreenPlayer(
                                                 thumbSize = DpSize(8.dp, 8.dp),
                                                 interactionSource =
                                                     remember {
-                                                        MutableInteractionSource()
+                                                        remember { MutableInteractionSource() }
                                                     },
                                                 colors =
                                                     SliderDefaults.colors().copy(
@@ -666,12 +667,12 @@ fun FullscreenPlayer(
                                 ) {
                                     Text(
                                         text = formatDuration((timelineState.total * (sliderValue / 100f)).roundToLong()),
-                                        style = typo().labelSmall,
+                                        style = LocalAppTypography.current.labelSmall,
                                     )
                                     Spacer(Modifier.width(4.dp))
                                     Text(
                                         text = " / ${formatDuration(timelineState.total)}",
-                                        style = typo().bodySmall,
+                                        style = LocalAppTypography.current.bodySmall,
                                     )
                                 }
                                 Row(

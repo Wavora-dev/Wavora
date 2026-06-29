@@ -34,7 +34,7 @@ class DiscordRPC(
             smallText = song.artistName?.firstOrNull(),
             buttons =
                 listOf(
-                    "Listen on Wavora" to "https://wavora.org/app/watch?v=${song.videoId}",
+                    "Listen on Wavora" to "https://music.youtube.com/watch?v=${song.videoId}",
                     "Visit Wavora" to "https://github.com/wavora-dev/Wavora",
                 ),
             type = Type.LISTENING,

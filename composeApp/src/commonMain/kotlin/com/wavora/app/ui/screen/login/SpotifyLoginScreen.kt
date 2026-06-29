@@ -54,6 +54,7 @@ import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.baseline_arrow_back_ios_new_24
 import wavora.composeapp.generated.resources.log_in_to_spotify
 import wavora.composeapp.generated.resources.login_success
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -196,7 +197,7 @@ fun SpotifyLoginScreen(
             title = {
                 Text(
                     text = stringResource(Res.string.log_in_to_spotify),
-                    style = typo().titleMedium,
+                    style = LocalAppTypography.current.titleMedium,
                 )
             },
             navigationIcon = {

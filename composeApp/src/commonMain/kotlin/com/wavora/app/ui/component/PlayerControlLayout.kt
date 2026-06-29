@@ -22,6 +22,8 @@ import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,6 +41,7 @@ fun PlayerControlLayout(
     isSmallSize: Boolean = false,
     onUIEvent: (UIEvent) -> Unit,
 ) {
+    val haptic = LocalHapticFeedback.current
     val height = if (isSmallSize) 48.dp else 96.dp
     val smallIcon = if (isSmallSize) 20.dp to 28.dp else 32.dp to 42.dp
     val mediumIcon = if (isSmallSize) 28.dp to 38.dp else 42.dp to 52.dp
@@ -63,6 +66,7 @@ fun PlayerControlLayout(
                             CircleShape,
                         )
                         .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onUIEvent(UIEvent.Shuffle)
                         },
                 contentAlignment = Alignment.Center,
@@ -79,7 +83,7 @@ fun PlayerControlLayout(
                         Icon(
                             imageVector = Icons.Rounded.Shuffle,
                             tint = seed,
-                            contentDescription = "",
+                            contentDescription = "Shuffle",
                             modifier = Modifier.size(smallIcon.first),
                         )
                     }
@@ -98,6 +102,7 @@ fun PlayerControlLayout(
                         )
                         .clickable {
                             if (controllerState.isPreviousAvailable) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 onUIEvent(UIEvent.Previous)
                             }
                         },
@@ -122,6 +127,7 @@ fun PlayerControlLayout(
                             CircleShape,
                         )
                         .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onUIEvent(UIEvent.PlayPause)
                         },
                 contentAlignment = Alignment.Center,
@@ -157,6 +163,7 @@ fun PlayerControlLayout(
                         )
                         .clickable {
                             if (controllerState.isNextAvailable) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 onUIEvent(UIEvent.Next)
                             }
                         },
@@ -180,6 +187,7 @@ fun PlayerControlLayout(
                             CircleShape,
                         )
                         .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onUIEvent(UIEvent.Repeat)
                         },
                 contentAlignment = Alignment.Center,
@@ -199,7 +207,7 @@ fun PlayerControlLayout(
                             Icon(
                                 imageVector = Icons.Rounded.Repeat,
                                 tint = seed,
-                                contentDescription = "",
+                                contentDescription = "Repeat all",
                                 modifier = Modifier.size(smallIcon.first),
                             )
                         }
@@ -208,7 +216,7 @@ fun PlayerControlLayout(
                             Icon(
                                 imageVector = Icons.Rounded.RepeatOne,
                                 tint = seed,
-                                contentDescription = "",
+                                contentDescription = "Repeat one",
                                 modifier = Modifier.size(smallIcon.first),
                             )
                         }

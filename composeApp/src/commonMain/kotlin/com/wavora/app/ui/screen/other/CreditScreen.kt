@@ -49,6 +49,7 @@ import dev.chrisbanes.haze.rememberHazeState
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import wavora.composeapp.generated.resources.*
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -84,21 +85,21 @@ fun CreditScreen(
         // App name
         Text(
             text = stringResource(Res.string.app_name),
-            style = typo().titleLarge,
+            style = LocalAppTypography.current.titleLarge,
             fontSize = 22.sp,
         )
 
         // Version
         Text(
             text = stringResource(Res.string.version_format, VersionManager.getVersionName()),
-            style = typo().bodySmall,
+            style = LocalAppTypography.current.bodySmall,
             fontSize = 13.sp,
         )
 
         // Developer - clickable, opens dev blog
         Text(
             text = stringResource(Res.string.wavora_dev),
-            style = typo().bodyMedium,
+            style = LocalAppTypography.current.bodyMedium,
             textDecoration = TextDecoration.Underline,
             modifier =
                 Modifier.clickable {
@@ -111,7 +112,7 @@ fun CreditScreen(
         // App description
         Text(
             text = stringResource(Res.string.credit_app),
-            style = typo().bodyMedium,
+            style = LocalAppTypography.current.bodyMedium,
             modifier =
                 Modifier
                     .fillMaxWidth()
@@ -151,7 +152,7 @@ fun CreditScreen(
                     Text(text = stringResource(Res.string.developer_blog))
                     Text(
                         text = stringResource(Res.string.developer_blog_tagline),
-                        style = typo().bodySmall,
+                        style = LocalAppTypography.current.bodySmall,
                     )
                 }
             }
@@ -204,7 +205,7 @@ fun CreditScreen(
         // Copyright text
         Text(
             text = stringResource(Res.string.copyright),
-            style = typo().bodySmall,
+            style = LocalAppTypography.current.bodySmall,
             modifier =
                 Modifier
                     .fillMaxWidth()
@@ -224,7 +225,7 @@ fun CreditScreen(
         title = {
             Text(
                 text = stringResource(Res.string.app_name),
-                style = typo().titleMedium,
+                style = LocalAppTypography.current.titleMedium,
                 maxLines = 1,
                 modifier =
                     Modifier

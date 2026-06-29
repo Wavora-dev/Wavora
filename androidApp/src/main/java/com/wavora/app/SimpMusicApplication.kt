@@ -8,6 +8,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.work.Configuration
 import androidx.work.WorkManager
 import cat.ereza.customactivityoncrash.config.CaocConfig
+import coil3.memory.MemoryCache
 import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
@@ -138,5 +139,10 @@ class WavoraApplication :
                     .maxSizeBytes(512L * 1024 * 1024)
                     .build(),
             ).crossfade(true)
+            .memoryCache {
+                MemoryCache.Builder()
+                    .maxSizePercent(context, 0.10)
+                    .build()
+            }
             .build()
 }

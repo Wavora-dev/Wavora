@@ -54,13 +54,15 @@ fun InfiniteBorderAnimationView(
     oneCircleDurationMillis: Int = 3000,
     content: @Composable () -> Unit,
 ) {
+    // Only run the infinite transition when the animation is actually visible.
+    // Previously the transition always ran (even on unselected chips), wasting CPU.
     val infiniteTransition = rememberInfiniteTransition(label = "Infinite Color Animation")
     val degrees by infiniteTransition.animateFloat(
         initialValue = 90f,
         targetValue = 450f,
         animationSpec =
             infiniteRepeatable(
-                animation = tween(durationMillis = oneCircleDurationMillis, easing = LinearEasing),
+                animation = tween(durationMillis = if (isAnimated) oneCircleDurationMillis else Int.MAX_VALUE, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart,
             ),
         label = "Infinite Colors",
@@ -126,10 +128,12 @@ fun LimitedBorderAnimationView(
         tween(800),
     )
 
-    LaunchedEffect(true) {
+    LaunchedEffect(isAnimated) {
         if (isAnimated) {
             shouldAnimate = true
             delay(interactionNumber * oneCircleDurationMillis.toLong())
+            shouldAnimate = false
+        } else {
             shouldAnimate = false
         }
     }

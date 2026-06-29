@@ -108,6 +108,7 @@ import wavora.composeapp.generated.resources.your_recently_played
 import wavora.composeapp.generated.resources.your_top_albums
 import wavora.composeapp.generated.resources.your_top_artists
 import wavora.composeapp.generated.resources.your_top_tracks
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -234,7 +235,7 @@ fun AnalyticsScreen(
                             ) {
                                 Text(
                                     text = stringResource(Res.string.top_song),
-                                    style = typo().titleLarge,
+                                    style = LocalAppTypography.current.titleLarge,
                                     color = Color.White,
                                     maxLines = 1,
                                 )
@@ -248,13 +249,13 @@ fun AnalyticsScreen(
                                     ) {
                                         Text(
                                             topTrack.second.title,
-                                            style = typo().labelMedium,
+                                            style = LocalAppTypography.current.labelMedium,
                                             color = Color.White,
                                             maxLines = 1,
                                         )
                                         Text(
                                             topTrack.second.artistName?.connectArtists() ?: "",
-                                            style = typo().bodyMedium,
+                                            style = LocalAppTypography.current.bodyMedium,
                                             maxLines = 1,
                                         )
                                     }
@@ -263,13 +264,13 @@ fun AnalyticsScreen(
                                     ) {
                                         Text(
                                             "Listened time",
-                                            style = typo().bodyMedium,
+                                            style = LocalAppTypography.current.bodyMedium,
                                             color = Color.White,
                                             maxLines = 1,
                                         )
                                         Text(
                                             "${topTrack.first.totalListeningTime} seconds",
-                                            style = typo().bodyLarge,
+                                            style = LocalAppTypography.current.bodyLarge,
                                             maxLines = 1,
                                         )
                                     }
@@ -288,7 +289,7 @@ fun AnalyticsScreen(
                                 Text(
                                     stringResource(Res.string.no_data_analytics),
                                     modifier = Modifier.align(Alignment.Center),
-                                    style = typo().bodyLarge,
+                                    style = LocalAppTypography.current.bodyLarge,
                                 )
                             }
                         }
@@ -305,14 +306,14 @@ fun AnalyticsScreen(
                             ) {
                                 Text(
                                     stringResource(Res.string.songs_played),
-                                    style = typo().bodyMedium,
+                                    style = LocalAppTypography.current.bodyMedium,
                                     textDecoration = TextDecoration.Underline,
                                     color = Color.White,
                                     maxLines = 1,
                                 )
                                 Text(
                                     "${scrobblesCount.data ?: 0}",
-                                    style = typo().bodyLarge,
+                                    style = LocalAppTypography.current.bodyLarge,
                                     maxLines = 1,
                                 )
                             }
@@ -328,14 +329,14 @@ fun AnalyticsScreen(
                             ) {
                                 Text(
                                     stringResource(Res.string.artists),
-                                    style = typo().bodyMedium,
+                                    style = LocalAppTypography.current.bodyMedium,
                                     textDecoration = TextDecoration.Underline,
                                     color = Color.White,
                                     maxLines = 1,
                                 )
                                 Text(
                                     "${artistCount.data ?: 0}",
-                                    style = typo().bodyLarge,
+                                    style = LocalAppTypography.current.bodyLarge,
                                     maxLines = 1,
                                 )
                             }
@@ -351,14 +352,14 @@ fun AnalyticsScreen(
                             ) {
                                 Text(
                                     stringResource(Res.string.total_listened_time),
-                                    style = typo().bodyMedium,
+                                    style = LocalAppTypography.current.bodyMedium,
                                     textDecoration = TextDecoration.Underline,
                                     color = Color.White,
                                     maxLines = 1,
                                 )
                                 Text(
                                     "${totalPlayedTime.data ?: 0} ${stringResource(Res.string.seconds)}",
-                                    style = typo().bodyLarge,
+                                    style = LocalAppTypography.current.bodyLarge,
                                     maxLines = 1,
                                 )
                             }
@@ -383,7 +384,7 @@ fun AnalyticsScreen(
                             ) {
                                 Text(
                                     text = stringResource(Res.string.your_recently_played),
-                                    style = typo().labelMedium,
+                                    style = LocalAppTypography.current.labelMedium,
                                     color = Color.White,
                                     modifier = Modifier.weight(1f),
                                 )
@@ -398,7 +399,7 @@ fun AnalyticsScreen(
                                                 contentColor = Color.White,
                                             ),
                                 ) {
-                                    Text(stringResource(Res.string.more), style = typo().bodySmall)
+                                    Text(stringResource(Res.string.more), style = LocalAppTypography.current.bodySmall)
                                 }
                             }
 
@@ -455,7 +456,7 @@ fun AnalyticsScreen(
                                                         year()
                                                     },
                                                 ),
-                                            style = typo().bodySmall,
+                                            style = LocalAppTypography.current.bodySmall,
                                         )
                                     },
                                 )
@@ -485,7 +486,7 @@ fun AnalyticsScreen(
                             ) {
                                 Text(
                                     text = stringResource(Res.string.your_top_artists),
-                                    style = typo().labelMedium,
+                                    style = LocalAppTypography.current.labelMedium,
                                     color = Color.White,
                                     modifier = Modifier.weight(1f),
                                 )
@@ -504,7 +505,7 @@ fun AnalyticsScreen(
                                                 contentColor = Color.White,
                                             ),
                                 ) {
-                                    Text(stringResource(Res.string.more), style = typo().bodySmall)
+                                    Text(stringResource(Res.string.more), style = LocalAppTypography.current.bodySmall)
                                 }
                             }
                             FiveImagesComponent(
@@ -549,7 +550,7 @@ fun AnalyticsScreen(
                             ) {
                                 Text(
                                     text = stringResource(Res.string.your_top_albums),
-                                    style = typo().labelMedium,
+                                    style = LocalAppTypography.current.labelMedium,
                                     color = Color.White,
                                     modifier = Modifier.weight(1f),
                                 )
@@ -568,7 +569,7 @@ fun AnalyticsScreen(
                                                 contentColor = Color.White,
                                             ),
                                 ) {
-                                    Text(stringResource(Res.string.more), style = typo().bodySmall)
+                                    Text(stringResource(Res.string.more), style = LocalAppTypography.current.bodySmall)
                                 }
                             }
                             FiveImagesComponent(
@@ -615,7 +616,7 @@ fun AnalyticsScreen(
                             ) {
                                 Text(
                                     text = stringResource(Res.string.your_top_tracks),
-                                    style = typo().labelMedium,
+                                    style = LocalAppTypography.current.labelMedium,
                                     color = Color.White,
                                     modifier = Modifier.weight(1f),
                                 )
@@ -634,7 +635,7 @@ fun AnalyticsScreen(
                                                 contentColor = Color.White,
                                             ),
                                 ) {
-                                    Text(stringResource(Res.string.more), style = typo().bodySmall)
+                                    Text(stringResource(Res.string.more), style = LocalAppTypography.current.bodySmall)
                                 }
                             }
 
@@ -680,7 +681,7 @@ fun AnalyticsScreen(
                                         ) {
                                             Text(
                                                 text = "${pair.first.totalListeningTime} ${stringResource(Res.string.seconds)}",
-                                                style = typo().bodySmall,
+                                                style = LocalAppTypography.current.bodySmall,
                                             )
                                             Box(Modifier.fillMaxWidth()) {
                                                 Box(
@@ -693,7 +694,7 @@ fun AnalyticsScreen(
                                                 ) {
                                                     Text(
                                                         text = "",
-                                                        style = typo().bodySmall,
+                                                        style = LocalAppTypography.current.bodySmall,
                                                         modifier =
                                                             Modifier
                                                                 .align(Alignment.CenterStart)
@@ -702,7 +703,7 @@ fun AnalyticsScreen(
                                                 }
                                                 Text(
                                                     text = "${pair.first.playCount} ${stringResource(Res.string.lower_plays)}",
-                                                    style = typo().bodySmall,
+                                                    style = LocalAppTypography.current.bodySmall,
                                                     modifier =
                                                         Modifier
                                                             .align(Alignment.CenterStart)
@@ -733,7 +734,7 @@ fun AnalyticsScreen(
                         ) {
                             Text(
                                 text = stringResource(Res.string.date_range),
-                                style = typo().labelMedium,
+                                style = LocalAppTypography.current.labelMedium,
                                 color = Color.White,
                             )
                             Row(
@@ -760,7 +761,7 @@ fun AnalyticsScreen(
                                                                     year()
                                                                 },
                                                             ),
-                                                        style = typo().bodyMedium,
+                                                        style = LocalAppTypography.current.bodyMedium,
                                                         modifier = Modifier.padding(horizontal = 8.dp),
                                                     )
                                                 }
@@ -768,7 +769,7 @@ fun AnalyticsScreen(
                                                 is AnalyticsUiState.ChartType.Month -> {
                                                     Text(
                                                         text = "${chartType.month} - ${chartType.year}",
-                                                        style = typo().bodySmall,
+                                                        style = LocalAppTypography.current.bodySmall,
                                                         modifier = Modifier.padding(horizontal = 8.dp),
                                                     )
                                                 }
@@ -796,7 +797,7 @@ fun AnalyticsScreen(
                                                 ) {
                                                     Text(
                                                         text = "",
-                                                        style = typo().bodySmall,
+                                                        style = LocalAppTypography.current.bodySmall,
                                                         modifier =
                                                             Modifier
                                                                 .align(Alignment.CenterStart)
@@ -805,7 +806,7 @@ fun AnalyticsScreen(
                                                 }
                                                 Text(
                                                     text = "$playCount ${stringResource(Res.string.lower_plays)}",
-                                                    style = typo().bodySmall,
+                                                    style = LocalAppTypography.current.bodySmall,
                                                     modifier =
                                                         Modifier
                                                             .align(Alignment.CenterStart)
@@ -899,7 +900,7 @@ fun AnalyticsScreen(
                                     AnalyticsUiState.DayRange.LAST_90_DAYS -> "90d"
                                     AnalyticsUiState.DayRange.THIS_YEAR -> "1y"
                                 },
-                                style = typo().bodySmall.copy(fontSize = 8.sp),
+                                style = LocalAppTypography.current.bodySmall.copy(fontSize = 8.sp),
                                 color = Color.White,
                                 modifier = Modifier.align(Alignment.Center),
                             )
@@ -910,28 +911,28 @@ fun AnalyticsScreen(
                         onDismissRequest = { dayRangeMenuExpanded = false },
                     ) {
                         DropdownMenuItem(
-                            text = { Text(stringResource(Res.string.last_7_days), style = typo().labelSmall) },
+                            text = { Text(stringResource(Res.string.last_7_days), style = LocalAppTypography.current.labelSmall) },
                             onClick = {
                                 analyticsViewModel.setDayRange(AnalyticsUiState.DayRange.LAST_7_DAYS)
                                 dayRangeMenuExpanded = false
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text(stringResource(Res.string.last_30_days), style = typo().labelSmall) },
+                            text = { Text(stringResource(Res.string.last_30_days), style = LocalAppTypography.current.labelSmall) },
                             onClick = {
                                 analyticsViewModel.setDayRange(AnalyticsUiState.DayRange.LAST_30_DAYS)
                                 dayRangeMenuExpanded = false
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text(stringResource(Res.string.last_90_days), style = typo().labelSmall) },
+                            text = { Text(stringResource(Res.string.last_90_days), style = LocalAppTypography.current.labelSmall) },
                             onClick = {
                                 analyticsViewModel.setDayRange(AnalyticsUiState.DayRange.LAST_90_DAYS)
                                 dayRangeMenuExpanded = false
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text(stringResource(Res.string.this_year), style = typo().labelSmall) },
+                            text = { Text(stringResource(Res.string.this_year), style = LocalAppTypography.current.labelSmall) },
                             onClick = {
                                 analyticsViewModel.setDayRange(AnalyticsUiState.DayRange.THIS_YEAR)
                                 dayRangeMenuExpanded = false

@@ -64,7 +64,6 @@ import com.wavora.app.ui.navigation.destination.list.PodcastDestination
 import com.wavora.app.ui.theme.typo
 import com.wavora.app.viewModel.LibraryViewModel
 import com.wavora.app.viewModel.SharedViewModel
-import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
@@ -78,6 +77,7 @@ import wavora.composeapp.generated.resources.no_playlists_downloaded
 import wavora.composeapp.generated.resources.radio
 import wavora.composeapp.generated.resources.recently_added
 import com.wavora.domain.mediaservice.handler.PlaylistType as DomainPlaylistType
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,6 +87,7 @@ fun LibraryItem(
     sharedViewModel: SharedViewModel = koinInject(),
     navController: NavController,
 ) {
+    val radioString = stringResource(Res.string.radio)
     var showBottomSheet by remember { mutableStateOf(false) }
     var songEntity by remember { mutableStateOf<SongEntity?>(null) }
     val title =
@@ -124,7 +125,7 @@ fun LibraryItem(
             ) {
                 Text(
                     text = title,
-                    style = typo().headlineMedium,
+                    style = LocalAppTypography.current.headlineMedium,
                     color = Color.White,
                     maxLines = 1,
                     modifier =
@@ -249,7 +250,7 @@ fun LibraryItem(
                                                     listTracks = arrayListOf(firstQueue),
                                                     firstPlayedTrack = firstQueue,
                                                     playlistId = "RDAMVM${firstQueue.videoId}",
-                                                    playlistName = "\"${song.title}\" ${runBlocking { getString(Res.string.radio) }}",
+                                                    playlistName = "\"${song.title}\" ${radioString}",
                                                     playlistType = DomainPlaylistType.RADIO,
                                                     continuation = null,
                                                 ),
@@ -288,7 +289,7 @@ fun LibraryItem(
                                     ) {
                                         Text(
                                             text = song.title,
-                                            style = typo().labelSmall,
+                                            style = LocalAppTypography.current.labelSmall,
                                             color = Color.White,
                                             maxLines = 1,
                                             modifier =
@@ -313,7 +314,7 @@ fun LibraryItem(
                                             }
                                             Text(
                                                 text = (song.artistName?.connectArtists() ?: ""),
-                                                style = typo().bodySmall,
+                                                style = LocalAppTypography.current.bodySmall,
                                                 maxLines = 1,
                                                 modifier =
                                                     Modifier
@@ -406,7 +407,7 @@ fun LibraryItem(
                                         .height(130.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Text(noPlaylistTitle, style = typo().bodyMedium)
+                                Text(noPlaylistTitle, style = LocalAppTypography.current.bodyMedium)
                             }
                         }
                     }

@@ -18,6 +18,7 @@ import org.jetbrains.compose.resources.stringResource
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.app_name
 import wavora.composeapp.generated.resources.version_format
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @Composable
 fun EndOfPage(withoutCredit: Boolean = false) {
@@ -35,7 +36,7 @@ fun EndOfPage(withoutCredit: Boolean = false) {
                         Res.string.version_format,
                         VersionManager.getVersionName(),
                     ) + "\nwavora-dev",
-                style = typo().bodySmall,
+                style = LocalAppTypography.current.bodySmall,
                 textAlign = TextAlign.Center,
                 modifier =
                     Modifier

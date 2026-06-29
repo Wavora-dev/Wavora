@@ -87,6 +87,7 @@ import wavora.composeapp.generated.resources.seconds
 import wavora.composeapp.generated.resources.your_top_albums
 import wavora.composeapp.generated.resources.your_top_artists
 import wavora.composeapp.generated.resources.your_top_tracks
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -201,7 +202,7 @@ fun LibraryDynamicPlaylistScreen(
                                 Box(Modifier.padding(horizontal = 8.dp)) {
                                     Text(
                                         text = "${artist.first.playCount} ${stringResource(Res.string.lower_plays)}",
-                                        style = typo().bodySmall,
+                                        style = LocalAppTypography.current.bodySmall,
                                     )
                                 }
                             },
@@ -236,7 +237,7 @@ fun LibraryDynamicPlaylistScreen(
                                 Box(Modifier.padding(horizontal = 8.dp)) {
                                     Text(
                                         text = "${album.first.playCount} ${stringResource(Res.string.lower_plays)}",
-                                        style = typo().bodySmall,
+                                        style = LocalAppTypography.current.bodySmall,
                                     )
                                 }
                             },
@@ -306,11 +307,11 @@ fun LibraryDynamicPlaylistScreen(
                                 ) {
                                     Text(
                                         text = "${song.first.totalListeningTime} ${stringResource(Res.string.seconds)}",
-                                        style = typo().bodySmall,
+                                        style = LocalAppTypography.current.bodySmall,
                                     )
                                     Text(
                                         text = "${song.first.playCount} ${stringResource(Res.string.lower_plays)}",
-                                        style = typo().bodySmall,
+                                        style = LocalAppTypography.current.bodySmall,
                                     )
                                 }
                             },
@@ -398,7 +399,7 @@ fun LibraryDynamicPlaylistScreen(
                             stringResource(
                                 type.name(),
                             ),
-                        style = typo().titleMedium,
+                        style = LocalAppTypography.current.titleMedium,
                     )
                 },
                 navigationIcon = {
@@ -506,7 +507,7 @@ fun LibraryDynamicPlaylistScreen(
                         .height(45.dp)
                         .padding(horizontal = 12.dp),
                 inputField = {
-                    CompositionLocalProvider(LocalTextStyle provides typo().bodySmall) {
+                    CompositionLocalProvider(LocalTextStyle provides LocalAppTypography.current.bodySmall) {
                         SearchBarDefaults.InputField(
                             query = query,
                             onQueryChange = { query = it },
@@ -516,7 +517,7 @@ fun LibraryDynamicPlaylistScreen(
                             placeholder = {
                                 Text(
                                     stringResource(Res.string.search),
-                                    style = typo().bodySmall,
+                                    style = LocalAppTypography.current.bodySmall,
                                 )
                             },
                             leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },

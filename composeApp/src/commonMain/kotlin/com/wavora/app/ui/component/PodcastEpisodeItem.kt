@@ -33,6 +33,7 @@ import org.jetbrains.compose.resources.painterResource
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.baseline_more_vert_24
 import wavora.composeapp.generated.resources.holder
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @Composable
 fun PodcastEpisodeFullWidthItem(
@@ -78,7 +79,7 @@ fun PodcastEpisodeFullWidthItem(
             ) {
                 Text(
                     text = episode.title,
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                     maxLines = 1,
                     color = Color.White,
                     modifier =
@@ -93,7 +94,7 @@ fun PodcastEpisodeFullWidthItem(
 
                 Text(
                     text = "${episode.createdDay ?: ""}${if (!episode.durationString.isNullOrEmpty()) " • ${episode.durationString}" else ""}",
-                    style = typo().bodyMedium,
+                    style = LocalAppTypography.current.bodyMedium,
                     maxLines = 1,
                     color = Color(0xC4FFFFFF),
                     modifier =
@@ -110,7 +111,7 @@ fun PodcastEpisodeFullWidthItem(
                 if (description != null) {
                     Text(
                         text = description,
-                        style = typo().bodyMedium,
+                        style = LocalAppTypography.current.bodyMedium,
                         maxLines = 1,
                         color = Color(0xC4FFFFFF),
                         modifier =

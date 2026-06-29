@@ -122,6 +122,7 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
+import com.wavora.app.ui.theme.LocalAppTypography
 
 private const val TAG = "LyricsView"
 
@@ -382,13 +383,13 @@ fun LyricsLineItem(
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
                     text = originalWords,
-                    style = typo().headlineLarge,
+                    style = LocalAppTypography.current.headlineLarge,
                     color = if (isCurrent) Color.White else DimOriginalColor,
                 )
                 if (translatedWords != null) {
                     Text(
                         text = translatedWords,
-                        style = typo().bodyMedium,
+                        style = LocalAppTypography.current.bodyMedium,
                         color = if (isCurrent) Color.Yellow else DimTranslatedColor,
                     )
                 }
@@ -403,13 +404,13 @@ fun LyricsLineItem(
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = originalWords,
-                style = typo().headlineMedium,
+                style = LocalAppTypography.current.headlineMedium,
                 color = DimOriginalColor,
             )
             if (translatedWords != null) {
                 Text(
                     text = translatedWords,
-                    style = typo().bodyMedium,
+                    style = LocalAppTypography.current.bodyMedium,
                     color = DimTranslatedColor,
                 )
             }
@@ -481,7 +482,7 @@ fun RichSyncLyricsLineItem(
         if (translatedWords != null) {
             Text(
                 text = translatedWords,
-                style = typo().bodyMedium,
+                style = LocalAppTypography.current.bodyMedium,
                 color = if (isCurrent) Color.Yellow else DimTranslatedColor,
             )
         }
@@ -503,8 +504,8 @@ private fun AnimatedWord(
     customFontSize: TextUnit? = null,
 ) {
     val style =
-        typo().headlineLarge.copy(
-            fontSize = customFontSize ?: typo().headlineLarge.fontSize,
+        LocalAppTypography.current.headlineLarge.copy(
+            fontSize = customFontSize ?: LocalAppTypography.current.headlineLarge.fontSize,
         )
 
     if (!isCurrent) {
@@ -875,7 +876,7 @@ fun FullscreenLyricsSheet(
                         // Song Name
                         Text(
                             text = screenDataState.nowPlayingTitle,
-                            style = typo().labelSmall,
+                            style = LocalAppTypography.current.labelSmall,
                             color = Color.White,
                             maxLines = 1,
                             modifier =
@@ -920,7 +921,7 @@ fun FullscreenLyricsSheet(
                             }
                             Text(
                                 text = screenDataState.artistName,
-                                style = typo().bodySmall,
+                                style = LocalAppTypography.current.bodySmall,
                                 color = Color.White.copy(alpha = 0.7f),
                                 maxLines = 1,
                                 modifier =
@@ -990,7 +991,7 @@ fun FullscreenLyricsSheet(
                             ) {
                                 Text(
                                     text = stringResource(Res.string.unavailable),
-                                    style = typo().bodyMedium,
+                                    style = LocalAppTypography.current.bodyMedium,
                                     color = Color.White,
                                     textAlign = TextAlign.Center,
                                 )
@@ -1101,7 +1102,7 @@ fun FullscreenLyricsSheet(
                                         thumbSize = DpSize(8.dp, 8.dp),
                                         interactionSource =
                                             remember {
-                                                MutableInteractionSource()
+                                                remember { MutableInteractionSource() }
                                             },
                                         colors =
                                             SliderDefaults.colors().copy(
@@ -1125,7 +1126,7 @@ fun FullscreenLyricsSheet(
                             ) {
                                 Text(
                                     text = formatDuration(timelineState.current),
-                                    style = typo().bodyMedium,
+                                    style = LocalAppTypography.current.bodyMedium,
                                     modifier = Modifier.weight(1f),
                                     textAlign = TextAlign.Left,
                                 )
@@ -1136,14 +1137,14 @@ fun FullscreenLyricsSheet(
                                 ) {
                                     Text(
                                         text = stringResource(Res.string.crossfading),
-                                        style = typo().bodyMedium,
+                                        style = LocalAppTypography.current.bodyMedium,
                                         modifier = Modifier.weight(1f),
                                         textAlign = TextAlign.Center,
                                     )
                                 }
                                 Text(
                                     text = formatDuration(timelineState.total),
-                                    style = typo().bodyMedium,
+                                    style = LocalAppTypography.current.bodyMedium,
                                     modifier = Modifier.weight(1f),
                                     textAlign = TextAlign.Right,
                                 )

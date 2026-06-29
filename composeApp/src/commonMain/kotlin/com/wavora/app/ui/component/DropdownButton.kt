@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Color.Companion.Transparent
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.wavora.app.ui.theme.typo
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,7 +45,7 @@ fun DropdownButton(
                     Modifier
                         .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                         .widthIn(1.dp, Dp.Infinity),
-                textStyle = typo().bodyMedium,
+                textStyle = LocalAppTypography.current.bodyMedium,
                 readOnly = true,
                 value = selected,
                 onValueChange = {},
@@ -62,7 +63,7 @@ fun DropdownButton(
             ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 items.forEachIndexed { index, s ->
                     DropdownMenuItem(
-                        text = { Text(s, style = typo().bodyMedium) },
+                        text = { Text(s, style = LocalAppTypography.current.bodyMedium) },
                         onClick = {
                             selected = s
                             expanded = false

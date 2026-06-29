@@ -99,6 +99,7 @@ import wavora.composeapp.generated.resources.baseline_shuffle_24
 import wavora.composeapp.generated.resources.holder
 import wavora.composeapp.generated.resources.no_description
 import wavora.composeapp.generated.resources.podcasts
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -258,7 +259,7 @@ fun PodcastScreen(
                                             Spacer(modifier = Modifier.size(25.dp))
                                             Text(
                                                 text = data.title,
-                                                style = typo().titleLarge,
+                                                style = LocalAppTypography.current.titleLarge,
                                                 color = Color.White,
                                                 maxLines = 2,
                                             )
@@ -308,7 +309,7 @@ fun PodcastScreen(
                                                         ) {
                                                             Text(
                                                                 text = data.author.name,
-                                                                style = typo().labelSmall,
+                                                                style = LocalAppTypography.current.labelSmall,
                                                                 color = Color.White,
                                                             )
                                                         }
@@ -317,7 +318,7 @@ fun PodcastScreen(
                                                 Spacer(modifier = Modifier.size(8.dp))
                                                 Text(
                                                     text = stringResource(Res.string.podcasts),
-                                                    style = typo().bodyMedium,
+                                                    style = LocalAppTypography.current.bodyMedium,
                                                 )
                                             }
                                             Row(
@@ -390,7 +391,7 @@ fun PodcastScreen(
                                                         "",
                                                     ),
                                                 color = Color.White,
-                                                style = typo().bodyMedium,
+                                                style = LocalAppTypography.current.bodyMedium,
                                                 modifier = Modifier.padding(vertical = 8.dp),
                                             )
                                         }
@@ -439,7 +440,7 @@ fun PodcastScreen(
                         title = {
                             Text(
                                 text = data.title,
-                                style = typo().titleMedium,
+                                style = LocalAppTypography.current.titleMedium,
                                 maxLines = 1,
                                 modifier =
                                     Modifier

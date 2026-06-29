@@ -38,9 +38,7 @@ internal class ArtistRepositoryImpl(
     override suspend fun updateArtistImage(
         channelId: String,
         thumbnail: String,
-    ) = withContext(
-        Dispatchers.Main,
-    ) {
+    ) = withContext(Dispatchers.IO) {
         localDataSource.updateArtistImage(
             channelId,
             thumbnail,
@@ -50,9 +48,7 @@ internal class ArtistRepositoryImpl(
     override suspend fun updateFollowedStatus(
         channelId: String,
         followedStatus: Int,
-    ) = withContext(
-        Dispatchers.Main,
-    ) { localDataSource.updateFollowed(followedStatus, channelId) }
+    ) = withContext(Dispatchers.IO) { localDataSource.updateFollowed(followedStatus, channelId) }
 
     override fun getFollowedArtists(): Flow<List<ArtistEntity>> =
         flow {
@@ -66,7 +62,7 @@ internal class ArtistRepositoryImpl(
     override suspend fun updateArtistInLibrary(
         inLibrary: LocalDateTime,
         channelId: String,
-    ) = withContext(Dispatchers.Main) {
+    ) = withContext(Dispatchers.IO) {
         localDataSource.updateArtistInLibrary(
             inLibrary,
             channelId,

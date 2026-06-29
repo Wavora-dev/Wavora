@@ -129,6 +129,7 @@ import wavora.composeapp.generated.resources.holder
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 import kotlin.time.Duration.Companion.seconds
+import com.wavora.app.ui.theme.LocalAppTypography
 
 private const val TAG = "MiniPlayer"
 
@@ -449,7 +450,7 @@ fun MiniPlayer(
                                     ) {
                                         Text(
                                             text = (songEntity?.title ?: "").toString(),
-                                            style = typo().labelSmall,
+                                            style = LocalAppTypography.current.labelSmall,
                                             color = textColor,
                                             maxLines = 1,
                                             modifier =
@@ -474,7 +475,7 @@ fun MiniPlayer(
                                             }
                                             Text(
                                                 text = (songEntity?.artistName?.connectArtists() ?: ""),
-                                                style = typo().bodySmall,
+                                                style = LocalAppTypography.current.bodySmall,
                                                 maxLines = 1,
                                                 color = textColor,
                                                 modifier =
@@ -610,7 +611,7 @@ fun MiniPlayer(
                         Column {
                             Text(
                                 text = (songEntity?.title ?: "").toString(),
-                                style = typo().labelSmall,
+                                style = LocalAppTypography.current.labelSmall,
                                 color = textColor,
                                 maxLines = 1,
                                 modifier =
@@ -635,7 +636,7 @@ fun MiniPlayer(
                                 }
                                 Text(
                                     text = (songEntity?.artistName?.connectArtists() ?: ""),
-                                    style = typo().bodySmall,
+                                    style = LocalAppTypography.current.bodySmall,
                                     maxLines = 1,
                                     modifier =
                                         Modifier
@@ -672,7 +673,7 @@ fun MiniPlayer(
                         ) {
                             Text(
                                 text = formatDuration((timelineState.total * (sliderValue / 100f)).roundToLong()),
-                                style = typo().bodyMedium,
+                                style = LocalAppTypography.current.bodyMedium,
                                 textAlign = TextAlign.Left,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -787,7 +788,7 @@ fun MiniPlayer(
                                                 thumbSize = DpSize(8.dp, 8.dp),
                                                 interactionSource =
                                                     remember {
-                                                        MutableInteractionSource()
+                                                        remember { MutableInteractionSource() }
                                                     },
                                                 colors =
                                                     SliderDefaults.colors().copy(
@@ -803,7 +804,7 @@ fun MiniPlayer(
                             }
                             Text(
                                 text = formatDuration(timelineState.total),
-                                style = typo().bodyMedium,
+                                style = LocalAppTypography.current.bodyMedium,
                                 textAlign = TextAlign.Right,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -904,7 +905,7 @@ fun MiniPlayer(
                                         thumbSize = DpSize(8.dp, 8.dp),
                                         interactionSource =
                                             remember {
-                                                MutableInteractionSource()
+                                                remember { MutableInteractionSource() }
                                             },
                                         colors =
                                             SliderDefaults.colors().copy(

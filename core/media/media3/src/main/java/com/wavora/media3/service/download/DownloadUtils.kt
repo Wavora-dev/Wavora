@@ -52,6 +52,10 @@ internal class DownloadUtils(
     databaseProvider: DatabaseProvider,
 ) : DownloadHandler {
     private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    // Reuse a single ImageLoader for thumbnail checks instead of allocating a new one per track.
+    // Each ImageLoader has its own thread pool and bitmap memory — leaking N instances during
+    // bulk playlist downloads is a direct contributor to the Android OOM.
+    private val thumbnailImageLoader: ImageLoader by lazy { ImageLoader(context) }
 
     private val dataSourceFactory =
         ResolvingDataSource.Factory(
@@ -179,7 +183,7 @@ internal class DownloadUtils(
                 .data(thumbnail)
                 .diskCachePolicy(CachePolicy.ENABLED)
                 .build()
-        val imageResult = ImageLoader(context).execute(request)
+        val imageResult = thumbnailImageLoader.execute(request)
         if (imageResult.image?.height != imageResult.image?.width && imageResult.image != null) {
             isVideo = true
         }

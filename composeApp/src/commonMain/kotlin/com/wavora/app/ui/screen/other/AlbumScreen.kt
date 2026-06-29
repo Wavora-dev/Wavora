@@ -88,6 +88,8 @@ import com.wavora.app.extension.angledGradientBackground
 import com.wavora.app.extension.getColorFromPalette
 import com.wavora.app.extension.getScreenSizeInfo
 import com.wavora.app.getPlatform
+import com.wavora.app.ui.component.AlbumScreenShimmer
+import com.wavora.app.ui.component.OfflineErrorState
 import com.wavora.app.ui.component.CenterLoadingBox
 import com.wavora.app.ui.component.DescriptionView
 import com.wavora.app.ui.component.EndOfPage
@@ -118,7 +120,6 @@ import io.github.alexzhirkevich.compottie.rememberLottieComposition
 import io.github.alexzhirkevich.compottie.rememberLottiePainter
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
@@ -140,6 +141,7 @@ import wavora.composeapp.generated.resources.holder
 import wavora.composeapp.generated.resources.no_description
 import wavora.composeapp.generated.resources.other_version
 import wavora.composeapp.generated.resources.year_and_category
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -149,6 +151,8 @@ fun AlbumScreen(
     viewModel: AlbumViewModel = koinViewModel(),
     sharedViewModel: SharedViewModel = koinInject(),
 ) {
+    val downloadedString = stringResource(Res.string.downloaded)
+    val downloadingString = stringResource(Res.string.downloading)
     val uriHandler = LocalUriHandler.current
 
     val playingVideoId by viewModel.nowPlayingVideoId.collectAsStateWithLifecycle()
@@ -388,7 +392,7 @@ fun AlbumScreen(
                                                 ) {
                                                     Text(
                                                         text = uiState.title,
-                                                        style = typo().titleLarge,
+                                                        style = LocalAppTypography.current.titleLarge,
                                                         color = Color.White,
                                                         maxLines = 2,
                                                         textAlign = TextAlign.Center,
@@ -396,7 +400,7 @@ fun AlbumScreen(
                                                     Spacer(modifier = Modifier.height(4.dp))
                                                     Text(
                                                         text = uiState.artist.name,
-                                                        style = typo().titleSmall,
+                                                        style = LocalAppTypography.current.titleSmall,
                                                         color = Color.White,
                                                         textAlign = TextAlign.Center,
                                                         modifier =
@@ -418,7 +422,7 @@ fun AlbumScreen(
                                                                 uiState.year,
                                                                 stringResource(Res.string.album),
                                                             ),
-                                                        style = typo().bodyMedium,
+                                                        style = LocalAppTypography.current.bodyMedium,
                                                         color = Color(0xC4FFFFFF),
                                                         textAlign = TextAlign.Center,
                                                     )
@@ -507,7 +511,7 @@ fun AlbumScreen(
                                                 Spacer(modifier = Modifier.size(25.dp))
                                                 Text(
                                                     text = uiState.title,
-                                                    style = typo().titleLarge,
+                                                    style = LocalAppTypography.current.titleLarge,
                                                     color = Color.White,
                                                     maxLines = 2,
                                                 )
@@ -517,7 +521,7 @@ fun AlbumScreen(
                                                     // Author clickable
                                                     Text(
                                                         text = uiState.artist.name,
-                                                        style = typo().titleSmall,
+                                                        style = LocalAppTypography.current.titleSmall,
                                                         color = Color.White,
                                                         modifier =
                                                             Modifier.clickable {
@@ -538,7 +542,7 @@ fun AlbumScreen(
                                                                 uiState.year,
                                                                 stringResource(Res.string.album),
                                                             ),
-                                                        style = typo().bodyMedium,
+                                                        style = LocalAppTypography.current.bodyMedium,
                                                         color = Color(0xC4FFFFFF),
                                                     )
                                                 }
@@ -603,7 +607,7 @@ fun AlbumScreen(
                                                             Text(
                                                                 text = if (isThisPlaying) "Pause" else "Play",
                                                                 color = Color.Black,
-                                                                style = typo().labelLarge,
+                                                                style = LocalAppTypography.current.labelLarge,
                                                             )
                                                         }
                                                     }
@@ -624,9 +628,7 @@ fun AlbumScreen(
                                                                                 .fillMaxSize()
                                                                                 .clickable {
                                                                                     viewModel.makeToast(
-                                                                                        runBlocking {
-                                                                                            getString(Res.string.downloaded)
-                                                                                        },
+                                                                                        downloadedString,
                                                                                     )
                                                                                 },
                                                                         contentAlignment = Alignment.Center,
@@ -647,9 +649,7 @@ fun AlbumScreen(
                                                                                 .fillMaxSize()
                                                                                 .clickable {
                                                                                     viewModel.makeToast(
-                                                                                        runBlocking {
-                                                                                            getString(Res.string.downloading)
-                                                                                        },
+                                                                                        downloadingString,
                                                                                     )
                                                                                 },
                                                                         contentAlignment = Alignment.Center,
@@ -728,9 +728,7 @@ fun AlbumScreen(
                                                                                 CircleShape,
                                                                             ).clickable {
                                                                                 viewModel.makeToast(
-                                                                                    runBlocking {
-                                                                                        getString(Res.string.downloaded)
-                                                                                    },
+                                                                                    downloadedString,
                                                                                 )
                                                                             },
                                                                 ) {
@@ -755,9 +753,7 @@ fun AlbumScreen(
                                                                                 CircleShape,
                                                                             ).clickable {
                                                                                 viewModel.makeToast(
-                                                                                    runBlocking {
-                                                                                        getString(Res.string.downloading)
-                                                                                    },
+                                                                                    downloadingString,
                                                                                 )
                                                                             },
                                                                 ) {
@@ -827,7 +823,7 @@ fun AlbumScreen(
                                                         uiState.length,
                                                     ),
                                                 color = Color.White,
-                                                style = typo().bodyMedium,
+                                                style = LocalAppTypography.current.bodyMedium,
                                                 modifier = Modifier.padding(vertical = 8.dp),
                                             )
                                         }
@@ -877,7 +873,7 @@ fun AlbumScreen(
                                 Spacer(Modifier.height(10.dp))
                                 Text(
                                     text = stringResource(Res.string.other_version),
-                                    style = typo().labelMedium,
+                                    style = LocalAppTypography.current.labelMedium,
                                     modifier =
                                         Modifier.padding(
                                             horizontal = 24.dp,
@@ -918,7 +914,7 @@ fun AlbumScreen(
                         title = {
                             Text(
                                 text = uiState.title,
-                                style = typo().titleMedium,
+                                style = LocalAppTypography.current.titleMedium,
                                 maxLines = 1,
                                 modifier =
                                     Modifier
@@ -987,13 +983,15 @@ fun AlbumScreen(
             }
 
             LocalPlaylistState.PlaylistLoadState.Error -> {
-                navController.navigateUp()
+                OfflineErrorState(
+                    modifier = Modifier.fillMaxSize(),
+                    onRetry = { viewModel.updateBrowseId(browseId) },
+                    onOpenDownloaded = { navController.navigateUp() },
+                )
             }
 
             LocalPlaylistState.PlaylistLoadState.Loading -> {
-                CenterLoadingBox(
-                    modifier = Modifier.fillMaxSize(),
-                )
+                AlbumScreenShimmer()
             }
         }
     }

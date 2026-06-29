@@ -186,6 +186,7 @@ import wavora.composeapp.generated.resources.warning
 import wavora.composeapp.generated.resources.welcome_back
 import wavora.composeapp.generated.resources.what_is_best_choice_today
 import wavora.composeapp.generated.resources.workout
+import com.wavora.app.ui.theme.LocalAppTypography
 
 // DataStore key for blog-promo one-shot dialog. Bump the suffix (v2, v3, …) to re-promote.
 private const val BLOG_PROMO_KEY = "blog_promo_v1_seen"
@@ -248,7 +249,8 @@ fun HomeScreen(
     }
     val animatedColor by animateColorAsState(topHeaderColor, tween(500))
     val mainHomeThumbnail by viewModel.mainHomeThumbnail.collectAsStateWithLifecycle()
-    val networkLoader = rememberNetworkLoader(HttpClient(CIO))
+    val httpClient = remember { HttpClient(CIO) }
+    val networkLoader = rememberNetworkLoader(httpClient)
     val dominantColorState =
         rememberDominantColorState(
             defaultColor = md_theme_dark_background,
@@ -521,7 +523,7 @@ fun HomeScreen(
                         verticalArrangement = Arrangement.spacedBy(28.dp),
                     ) {
                         itemsIndexed(homeData, key = { idx, item ->
-                            idx.toString() + "_" + item.hashCode().toString() + (mainHomeThumbnail ?: "nothumb")
+                            idx.toString() + "_" + item.hashCode().toString()
                         }) { index, item ->
                             Box {
                                 if (index == 0) {
@@ -836,11 +838,17 @@ fun HomeScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeTopAppBar(navController: NavController) {
-    val hour =
-        remember {
-            val date = now().time
-            date.hour
+    // Recompute every hour so the greeting stays current if the app is left open.
+    var hour by remember { mutableIntStateOf(now().time.hour) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            val currentHour = now().time.hour
+            hour = currentHour
+            // Sleep until the start of the next hour
+            val minutesLeft = 60 - now().time.minute
+            kotlinx.coroutines.delay(minutesLeft * 60 * 1000L)
         }
+    }
     TopAppBar(
         windowInsets =
             TopAppBarDefaults.windowInsets.exclude(
@@ -850,7 +858,7 @@ fun HomeTopAppBar(navController: NavController) {
             Column {
                 Text(
                     text = stringResource(Res.string.app_name),
-                    style = typo().titleMedium,
+                    style = LocalAppTypography.current.titleMedium,
                     color = Color.White,
                     modifier = Modifier.padding(bottom = 4.dp),
                 )
@@ -873,7 +881,7 @@ fun HomeTopAppBar(navController: NavController) {
                                 stringResource(Res.string.good_night)
                             }
                         },
-                    style = typo().bodySmall,
+                    style = LocalAppTypography.current.bodySmall,
                 )
             }
         },
@@ -903,7 +911,7 @@ fun AccountLayout(
     Column {
         Text(
             text = stringResource(Res.string.welcome_back),
-            style = typo().bodyMedium,
+            style = LocalAppTypography.current.bodyMedium,
             color = Color.White,
             modifier = Modifier.padding(bottom = 3.dp),
         )
@@ -933,7 +941,7 @@ fun AccountLayout(
             )
             Text(
                 text = accountName,
-                style = typo().headlineMedium,
+                style = LocalAppTypography.current.headlineMedium,
                 color = Color.White,
                 modifier =
                     Modifier
@@ -966,11 +974,11 @@ fun QuickPicks(
     ) {
         Text(
             text = stringResource(Res.string.let_s_start_with_a_radio),
-            style = typo().bodySmall,
+            style = LocalAppTypography.current.bodySmall,
         )
         Text(
             text = stringResource(Res.string.quick_picks),
-            style = typo().headlineMedium,
+            style = LocalAppTypography.current.headlineMedium,
             color = Color.White,
             maxLines = 1,
             modifier =
@@ -1030,11 +1038,11 @@ fun MoodMomentAndGenre(
     ) {
         Text(
             text = stringResource(Res.string.let_s_pick_a_playlist_for_you),
-            style = typo().bodyMedium,
+            style = LocalAppTypography.current.bodyMedium,
         )
         Text(
             text = stringResource(Res.string.moods_amp_moment),
-            style = typo().headlineMedium,
+            style = LocalAppTypography.current.headlineMedium,
             color = white,
             maxLines = 1,
             modifier =
@@ -1060,7 +1068,7 @@ fun MoodMomentAndGenre(
         }
         Text(
             text = stringResource(Res.string.genre),
-            style = typo().headlineMedium,
+            style = LocalAppTypography.current.headlineMedium,
             maxLines = 1,
             color = white,
             modifier =
@@ -1092,11 +1100,11 @@ fun ChartTitle() {
     Column {
         Text(
             text = stringResource(Res.string.what_is_best_choice_today),
-            style = typo().bodyMedium,
+            style = LocalAppTypography.current.bodyMedium,
         )
         Text(
             text = stringResource(Res.string.chart),
-            style = typo().headlineMedium,
+            style = LocalAppTypography.current.headlineMedium,
             color = white,
             maxLines = 1,
             modifier =
@@ -1130,7 +1138,7 @@ fun ChartData(
         chart.listChartItem.forEach { item ->
             Text(
                 text = item.title,
-                style = typo().headlineMedium,
+                style = LocalAppTypography.current.headlineMedium,
                 color = white,
                 maxLines = 1,
                 modifier =
@@ -1161,7 +1169,7 @@ fun ChartData(
         }
         Text(
             text = stringResource(Res.string.top_artists),
-            style = typo().headlineMedium,
+            style = LocalAppTypography.current.headlineMedium,
             color = white,
             maxLines = 1,
             modifier =

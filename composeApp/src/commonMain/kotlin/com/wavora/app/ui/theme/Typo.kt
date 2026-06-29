@@ -2,6 +2,8 @@ package com.wavora.app.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ProvidableCompositionLocal
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -11,6 +13,15 @@ import androidx.compose.ui.unit.sp
 import org.jetbrains.compose.resources.Font
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.poppins_medium
+
+/**
+ * CompositionLocal that provides the app's Typography.
+ * Use [LocalAppTypography.current] instead of calling [typo()] directly —
+ * [typo()] re-creates FontFamily + Typography on every call (428× in the codebase),
+ * whereas the CompositionLocal reads a single already-computed instance.
+ */
+val LocalAppTypography: ProvidableCompositionLocal<Typography> =
+    compositionLocalOf { error("No Typography provided — wrap your root composable in AppTheme") }
 
 @Composable
 fun fontFamily(): FontFamily =
@@ -81,14 +92,14 @@ fun typo(): Typography {
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = fontFamily,
-                    color = Color(0xFFA8A8A8),
+                    color = Color.White,
                 ),
             headlineLarge =
                 TextStyle(
                     fontSize = 23.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = fontFamily,
-                    color = Color(0xFFA8A8A8),
+                    color = Color.White,
                 ),
             labelMedium =
                 TextStyle(

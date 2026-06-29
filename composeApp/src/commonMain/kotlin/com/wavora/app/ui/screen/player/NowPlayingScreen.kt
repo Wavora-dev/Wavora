@@ -4,6 +4,7 @@ package com.wavora.app.ui.screen.player
 
 import androidx.compose.animation.Animatable
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
@@ -16,6 +17,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
@@ -218,6 +220,7 @@ import wavora.composeapp.generated.resources.spotify_lyrics_provider
 import wavora.composeapp.generated.resources.unsynced
 import wavora.composeapp.generated.resources.view_count
 import kotlin.math.roundToLong
+import com.wavora.app.ui.theme.LocalAppTypography
 
 private const val TAG = "NowPlayingScreen"
 private val RICH_SYNC_TIMESTAMP_REGEX = Regex("""<\d{2}:\d{2}\.\d{2,3}>\s*""")
@@ -318,6 +321,10 @@ fun NowPlayingScreenContent(
         )
     var isAnimatingFromPlayer by remember { mutableStateOf(false) }
     var isUserDraggingActive by remember { mutableStateOf(false) }
+
+    // Cache extracted palette colors by videoId so we never re-run the pixel-sampling
+    // analysis when the user swipes back to a track they've already seen.
+    val paletteColorCache = remember { androidx.compose.runtime.snapshots.SnapshotStateMap<String, Color>() }
 
     // Drag detection — `isScrollInProgress` is `true` for both user drags (forwarded
     // by the outer Modifier.scrollable on the Column) and programmatic
@@ -863,13 +870,22 @@ fun NowPlayingScreenContent(
                         remember(pageTrack?.videoId) {
                             Animatable(md_theme_dark_background)
                         }
+                    // Apply cached color immediately if we have it (avoids re-extraction on swipe-back)
+                    LaunchedEffect(pageTrack?.videoId) {
+                        pageTrack?.videoId?.let { vid ->
+                            paletteColorCache[vid]?.let { cached ->
+                                pageStartColor.snapTo(cached)
+                            }
+                        }
+                    }
                     LaunchedEffect(pagePaletteState, pageTrack?.videoId) {
                         snapshotFlow { pagePaletteState.palette }
                             .distinctUntilChanged()
                             .collectLatest { palette ->
-                                pageStartColor.animateTo(
-                                    palette.getColorFromPalette(),
-                                )
+                                val color = palette.getColorFromPalette()
+                                pageStartColor.animateTo(color)
+                                // Store in cache so swipe-back is instant
+                                pageTrack?.videoId?.let { paletteColorCache[it] = color }
                             }
                     }
 
@@ -895,7 +911,7 @@ fun NowPlayingScreenContent(
                                     indication = null,
                                     interactionSource =
                                         remember {
-                                            MutableInteractionSource()
+                                            remember { MutableInteractionSource() }
                                         },
                                 ),
                     ) {
@@ -1074,7 +1090,17 @@ fun NowPlayingScreenContent(
                                         .aspectRatio(1f),
                             ) {
                                 if (isCurrentArtworkPage) {
-                                    // Live artwork (drives palette extraction via setBitmap).
+                                    // Live artwork — AnimatedContent provides a visual crossfade
+                                    // between artworks when the track changes (keyed on URL).
+                                    AnimatedContent(
+                                        targetState = screenDataState.thumbnailURL,
+                                        transitionSpec = {
+                                            fadeIn(animationSpec = tween(380)) togetherWith
+                                                fadeOut(animationSpec = tween(280))
+                                        },
+                                        label = "artwork_crossfade",
+                                        modifier = Modifier.align(Alignment.Center),
+                                    ) { artworkUrl ->
                                     Box(
                                         contentAlignment = Alignment.Center,
                                         modifier =
@@ -1095,9 +1121,9 @@ fun NowPlayingScreenContent(
                                             model =
                                                 ImageRequest
                                                     .Builder(LocalPlatformContext.current)
-                                                    .data(screenDataState.thumbnailURL)
+                                                    .data(artworkUrl)
                                                     .diskCachePolicy(CachePolicy.ENABLED)
-                                                    .diskCacheKey(screenDataState.thumbnailURL + "BIGGER")
+                                                    .diskCacheKey(artworkUrl + "BIGGER")
                                                     .crossfade(550)
                                                     .build(),
                                             contentDescription = "",
@@ -1152,8 +1178,8 @@ fun NowPlayingScreenContent(
                                                     lyricsData = screenDataState.lyricsData?.lyrics,
                                                     translatedLyricsData = screenDataState.lyricsData?.translatedLyrics?.first,
                                                     isInPipMode = isInPipMode,
-                                                    mainTextStyle = typo().bodyLarge,
-                                                    translatedTextStyle = typo().bodyMedium,
+                                                    mainTextStyle = LocalAppTypography.current.bodyLarge,
+                                                    translatedTextStyle = LocalAppTypography.current.bodyMedium,
                                                 )
                                             }
                                             Box(
@@ -1165,7 +1191,7 @@ fun NowPlayingScreenContent(
                                                             indication = null,
                                                             interactionSource =
                                                                 remember {
-                                                                    MutableInteractionSource()
+                                                                    remember { MutableInteractionSource() }
                                                                 },
                                                         ),
                                             ) {
@@ -1367,12 +1393,12 @@ fun NowPlayingScreenContent(
                         ) {
                             Text(
                                 text = stringResource(Res.string.now_playing_upper),
-                                style = typo().bodyMedium,
+                                style = LocalAppTypography.current.bodyMedium,
                                 color = Color.White,
                             )
                             Text(
                                 text = screenDataState.playlistName,
-                                style = typo().labelMedium,
+                                style = LocalAppTypography.current.labelMedium,
                                 color = Color.White,
                                 textAlign = TextAlign.Center,
                                 maxLines = 1,
@@ -1520,7 +1546,7 @@ fun NowPlayingScreenContent(
                                         Column(Modifier.weight(1f)) {
                                             Text(
                                                 text = screenDataState.nowPlayingTitle,
-                                                style = typo().titleMedium,
+                                                style = LocalAppTypography.current.titleMedium,
                                                 maxLines = 1,
                                                 color = Color.White,
                                                 modifier =
@@ -1551,7 +1577,7 @@ fun NowPlayingScreenContent(
                                                 item(screenDataState.artistName) {
                                                     Text(
                                                         text = screenDataState.artistName,
-                                                        style = typo().bodyMedium,
+                                                        style = LocalAppTypography.current.bodyMedium,
                                                         maxLines = 1,
                                                         modifier =
                                                             Modifier
@@ -1738,7 +1764,7 @@ fun NowPlayingScreenContent(
                                                             thumbSize = DpSize(8.dp, 8.dp),
                                                             interactionSource =
                                                                 remember {
-                                                                    MutableInteractionSource()
+                                                                    remember { MutableInteractionSource() }
                                                                 },
                                                             colors =
                                                                 SliderDefaults.colors().copy(
@@ -1760,7 +1786,7 @@ fun NowPlayingScreenContent(
                                         ) {
                                             Text(
                                                 text = formatDuration((timelineState.total * (sliderValue / 100f)).roundToLong()),
-                                                style = typo().bodyMedium,
+                                                style = LocalAppTypography.current.bodyMedium,
                                                 modifier = Modifier.weight(1f),
                                                 textAlign = TextAlign.Left,
                                             )
@@ -1771,14 +1797,14 @@ fun NowPlayingScreenContent(
                                             ) {
                                                 Text(
                                                     text = stringResource(Res.string.crossfading),
-                                                    style = typo().bodyMedium,
+                                                    style = LocalAppTypography.current.bodyMedium,
                                                     modifier = Modifier.weight(1f),
                                                     textAlign = TextAlign.Center,
                                                 )
                                             }
                                             Text(
                                                 text = formatDuration(timelineState.total),
-                                                style = typo().bodyMedium,
+                                                style = LocalAppTypography.current.bodyMedium,
                                                 modifier = Modifier.weight(1f),
                                                 textAlign = TextAlign.Right,
                                             )
@@ -1886,7 +1912,7 @@ fun NowPlayingScreenContent(
                                                     indication = null,
                                                     interactionSource =
                                                         remember {
-                                                            MutableInteractionSource()
+                                                            remember { MutableInteractionSource() }
                                                         },
                                                 ),
                                         contentAlignment = Alignment.BottomStart,
@@ -1944,7 +1970,7 @@ fun NowPlayingScreenContent(
                                                                         animationMode = MarqueeAnimationMode.Immediately,
                                                                     ).focusable(),
                                                             text = lineText,
-                                                            style = typo().bodyMedium,
+                                                            style = LocalAppTypography.current.bodyMedium,
                                                             color = Color.White,
                                                             maxLines = 1,
                                                         )
@@ -1969,7 +1995,7 @@ fun NowPlayingScreenContent(
                                                                             animationMode = MarqueeAnimationMode.Immediately,
                                                                         ).focusable(),
                                                                 text = translatedLineText,
-                                                                style = typo().bodyMedium,
+                                                                style = LocalAppTypography.current.bodyMedium,
                                                                 color = Color.Yellow,
                                                                 maxLines = 1,
                                                             )
@@ -2012,7 +2038,7 @@ fun NowPlayingScreenContent(
                                                 Column(Modifier.weight(1f)) {
                                                     Text(
                                                         text = screenDataState.nowPlayingTitle,
-                                                        style = typo().titleMedium,
+                                                        style = LocalAppTypography.current.titleMedium,
                                                         maxLines = 1,
                                                         color = Color.White,
                                                         modifier =
@@ -2043,7 +2069,7 @@ fun NowPlayingScreenContent(
                                                         item(screenDataState.artistName) {
                                                             Text(
                                                                 text = screenDataState.artistName,
-                                                                style = typo().bodyMedium,
+                                                                style = LocalAppTypography.current.bodyMedium,
                                                                 maxLines = 1,
                                                                 modifier =
                                                                     Modifier
@@ -2151,7 +2177,7 @@ fun NowPlayingScreenContent(
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
                                             text = stringResource(Res.string.lyrics),
-                                            style = typo().labelMedium,
+                                            style = LocalAppTypography.current.labelMedium,
                                             color = Color.White,
                                         )
                                         if (screenDataState.lyricsData?.translatedLyrics?.second == LyricsProvider.AI) {
@@ -2230,7 +2256,7 @@ fun NowPlayingScreenContent(
                                                     "RICH_SYNCED" -> stringResource(Res.string.rich_synced)
                                                     else -> stringResource(Res.string.unsynced)
                                                 },
-                                            style = typo().bodySmall,
+                                            style = LocalAppTypography.current.bodySmall,
                                             textAlign = TextAlign.End,
                                             modifier =
                                                 Modifier
@@ -2268,7 +2294,7 @@ fun NowPlayingScreenContent(
                                                         ""
                                                     }
                                                 },
-                                            style = typo().bodySmall,
+                                            style = LocalAppTypography.current.bodySmall,
                                             textAlign = TextAlign.End,
                                             modifier =
                                                 Modifier
@@ -2339,20 +2365,20 @@ fun NowPlayingScreenContent(
                                             Spacer(modifier = Modifier.height(5.dp))
                                             Text(
                                                 text = stringResource(Res.string.artists),
-                                                style = typo().labelMedium,
+                                                style = LocalAppTypography.current.labelMedium,
                                                 color = Color.White,
                                             )
                                         }
                                         Column(Modifier.align(Alignment.BottomStart)) {
                                             Text(
                                                 text = screenDataState.songInfoData?.author ?: "",
-                                                style = typo().labelMedium,
+                                                style = LocalAppTypography.current.labelMedium,
                                                 color = Color.White,
                                             )
                                             Spacer(modifier = Modifier.height(5.dp))
                                             Text(
                                                 text = screenDataState.songInfoData?.subscribers ?: "",
-                                                style = typo().bodySmall,
+                                                style = LocalAppTypography.current.bodySmall,
                                                 textAlign = TextAlign.End,
                                             )
                                             Spacer(modifier = Modifier.height(5.dp))
@@ -2379,7 +2405,7 @@ fun NowPlayingScreenContent(
                                     Spacer(modifier = Modifier.height(5.dp))
                                     Text(
                                         text = stringResource(Res.string.published_at, screenDataState.songInfoData?.uploadDate ?: ""),
-                                        style = typo().labelSmall,
+                                        style = LocalAppTypography.current.labelSmall,
                                         color = Color.White,
                                     )
                                     Spacer(modifier = Modifier.height(10.dp))
@@ -2389,7 +2415,7 @@ fun NowPlayingScreenContent(
                                                 Res.string.view_count,
                                                 "%,d".format(screenDataState.songInfoData?.viewCount),
                                             ),
-                                        style = typo().labelMedium,
+                                        style = LocalAppTypography.current.labelMedium,
                                         color = Color.White,
                                     )
                                     Spacer(modifier = Modifier.height(10.dp))
@@ -2400,12 +2426,12 @@ fun NowPlayingScreenContent(
                                                 screenDataState.songInfoData?.like ?: 0,
                                                 screenDataState.songInfoData?.dislike ?: 0,
                                             ),
-                                        style = typo().bodyMedium,
+                                        style = LocalAppTypography.current.bodyMedium,
                                     )
                                     Spacer(modifier = Modifier.height(10.dp))
                                     Text(
                                         text = stringResource(Res.string.description),
-                                        style = typo().labelSmall,
+                                        style = LocalAppTypography.current.labelSmall,
                                         color = Color.White,
                                     )
                                     Spacer(modifier = Modifier.height(10.dp))
@@ -2489,7 +2515,7 @@ fun NowPlayingScreenContent(
                             ) {
                                 Text(
                                     text = screenDataState.nowPlayingTitle,
-                                    style = typo().bodyMedium,
+                                    style = LocalAppTypography.current.bodyMedium,
                                     color = Color.White,
                                     maxLines = 1,
                                     modifier =
@@ -2519,7 +2545,7 @@ fun NowPlayingScreenContent(
                                     ) {
                                         Text(
                                             text = screenDataState.artistName,
-                                            style = typo().bodySmall,
+                                            style = LocalAppTypography.current.bodySmall,
                                             maxLines = 1,
                                             modifier =
                                                 Modifier

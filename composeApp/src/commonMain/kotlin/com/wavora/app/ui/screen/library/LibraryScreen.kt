@@ -83,7 +83,6 @@ import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
@@ -110,6 +109,7 @@ import wavora.composeapp.generated.resources.wavora_charts
 import wavora.composeapp.generated.resources.your_library
 import wavora.composeapp.generated.resources.your_playlists
 import wavora.composeapp.generated.resources.your_youtube_playlists
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -118,6 +118,7 @@ fun LibraryScreen(
     viewModel: LibraryViewModel = koinViewModel(),
     navController: NavController,
     onScrolling: (onTop: Boolean) -> Unit = {},
+    val cannotBeEmptyString = stringResource(Res.string.playlist_name_cannot_be_empty)
 ) {
     val density = LocalDensity.current
 
@@ -406,7 +407,7 @@ fun LibraryScreen(
                     TextButton(
                         onClick = {
                             if (newTitle.isBlank()) {
-                                viewModel.makeToast(runBlocking { getString(Res.string.playlist_name_cannot_be_empty) })
+                                viewModel.makeToast(cannotBeEmptyString)
                             } else {
                                 viewModel.createPlaylist(newTitle)
                                 hideEditTitleBottomSheet()
@@ -436,7 +437,7 @@ fun LibraryScreen(
             title = {
                 Text(
                     text = stringResource(Res.string.library),
-                    style = typo().titleMedium,
+                    style = LocalAppTypography.current.titleMedium,
                     color = Color.White,
                 )
             },
@@ -456,7 +457,7 @@ fun LibraryScreen(
                             "NEW",
                             Modifier.align(Alignment.BottomEnd),
                             style =
-                                typo().bodySmall.copy(
+                                LocalAppTypography.current.bodySmall.copy(
                                     fontSize = 5.sp,
                                 ),
                         )

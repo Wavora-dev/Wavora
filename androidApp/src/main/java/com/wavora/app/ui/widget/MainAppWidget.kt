@@ -84,6 +84,11 @@ class MainAppWidget :
     KoinComponent {
     val sharedViewModel by inject<SharedViewModel>()
     val serviceScope by inject<CoroutineScope>(named(Config.SERVICE_SCOPE))
+    // Single ImageLoader instance shared across all thumbnail loads in this widget.
+    // Creating a new ImageLoader per LaunchedEffect(thumbUrl) was leaking thread pools.
+    private var cachedImageLoader: ImageLoader? = null
+    private fun getImageLoader(context: Context): ImageLoader =
+        cachedImageLoader ?: ImageLoader(context.applicationContext).also { cachedImageLoader = it }
 
     @SuppressLint("RestrictedApi")
     override suspend fun provideGlance(
@@ -172,7 +177,7 @@ class MainAppWidget :
                             .error(R.drawable.holder)
                             .allowHardware(false)
                             .build()
-                    val result = ImageLoader(context).execute(request)
+                    val result = getImageLoader(context).execute(request)
                     randomImage =
                         when (result) {
                             is SuccessResult -> {

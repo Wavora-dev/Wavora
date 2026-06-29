@@ -34,6 +34,7 @@ import wavora.composeapp.generated.resources.downloaded
 import wavora.composeapp.generated.resources.favorite
 import wavora.composeapp.generated.resources.followed
 import wavora.composeapp.generated.resources.most_played
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @Composable
 fun LibraryTilingBox(navController: NavController) {
@@ -130,7 +131,7 @@ fun LibraryTilingItem(
             )
             Text(
                 title,
-                style = typo().titleSmall,
+                style = LocalAppTypography.current.titleSmall,
                 color = Color.Black,
             )
         }

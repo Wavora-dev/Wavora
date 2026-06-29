@@ -36,7 +36,7 @@ data class SongItem(
     val setVideoId: String? = null,
 ) : YTItem() {
     override val shareLink: String
-        get() = "https://wavora.org/app/watch?v=$id"
+        get() = "https://music.youtube.com/watch?v=$id"
     override val type: YTItemType
         get() = YTItemType.SONG
 
@@ -62,7 +62,7 @@ data class VideoItem(
     val setVideoId: String? = null,
 ) : YTItem() {
     override val shareLink: String
-        get() = "https://wavora.org/app/watch?v=$id"
+        get() = "https://music.youtube.com/watch?v=$id"
     override val type: YTItemType
         get() = YTItemType.VIDEO
 }
@@ -79,7 +79,7 @@ data class AlbumItem(
     override val explicit: Boolean = false,
 ) : YTItem() {
     override val shareLink: String
-        get() = "https://wavora.org/app/playlist?list=$playlistId"
+        get() = "https://music.youtube.com/playlist?list=$playlistId"
     override val type: YTItemType
         get() = YTItemType.ALBUM
 }
@@ -97,7 +97,7 @@ data class PlaylistItem(
     override val explicit: Boolean
         get() = false
     override val shareLink: String
-        get() = "https://wavora.org/app/playlist?list=$id"
+        get() = "https://music.youtube.com/playlist?list=$id"
     override val type: YTItemType
         get() = YTItemType.PLAYLIST
 }
@@ -113,7 +113,7 @@ data class ArtistItem(
     override val explicit: Boolean
         get() = false
     override val shareLink: String
-        get() = "https://wavora.org/app/channel/$id"
+        get() = "https://music.youtube.com/channel/$id"
     override val type: YTItemType
         get() = YTItemType.ARTIST
 }

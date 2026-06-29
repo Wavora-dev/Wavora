@@ -289,7 +289,9 @@ class NowPlayingViewModel(
                 val fileOutputStream = FileOutputStream("$path.jpg")
                 fileOutputStream.write(bitmap.toByteArray())
                 fileOutputStream.close()
-            } catch (e: Exception) { throw RuntimeException(e) }
+            } catch (e: Exception) {
+                Logger.e(TAG, "Failed to save artwork to file: ${e.message}", e)
+            }
             songRepository.downloadToFile(track = track, videoId = track.videoId, path = path, isVideo = nowPlayingScreenData.value.isVideo)
                 .collectLatest { _downloadFileProgress.value = it }
         }

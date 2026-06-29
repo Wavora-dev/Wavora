@@ -22,6 +22,7 @@ import wavora.composeapp.generated.resources.blog_promo_title
 import wavora.composeapp.generated.resources.later
 import wavora.composeapp.generated.resources.visit_blog
 import wavora.composeapp.generated.resources.circle_app_icon
+import com.wavora.app.ui.theme.LocalAppTypography
 
 
 @Composable
@@ -47,7 +48,7 @@ fun BlogPromoDialog(
             }) {
                 Text(
                     stringResource(Res.string.visit_blog),
-                    style = typo().bodySmall,
+                    style = LocalAppTypography.current.bodySmall,
                 )
             }
         },
@@ -57,7 +58,7 @@ fun BlogPromoDialog(
             }) {
                 Text(
                     stringResource(Res.string.later),
-                    style = typo().bodySmall,
+                    style = LocalAppTypography.current.bodySmall,
                 )
             }
         },
@@ -71,14 +72,14 @@ fun BlogPromoDialog(
         title = {
             Text(
                 stringResource(Res.string.blog_promo_title),
-                style = typo().labelSmall,
+                style = LocalAppTypography.current.labelSmall,
             )
         },
         text = {
             Text(
                 stringResource(Res.string.blog_promo_message),
                 textAlign = TextAlign.Center,
-                style = typo().bodySmall,
+                style = LocalAppTypography.current.bodySmall,
             )
         },
     )

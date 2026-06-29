@@ -25,6 +25,7 @@ import com.wavora.app.viewModel.MoodViewModel
 import org.jetbrains.compose.resources.painterResource
 import org.koin.compose.viewmodel.koinViewModel
 import wavora.composeapp.generated.resources.*
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @Composable
 fun MoodScreen(
@@ -46,7 +47,7 @@ fun MoodScreen(
             title = {
                 Text(
                     text = moodData?.header ?: "",
-                    style = typo().labelMedium,
+                    style = LocalAppTypography.current.labelMedium,
                 )
             },
             leftIcon = {

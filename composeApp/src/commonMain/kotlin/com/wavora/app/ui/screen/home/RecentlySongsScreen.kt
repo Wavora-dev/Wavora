@@ -55,6 +55,7 @@ import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.baseline_arrow_back_ios_new_24
 import wavora.composeapp.generated.resources.error
 import wavora.composeapp.generated.resources.recently_added
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalHazeMaterialsApi::class)
 @Composable
@@ -220,7 +221,7 @@ fun RecentlySongsScreen(
             title = {
                 Text(
                     text = stringResource(Res.string.recently_added),
-                    style = typo().titleMedium,
+                    style = LocalAppTypography.current.titleMedium,
                 )
             },
             navigationIcon = {

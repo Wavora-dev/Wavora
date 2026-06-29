@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.MusicOff
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -38,7 +39,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.wavora.domain.model.entities.AlbumEntity
@@ -64,6 +64,7 @@ import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.create
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -158,7 +159,7 @@ internal inline fun <reified T> GridLibraryPlaylist(
                                     }
                                     Text(
                                         text = stringResource(Res.string.create),
-                                        style = typo().titleSmall,
+                                        style = LocalAppTypography.current.titleSmall,
                                         color = Color.White,
                                         maxLines = 1,
                                         modifier =
@@ -250,19 +251,6 @@ internal inline fun <reified T> GridLibraryPlaylist(
                     }
 
                     item(span = { GridItemSpan(maxLineSpan) }) {
-                        val uriHandler = LocalUriHandler.current
-                        WavoraChartButton(
-                            modifier =
-                                Modifier.wrapContentWidth().padding(
-                                    vertical = 16.dp,
-                                ),
-                            onClick = {
-                                uriHandler.openUri("https://chart.wavora.org")
-                            },
-                        )
-                    }
-
-                    item(span = { GridItemSpan(maxLineSpan) }) {
                         EndOfPage()
                     }
                 }
@@ -277,11 +265,23 @@ internal inline fun <reified T> GridLibraryPlaylist(
                         .padding(16.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = stringResource(emptyText),
-                        style = typo().bodyMedium,
-                        color = Color.White,
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.MusicOff,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = Color.White.copy(alpha = 0.35f),
+                        )
+                        Text(
+                            text = stringResource(emptyText),
+                            style = LocalAppTypography.current.bodyMedium,
+                            color = Color.White.copy(alpha = 0.6f),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        )
+                    }
                 }
             }
         }

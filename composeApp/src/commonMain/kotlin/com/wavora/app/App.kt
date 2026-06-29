@@ -36,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -115,6 +116,7 @@ import wavora.composeapp.generated.resources.update_message
 import wavora.composeapp.generated.resources.version_format
 import wavora.composeapp.generated.resources.yes
 import kotlin.time.ExperimentalTime
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalTime::class, ExperimentalFoundationApi::class)
 @Composable
@@ -328,12 +330,14 @@ fun App(viewModel: SharedViewModel = koinInject()) {
     val backdrop = rememberBackdrop()
 
     var shouldShowCafecitoDialog by rememberSaveable { mutableStateOf(false) }
+    var showOnboarding by rememberSaveable { mutableStateOf(false) }
     val openAppTime by viewModel.openAppTime.collectAsStateWithLifecycle()
 
     // Show Cafecito dialog only on first launch ever (openAppTime == 1)
     LaunchedEffect(openAppTime) {
         if (openAppTime == 1) {
             shouldShowCafecitoDialog = true
+            showOnboarding = true
         }
     }
 
@@ -526,6 +530,14 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                     }
                 }
 
+
+                // Onboarding — shown on very first launch
+                if (showOnboarding) {
+                    OnboardingScreen(
+                    onFinish = { showOnboarding = false },
+                    )
+                }
+
                 if (isShowNowPlaylistScreen && !isTabletLandscape) {
                     NowPlayingScreen(
                         navController = navController,
@@ -551,20 +563,20 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                             }) {
                                 Text(
                                     stringResource(Res.string.yes),
-                                    style = typo().bodySmall,
+                                    style = LocalAppTypography.current.bodySmall,
                                 )
                             }
                         },
                         text = {
                             Text(
                                 stringResource(Res.string.sleep_timer_off),
-                                style = typo().labelSmall,
+                                style = LocalAppTypography.current.labelSmall,
                             )
                         },
                         title = {
                             Text(
                                 stringResource(Res.string.good_night),
-                                style = typo().bodySmall,
+                                style = LocalAppTypography.current.bodySmall,
                             )
                         },
                     )
@@ -592,7 +604,7 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                             ) {
                                 Text(
                                     stringResource(Res.string.download),
-                                    style = typo().bodySmall,
+                                    style = LocalAppTypography.current.bodySmall,
                                 )
                             }
                         },
@@ -605,14 +617,14 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                             ) {
                                 Text(
                                     stringResource(Res.string.cancel),
-                                    style = typo().bodySmall,
+                                    style = LocalAppTypography.current.bodySmall,
                                 )
                             }
                         },
                         title = {
                             Text(
                                 stringResource(Res.string.update_available),
-                                style = typo().labelSmall,
+                                style = LocalAppTypography.current.labelSmall,
                             )
                         },
                         text = {
@@ -659,7 +671,7 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                             ) {
                                 Text(
                                     text = updateMessage,
-                                    style = typo().labelMedium,
+                                    style = LocalAppTypography.current.labelMedium,
                                     modifier =
                                         Modifier.padding(
                                             vertical = 8.dp,
@@ -669,12 +681,12 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                                     response.body,
                                     typography =
                                         markdownTypography(
-                                            h1 = typo().labelLarge,
-                                            h2 = typo().labelMedium,
-                                            h3 = typo().labelSmall,
-                                            text = typo().bodySmall,
-                                            bullet = typo().bodySmall,
-                                            paragraph = typo().bodySmall,
+                                            h1 = LocalAppTypography.current.labelLarge,
+                                            h2 = LocalAppTypography.current.labelMedium,
+                                            h3 = LocalAppTypography.current.labelSmall,
+                                            text = LocalAppTypography.current.bodySmall,
+                                            bullet = LocalAppTypography.current.bodySmall,
+                                            paragraph = LocalAppTypography.current.bodySmall,
                                             textLink =
                                                 TextLinkStyles(
                                                     SpanStyle(
@@ -707,7 +719,7 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                             ) {
                                 Text(
                                     "☕  Support Wavora",
-                                    style = typo().bodySmall.copy(
+                                    style = LocalAppTypography.current.bodySmall.copy(
                                         color = Color(0xFFA259FF),
                                         fontWeight = FontWeight.Bold,
                                     ),
@@ -718,26 +730,26 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                             TextButton(onClick = { shouldShowCafecitoDialog = false }) {
                                 Text(
                                     "Maybe later",
-                                    style = typo().bodySmall.copy(color = Color(0xFF6B6B7A)),
+                                    style = LocalAppTypography.current.bodySmall.copy(color = Color(0xFF6B6B7A)),
                                 )
                             }
                         },
                         title = {
                             Text(
                                 "Welcome to Wavora 👋",
-                                style = typo().labelSmall.copy(fontWeight = FontWeight.Bold),
+                                style = LocalAppTypography.current.labelSmall.copy(fontWeight = FontWeight.Bold),
                             )
                         },
                         text = {
                             Column {
                                 Text(
                                     "Wavora is free and always will be.\n\nIf you enjoy the app, consider buying me a coffee — it helps keep development going and new features coming.",
-                                    style = typo().bodySmall,
+                                    style = LocalAppTypography.current.bodySmall,
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     "cafecito.app/wavora",
-                                    style = typo().bodySmall.copy(
+                                    style = LocalAppTypography.current.bodySmall.copy(
                                         color = Color(0xFF00D4FF),
                                         textDecoration = TextDecoration.Underline,
                                     ),
@@ -762,21 +774,21 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                             ) {
                                 Text(
                                     stringResource(Res.string.yes),
-                                    style = typo().bodySmall,
+                                    style = LocalAppTypography.current.bodySmall,
                                 )
                             }
                         },
                         title = {
                             Text(
                                 stringResource(Res.string.notification),
-                                style = typo().labelSmall,
+                                style = LocalAppTypography.current.labelSmall,
                             )
                         },
                         text = {
                             Column {
                                 Text(
                                     stringResource(Res.string.this_app_needs_to_access_your_notification),
-                                    style = typo().bodySmall,
+                                    style = LocalAppTypography.current.bodySmall,
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Row(
@@ -793,7 +805,7 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                                     Spacer(modifier = Modifier.width(5.dp))
                                     Text(
                                         stringResource(Res.string.do_not_show_again),
-                                        style = typo().bodySmall,
+                                        style = LocalAppTypography.current.bodySmall,
                                     )
                                 }
                             }

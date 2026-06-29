@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.wavora.app.extension.greyScale
 import com.wavora.app.ui.theme.typo
 import com.wavora.app.ui.theme.white
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @Composable
 fun SettingItem(
@@ -70,7 +71,7 @@ fun SettingItem(
                 Text(
                     text = title,
                     style =
-                        typo().labelMedium.let {
+                        LocalAppTypography.current.labelMedium.let {
                             if (!isEnable) it.greyScale() else it
                         },
                     color = white,
@@ -80,11 +81,11 @@ fun SettingItem(
                     text = subtitle,
                     style =
                         if (smallSubtitle) {
-                            typo().bodySmall.let {
+                            LocalAppTypography.current.bodySmall.let {
                                 if (!isEnable) it.greyScale() else it
                             }
                         } else {
-                            typo().bodyMedium.let {
+                            LocalAppTypography.current.bodyMedium.let {
                                 if (!isEnable) it.greyScale() else it
                             }
                         },

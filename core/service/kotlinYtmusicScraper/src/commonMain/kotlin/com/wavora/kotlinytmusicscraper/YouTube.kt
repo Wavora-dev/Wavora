@@ -1726,12 +1726,18 @@ class YouTube {
 
     suspend fun getAccountListWithPageId(customCookie: String): Result<List<AccountInfo>> =
         runCatching {
-            val res =
-                ytMusic
-                    .getAccountSwitcherEndpoint(customCookie)
-                    .bodyAsText()
-                    .removePrefix(")]}'\n")
-            val accountSwitcherEndpointResponse = ytMusic.normalJson.decodeFromString<AccountSwitcherEndpointResponse>(res)
+            Logger.d(TAG, "getAccountListWithPageId: starting HTTP call")
+            val rawResponse = ytMusic
+                .getAccountSwitcherEndpoint(customCookie)
+                .bodyAsText()
+            Logger.d(TAG, "getAccountListWithPageId: raw response length=\${rawResponse.length}")
+            val res = rawResponse.removePrefix(")]}'\n")
+            val accountSwitcherEndpointResponse = try {
+                ytMusic.normalJson.decodeFromString<AccountSwitcherEndpointResponse>(res)
+            } catch (e: Exception) {
+                Logger.e(TAG, "getAccountListWithPageId: JSON decode failed — \${e.message}. First 300 chars: \${res.take(300)}")
+                throw e
+            }
             Logger.d(TAG, "Account List Response: $accountSwitcherEndpointResponse")
             accountSwitcherEndpointResponse.toListAccountInfo()
         }

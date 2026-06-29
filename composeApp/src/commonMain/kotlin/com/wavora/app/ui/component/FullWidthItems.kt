@@ -99,6 +99,7 @@ import wavora.composeapp.generated.resources.podcasts
 import wavora.composeapp.generated.resources.radio
 import wavora.composeapp.generated.resources.you
 import kotlin.math.roundToInt
+import com.wavora.app.ui.theme.LocalAppTypography
 
 /**
  * This is the song item in the playlist or other places.
@@ -240,7 +241,7 @@ fun SongFullWidthItems(
                             Text(
                                 text = (index + 1).toString(),
                                 color = Color.White,
-                                style = typo().titleMedium,
+                                style = LocalAppTypography.current.titleMedium,
                                 modifier = Modifier.align(Alignment.Center),
                             )
                         }
@@ -255,7 +256,7 @@ fun SongFullWidthItems(
                 ) {
                     Text(
                         text = track?.title ?: songEntity?.title ?: "",
-                        style = typo().titleSmall,
+                        style = LocalAppTypography.current.titleSmall,
                         maxLines = 1,
                         color = Color.White,
                         modifier =
@@ -304,7 +305,7 @@ fun SongFullWidthItems(
                                     track?.artists?.toListName()?.connectArtists()
                                         ?: songEntity?.artistName?.connectArtists()
                                 ) ?: "",
-                            style = typo().bodySmall,
+                            style = LocalAppTypography.current.bodySmall,
                             maxLines = 1,
                             color = Color(0xC4FFFFFF),
                             modifier =
@@ -414,7 +415,7 @@ fun SuggestItems(
             ) {
                 Text(
                     text = track.title,
-                    style = typo().titleSmall,
+                    style = LocalAppTypography.current.titleSmall,
                     maxLines = 1,
                     color = Color.White,
                     modifier =
@@ -431,7 +432,7 @@ fun SuggestItems(
                         (
                             track.artists?.toListName()?.connectArtists()
                         ) ?: "",
-                    style = typo().bodySmall,
+                    style = LocalAppTypography.current.bodySmall,
                     maxLines = 1,
                     color = Color(0xC4FFFFFF),
                     modifier =
@@ -563,7 +564,7 @@ fun PlaylistFullWidthItems(
             ) {
                 Text(
                     text = title,
-                    style = typo().titleSmall,
+                    style = LocalAppTypography.current.titleSmall,
                     maxLines = 1,
                     color = Color.White,
                     modifier =
@@ -590,7 +591,7 @@ fun PlaylistFullWidthItems(
                     }
                     Text(
                         text = "$firstSubtitle ${if (secondSubtitle.isNotEmpty()) " • $secondSubtitle" else ""}",
-                        style = typo().bodySmall,
+                        style = LocalAppTypography.current.bodySmall,
                         maxLines = 1,
                         color = Color(0xC4FFFFFF),
                         modifier =
@@ -607,7 +608,7 @@ fun PlaylistFullWidthItems(
                 if (thirdRowSubtitle != null) {
                     Text(
                         text = thirdRowSubtitle,
-                        style = typo().bodySmall,
+                        style = LocalAppTypography.current.bodySmall,
                         maxLines = 1,
                         color = Color(0xC4FFFFFF),
                         modifier =
@@ -682,7 +683,7 @@ fun ArtistFullWidthItems(
             ) {
                 Text(
                     text = name,
-                    style = typo().titleSmall,
+                    style = LocalAppTypography.current.titleSmall,
                     maxLines = 1,
                     color = Color.White,
                     modifier =
@@ -697,7 +698,7 @@ fun ArtistFullWidthItems(
 
                 Text(
                     text = stringResource(Res.string.artists),
-                    style = typo().bodySmall,
+                    style = LocalAppTypography.current.bodySmall,
                     maxLines = 1,
                     color = Color(0xC4FFFFFF),
                     modifier =

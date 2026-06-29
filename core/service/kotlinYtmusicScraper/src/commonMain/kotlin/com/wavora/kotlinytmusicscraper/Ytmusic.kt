@@ -397,11 +397,9 @@ class Ytmusic {
         parameter("prettyPrint", false)
     }
 
-    suspend fun getWavoraChart() =
-        httpClient.get("https://chart.wavora.org/api/playlists") {
-            accept(ContentType.Application.Json)
-            contentType(ContentType.Application.Json)
-        }
+    // chart.wavora.org is not available; function preserved as stub to avoid breaking callers
+    @Deprecated("chart.wavora.org does not exist", level = DeprecationLevel.WARNING)
+    suspend fun getWavoraChart(): Nothing = throw UnsupportedOperationException("Wavora Chart is not available")
 
     suspend fun test403Error(url: String): Boolean = httpClient.get(url).status.value in 200..299
 

@@ -101,6 +101,7 @@ import wavora.composeapp.generated.resources.holder_video
 import wavora.composeapp.generated.resources.playlist
 import wavora.composeapp.generated.resources.subscribers
 import wavora.composeapp.generated.resources.you
+import com.wavora.app.ui.theme.LocalAppTypography
 
 @Composable
 fun HomeItem(
@@ -173,12 +174,12 @@ fun HomeItem(
                 AnimatedVisibility(visible = (data.subtitle != null && data.subtitle != "")) {
                     Text(
                         text = data.subtitle ?: "",
-                        style = typo().bodySmall,
+                        style = LocalAppTypography.current.bodySmall,
                     )
                 }
                 Text(
                     text = data.title,
-                    style = typo().headlineMedium,
+                    style = LocalAppTypography.current.headlineMedium,
                     color = Color.White,
                     maxLines = 1,
                     modifier = Modifier.fillMaxWidth(),
@@ -354,7 +355,7 @@ fun HomeItemContentPlaylist(
                         is LocalPlaylistEntity -> {
                             painterPlaylistThumbnail(
                                 data.title,
-                                style = typo().bodySmall,
+                                style = LocalAppTypography.current.bodySmall,
                                 thumbSize * 0.9f to thumbSize * 0.9f,
                             )
                         }
@@ -362,7 +363,7 @@ fun HomeItemContentPlaylist(
                         is ChartItem -> {
                             painterPlaylistThumbnail(
                                 data.name,
-                                style = typo().bodySmall,
+                                style = LocalAppTypography.current.bodySmall,
                                 thumbSize * 0.9f to thumbSize * 0.9f,
                             )
                         }
@@ -376,7 +377,7 @@ fun HomeItemContentPlaylist(
                         is LocalPlaylistEntity -> {
                             painterPlaylistThumbnail(
                                 data.title,
-                                style = typo().bodySmall,
+                                style = LocalAppTypography.current.bodySmall,
                                 thumbSize * 0.9f to thumbSize * 0.9f,
                             )
                         }
@@ -384,7 +385,7 @@ fun HomeItemContentPlaylist(
                         is ChartItem -> {
                             painterPlaylistThumbnail(
                                 data.name,
-                                style = typo().bodySmall,
+                                style = LocalAppTypography.current.bodySmall,
                                 thumbSize * 0.9f to thumbSize * 0.9f,
                             )
                         }
@@ -421,7 +422,7 @@ fun HomeItemContentPlaylist(
                         is AlbumsResult -> data.title
                         else -> ""
                     },
-                style = typo().titleSmall,
+                style = LocalAppTypography.current.titleSmall,
                 color = Color.White,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -503,7 +504,7 @@ fun HomeItemContentPlaylist(
                             ""
                         }
                     },
-                style = typo().bodySmall,
+                style = LocalAppTypography.current.bodySmall,
                 minLines = 1,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -573,7 +574,7 @@ fun QuickPicksItem(
             ) {
                 Text(
                     text = data.title,
-                    style = typo().titleSmall,
+                    style = LocalAppTypography.current.titleSmall,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     color = Color.White,
@@ -600,7 +601,7 @@ fun QuickPicksItem(
                     item {
                         Text(
                             text = data.artists.toListName().connectArtists(),
-                            style = typo().bodySmall,
+                            style = LocalAppTypography.current.bodySmall,
                             minLines = 1,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -678,7 +679,7 @@ fun HomeItemSong(
             )
             Text(
                 text = data.title,
-                style = typo().titleSmall,
+                style = LocalAppTypography.current.titleSmall,
                 color = Color.White,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -704,7 +705,7 @@ fun HomeItemSong(
                             data.artists.toListName().connectArtists().takeIf { it.isNotBlank() },
                             data.album?.name?.takeIf { it.isNotBlank() },
                         ).joinToString(" • "),
-                    style = typo().bodySmall,
+                    style = LocalAppTypography.current.bodySmall,
                     minLines = 1,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -774,7 +775,7 @@ fun HomeItemVideo(
             )
             Text(
                 text = data.title,
-                style = typo().titleSmall,
+                style = LocalAppTypography.current.titleSmall,
                 color = Color.White,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -790,7 +791,7 @@ fun HomeItemVideo(
                         data.artists.toListName().connectArtists().takeIf { it.isNotBlank() },
                         data.views?.takeIf { it.isNotBlank() },
                     ).joinToString(" • "),
-                style = typo().bodySmall,
+                style = LocalAppTypography.current.bodySmall,
                 minLines = 1,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -854,7 +855,7 @@ fun HomeItemArtist(
             )
             Text(
                 text = data.title,
-                style = typo().titleSmall,
+                style = LocalAppTypography.current.titleSmall,
                 color = Color.White,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -867,7 +868,7 @@ fun HomeItemArtist(
             )
             Text(
                 text = data.description?.takeIf { it.isNotBlank() }.orEmpty(),
-                style = typo().bodySmall,
+                style = LocalAppTypography.current.bodySmall,
                 minLines = 1,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -913,7 +914,7 @@ fun MoodMomentAndGenreHomeItem(
             )
             Text(
                 text = title,
-                style = typo().titleSmall,
+                style = LocalAppTypography.current.titleSmall,
                 textAlign = TextAlign.Center,
                 color = Color.White,
                 modifier =
@@ -971,7 +972,7 @@ fun ItemVideoChart(
             Row {
                 Text(
                     text = position.toString(),
-                    style = typo().titleLarge,
+                    style = LocalAppTypography.current.titleLarge,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     modifier =
@@ -983,7 +984,7 @@ fun ItemVideoChart(
                 Column(Modifier.padding(start = 10.dp)) {
                     Text(
                         text = data.title,
-                        style = typo().titleMedium,
+                        style = LocalAppTypography.current.titleMedium,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         color = Color.White,
@@ -999,7 +1000,7 @@ fun ItemVideoChart(
                                 data.artists.toListName().connectArtists().takeIf { it.isNotBlank() },
                                 data.views.takeIf { it.isNotBlank() },
                             ).joinToString(" • "),
-                        style = typo().bodyMedium,
+                        style = LocalAppTypography.current.bodyMedium,
                         minLines = 1,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -1043,7 +1044,7 @@ fun ItemArtistChart(
         ) {
             Text(
                 text = data.rank,
-                style = typo().titleLarge,
+                style = LocalAppTypography.current.titleLarge,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
                 modifier =
@@ -1083,7 +1084,7 @@ fun ItemArtistChart(
             ) {
                 Text(
                     text = data.title,
-                    style = typo().titleMedium,
+                    style = LocalAppTypography.current.titleMedium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier =
@@ -1103,7 +1104,7 @@ fun ItemArtistChart(
                                 data.subscribers,
                             )
                         },
-                    style = typo().bodySmall,
+                    style = LocalAppTypography.current.bodySmall,
                     minLines = 1,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -1149,7 +1150,7 @@ fun ItemTrackChart(
                     Row {
                         Text(
                             text = position.toString(),
-                            style = typo().titleLarge,
+                            style = LocalAppTypography.current.titleLarge,
                             textAlign = TextAlign.Center,
                             maxLines = 1,
                             modifier =
@@ -1194,7 +1195,7 @@ fun ItemTrackChart(
             ) {
                 Text(
                     text = data.title,
-                    style = typo().titleSmall,
+                    style = LocalAppTypography.current.titleSmall,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     color = Color.White,
@@ -1209,7 +1210,7 @@ fun ItemTrackChart(
 
                 Text(
                     text = data.artists.toListName().connectArtists(),
-                    style = typo().bodySmall,
+                    style = LocalAppTypography.current.bodySmall,
                     minLines = 1,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -1243,7 +1244,7 @@ fun MoodAndGenresContentItem(
                     is Item -> (data).header
                     else -> ""
                 },
-            style = typo().titleMedium,
+            style = LocalAppTypography.current.titleMedium,
             color = Color.White,
             modifier =
                 Modifier
