@@ -1895,10 +1895,9 @@ class YouTube {
             ytMusic.removeFromLiked(mediaId).status.value
         }
 
-    suspend fun getWavoraChart() =
-        runCatching {
-            ytMusic.getWavoraChart().body<WavoraChartResponse>()
-        }
+    @Deprecated("chart.wavora.org is not available", level = DeprecationLevel.WARNING)
+    suspend fun getWavoraChart(): Result<WavoraChartResponse> =
+        Result.failure(UnsupportedOperationException("Wavora Chart is not available"))
 
     /**
      * Fetch the remote app config (TIDAL credentials) from GitHub raw.

@@ -16,7 +16,6 @@ kotlin {
     jvmToolchain(21)
     compilerOptions {
         freeCompilerArgs.add("-Xmulti-dollar-interpolation")
-        freeCompilerArgs.add("-Xwhen-guards")
     }
     // Target declarations - add or remove as needed below. These define
     // which platforms this KMP module supports.

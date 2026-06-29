@@ -51,6 +51,18 @@ subprojects {
         resolutionStrategy {
             force("com.github.TeamNewPipe:nanojson:c7a6c1c08d16b6d5ecded34758e6415e07be2166")
             force("org.jetbrains.skiko:skiko:0.148.1")
+            // Pin Compose Multiplatform runtime to match the plugin version (1.11.1).
+            // Without this, transitive dependencies can pull 1.12.0-alpha01 which causes
+            // the "versions don't match" warning and potential runtime instability.
+            force("org.jetbrains.compose.foundation:foundation:1.11.1")
+            force("org.jetbrains.compose.foundation:foundation-desktop:1.11.1")
+            force("org.jetbrains.compose.foundation:foundation-android:1.11.1")
+            force("org.jetbrains.compose.ui:ui:1.11.1")
+            force("org.jetbrains.compose.ui:ui-desktop:1.11.1")
+            force("org.jetbrains.compose.ui:ui-android:1.11.1")
+            force("org.jetbrains.compose.runtime:runtime:1.11.1")
+            force("org.jetbrains.compose.runtime:runtime-desktop:1.11.1")
+            force("org.jetbrains.compose.runtime:runtime-android:1.11.1")
         }
     }
 }
