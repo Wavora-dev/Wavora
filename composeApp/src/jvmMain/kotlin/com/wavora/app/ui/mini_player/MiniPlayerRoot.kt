@@ -21,16 +21,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.WindowState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.wavora.app.viewModel.SharedViewModel
 import java.awt.Cursor
+import java.awt.MouseInfo
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.shape.CircleShape
@@ -52,6 +53,7 @@ fun MiniPlayerRoot(
     sharedViewModel: SharedViewModel,
     onClose: () -> Unit,
     windowState: WindowState,
+    window: java.awt.Window,
 ) {
     val nowPlayingData by sharedViewModel.nowPlayingScreenData.collectAsStateWithLifecycle()
     val controllerState by sharedViewModel.controllerState.collectAsStateWithLifecycle()
@@ -62,9 +64,6 @@ fun MiniPlayerRoot(
             nowPlayingData.lyricsData
         }
     }
-
-    // Used to convert the drag gesture's pixel delta into Dp for windowState.position.
-    val density = LocalDensity.current
 
     // Check if there's any track playing
     val hasTrack = nowPlayingData.nowPlayingTitle.isNotBlank()
@@ -151,20 +150,39 @@ fun MiniPlayerRoot(
                         .fillMaxWidth(0.75f)
                         .height(28.dp)
                         .pointerInput(Unit) {
+                            // Screen-space drag: same approach as CustomTitleBar.kt for the
+                            // main window. We track the ABSOLUTE screen mouse position
+                            // (MouseInfo.getPointerInfo) and move the real AWT window
+                            // directly (window.setLocation), instead of using Compose's
+                            // pointer coordinates local to the window (change.position) and
+                            // writing to windowState.position.
+                            //
+                            // The previous approach broke because change.position is
+                            // relative to the window's own origin -- and that origin moves
+                            // every time we drag. Each frame's local reading already
+                            // includes the window's own movement from the previous frame,
+                            // so the calculation feeds back into itself: the window
+                            // overshoots the mouse, corrects, overshoots again, which is
+                            // exactly the jitter / stutter / "walks outside the rectangle"
+                            // / snap-back behavior being reported. Absolute screen
+                            // coordinates don't move when the window moves, so there's no
+                            // feedback loop, and window.setLocation applies immediately
+                            // instead of going through Compose state/recomposition.
+                            var dragStartX = 0
+                            var dragStartY = 0
                             detectDragGestures(
+                                onDragStart = {
+                                    val mouseLocation = MouseInfo.getPointerInfo().location
+                                    dragStartX = mouseLocation.x - window.x
+                                    dragStartY = mouseLocation.y - window.y
+                                },
                                 onDrag = { change, _ ->
                                     change.consume()
-                                    val deltaPx = change.position - change.previousPosition
-                                    val currentPos = windowState.position
-                                    if (currentPos is androidx.compose.ui.window.WindowPosition.Absolute) {
-                                        with(density) {
-                                            windowState.position =
-                                                androidx.compose.ui.window.WindowPosition(
-                                                    currentPos.x + deltaPx.x.toDp(),
-                                                    currentPos.y + deltaPx.y.toDp(),
-                                                )
-                                        }
-                                    }
+                                    val mouseLocation = MouseInfo.getPointerInfo().location
+                                    window.setLocation(
+                                        mouseLocation.x - dragStartX,
+                                        mouseLocation.y - dragStartY,
+                                    )
                                 },
                             )
                         }.pointerHoverIcon(PointerIcon(Cursor(Cursor.MOVE_CURSOR))),

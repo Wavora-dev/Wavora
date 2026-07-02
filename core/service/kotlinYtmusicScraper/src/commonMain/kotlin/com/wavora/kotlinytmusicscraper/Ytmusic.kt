@@ -229,7 +229,11 @@ class Ytmusic {
                 cookie?.let { cookie ->
                     append("Cookie", cookie)
                     if ("SAPISID" !in cookieMap || "__Secure-3PAPISID" !in cookieMap) return@let
-                    val currentTime = now().toInstant(TimeZone.currentSystemDefault()).epochSeconds / 1000
+                    // BUG FIX: epochSeconds is already Unix time in SECONDS. Dividing it by
+                    // 1000 here turned it into a bogus timestamp from ~1970, which Google
+                    // rejects as an invalid/expired SAPISIDHASH -- surfacing to the user as
+                    // "cookie incorrecta" even with a perfectly valid pasted cookie.
+                    val currentTime = now().toInstant(TimeZone.currentSystemDefault()).epochSeconds
                     val sapisidCookie = cookieMap["SAPISID"] ?: cookieMap["__Secure-3PAPISID"]
                     val sapisidHash = sha1("$currentTime $sapisidCookie https://music.youtube.com")
                     Logger.d(TAG, "SAPI SID Hash: SAPISIDHASH ${currentTime}_$sapisidHash")
@@ -244,8 +248,9 @@ class Ytmusic {
     @OptIn(ExperimentalTime::class)
     internal fun getAuthorizationHeader(): String? =
         cookie?.let { cookie ->
-            if ("SAPISID" !in cookieMap || "__Secure-3PAPISID" !in cookieMap) null
-            val currentTime = now().toInstant(TimeZone.currentSystemDefault()).epochSeconds / 1000
+            if ("SAPISID" !in cookieMap || "__Secure-3PAPISID" !in cookieMap) return@let null
+            // Same fix as ytClient's header block above.
+            val currentTime = now().toInstant(TimeZone.currentSystemDefault()).epochSeconds
             val sapisidCookie = cookieMap["SAPISID"] ?: cookieMap["__Secure-3PAPISID"]
             val sapisidHash = sha1("$currentTime $sapisidCookie https://music.youtube.com")
             Logger.d(TAG, "SAPI SID Hash: SAPISIDHASH ${currentTime}_$sapisidHash")

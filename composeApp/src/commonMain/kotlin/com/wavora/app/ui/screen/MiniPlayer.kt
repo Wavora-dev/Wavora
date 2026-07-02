@@ -40,6 +40,7 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.VolumeOff
@@ -105,6 +106,7 @@ import com.wavora.app.expect.ui.toImageBitmap
 import com.wavora.app.extension.formatDuration
 import com.wavora.app.extension.getColorFromPalette
 import com.wavora.app.extension.toResizedBitmap
+import com.wavora.app.extension.wavoraIconGradient
 import com.wavora.app.getPlatform
 import com.wavora.app.ui.component.ExplicitBadge
 import com.wavora.app.ui.component.HeartCheckBox
@@ -113,6 +115,7 @@ import com.wavora.app.ui.component.PlayerControlLayout
 import com.wavora.app.ui.component.liquidGlass
 import com.wavora.app.ui.theme.transparent
 import com.wavora.app.ui.theme.typo
+import com.wavora.app.ui.theme.wavoraIconGradientBrush
 import com.wavora.app.viewModel.SharedViewModel
 import com.wavora.app.viewModel.UIEvent
 import kotlinx.coroutines.Dispatchers
@@ -310,7 +313,14 @@ fun MiniPlayer(
                                         if (offsetY.value + dragAmount > 0) {
                                             coroutineScope.launch {
                                                 change.consume()
-                                                offsetY.animateTo(offsetY.value + 2 * dragAmount)
+                                                // snapTo (not animateTo) here: this fires on every
+                                                // pointer-move event during the drag, so it must
+                                                // track the cursor immediately. animateTo interpolates
+                                                // with easing and each new call cancels the previous
+                                                // one mid-flight, causing the offset to lag behind /
+                                                // "stick" on fast drags. animateTo is still used below
+                                                // for the settle-back animation once the drag ends.
+                                                offsetY.snapTo(offsetY.value + 2 * dragAmount)
                                                 Logger.w("MiniPlayer", "Dragged ${offsetY.value}")
                                             }
                                         }
@@ -356,7 +366,9 @@ fun MiniPlayer(
                                                 ->
                                                 coroutineScope.launch {
                                                     change.consume()
-                                                    offsetX.animateTo(offsetX.value + dragAmount * 2)
+                                                    // snapTo instead of animateTo: see the analogous
+                                                    // comment in onVerticalDrag above for why.
+                                                    offsetX.snapTo(offsetX.value + dragAmount * 2)
                                                     Logger.w("MiniPlayer", "Dragged ${offsetX.value}")
                                                 }
                                             },
@@ -449,7 +461,7 @@ fun MiniPlayer(
                                             .align(Alignment.CenterVertically),
                                     ) {
                                         Text(
-                                            text = (songEntity?.title ?: "").toString(),
+                                            text = (songEntity?.title ?: ""),
                                             style = LocalAppTypography.current.labelSmall,
                                             color = textColor,
                                             maxLines = 1,
@@ -509,7 +521,17 @@ fun MiniPlayer(
                                 )
                             }
                         } else {
-                            PlayPauseButton(isPlaying = isPlaying, modifier = Modifier.size(48.dp)) {
+                            PlayPauseButton(
+                                isPlaying = isPlaying,
+                                // Gradient painted directly on the icon glyph (no background
+                                // shape behind it) via wavoraIconGradient(). Icon is white by
+                                // default inside PlayPauseButton, which is what the SrcAtop
+                                // mask technique needs.
+                                modifier =
+                                    Modifier
+                                        .size(48.dp)
+                                        .wavoraIconGradient(),
+                            ) {
                                 sharedViewModel.onUIEvent(UIEvent.PlayPause)
                             }
                         }
@@ -610,7 +632,7 @@ fun MiniPlayer(
                         Spacer(modifier = Modifier.width(16.dp))
                         Column {
                             Text(
-                                text = (songEntity?.title ?: "").toString(),
+                                text = (songEntity?.title ?: ""),
                                 style = LocalAppTypography.current.labelSmall,
                                 color = textColor,
                                 maxLines = 1,
@@ -759,22 +781,33 @@ fun MiniPlayer(
                                                     Alignment.TopCenter,
                                                 ),
                                         track = { sliderState ->
-                                            SliderDefaults.Track(
+                                            // Custom track (not SliderDefaults.Track): SliderColors
+                                            // only takes a solid Color for activeTrackColor, not a
+                                            // Brush. This is the real desktop seek bar -- it was
+                                            // missed in the earlier gradient pass (only the volume
+                                            // slider got fixed then).
+                                            val fraction =
+                                                ((sliderState.value - sliderState.valueRange.start) /
+                                                    (sliderState.valueRange.endInclusive - sliderState.valueRange.start))
+                                                    .coerceIn(0f, 1f)
+                                            Box(
                                                 modifier =
                                                     Modifier
-                                                        .height(5.dp),
-                                                enabled = true,
-                                                sliderState = sliderState,
-                                                colors =
-                                                    SliderDefaults.colors().copy(
-                                                        thumbColor = Color(0xFFA259FF),
-                                                        activeTrackColor = Color(0xFFA259FF),
-                                                        inactiveTrackColor = Color.Transparent,
-                                                    ),
-                                                thumbTrackGapSize = 0.dp,
-                                                drawTick = { _, _ -> },
-                                                drawStopIndicator = null,
-                                            )
+                                                        .fillMaxWidth()
+                                                        .height(5.dp)
+                                                        .background(Color.Transparent, RoundedCornerShape(4.dp)),
+                                            ) {
+                                                Box(
+                                                    modifier =
+                                                        Modifier
+                                                            .fillMaxWidth(fraction)
+                                                            .fillMaxHeight()
+                                                            .background(
+                                                                brush = wavoraIconGradientBrush,
+                                                                shape = RoundedCornerShape(4.dp),
+                                                            ),
+                                                )
+                                            }
                                         },
                                         thumb = {
                                             SliderDefaults.Thumb(
@@ -787,9 +820,7 @@ fun MiniPlayer(
                                                         ),
                                                 thumbSize = DpSize(8.dp, 8.dp),
                                                 interactionSource =
-                                                    remember {
-                                                        remember { MutableInteractionSource() }
-                                                    },
+                                                    remember { MutableInteractionSource() },
                                                 colors =
                                                     SliderDefaults.colors().copy(
                                                         thumbColor = Color(0xFFA259FF),
@@ -823,7 +854,7 @@ fun MiniPlayer(
                         if (getPlatform() == Platform.Desktop) {
                             IconButton(onClick = { toggleMiniPlayer() }) {
                                 Icon(
-                                    imageVector = Icons.Outlined.OpenInNew,
+                                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
                                     contentDescription = "Mini Player",
                                 )
                             }
@@ -876,22 +907,35 @@ fun MiniPlayer(
                                         .padding(top = 3.dp)
                                         .width(64.dp),
                                 track = { sliderState ->
-                                    SliderDefaults.Track(
+                                    // Custom track (not SliderDefaults.Track): SliderColors only
+                                    // takes a solid Color for activeTrackColor, not a Brush, so
+                                    // the gradient needs to be hand-drawn. Same pattern as the
+                                    // FullscreenPlayer seek bar.
+                                    val fraction =
+                                        ((sliderState.value - sliderState.valueRange.start) /
+                                            (sliderState.valueRange.endInclusive - sliderState.valueRange.start))
+                                            .coerceIn(0f, 1f)
+                                    Box(
                                         modifier =
                                             Modifier
-                                                .height(5.dp),
-                                        enabled = true,
-                                        sliderState = sliderState,
-                                        colors =
-                                            SliderDefaults.colors().copy(
-                                                thumbColor = Color(0xFFA259FF),
-                                                activeTrackColor = Color.White,
-                                                inactiveTrackColor = Color.Gray,
-                                            ),
-                                        thumbTrackGapSize = 0.dp,
-                                        drawTick = { _, _ -> },
-                                        drawStopIndicator = null,
-                                    )
+                                                .fillMaxWidth()
+                                                .height(5.dp)
+                                                .background(Color.Gray, RoundedCornerShape(4.dp)),
+                                    ) {
+                                        Box(
+                                            modifier =
+                                                Modifier
+                                                    .fillMaxWidth(fraction)
+                                                    .fillMaxHeight()
+                                                    .background(
+                                                        brush =
+                                                            Brush.horizontalGradient(
+                                                                colors = listOf(Color(0xFFA259FF), Color(0xFF6A5CFF), Color(0xFF00D4FF)),
+                                                            ),
+                                                        shape = RoundedCornerShape(4.dp),
+                                                    ),
+                                        )
+                                    }
                                 },
                                 thumb = {
                                     SliderDefaults.Thumb(
@@ -904,9 +948,7 @@ fun MiniPlayer(
                                                 ),
                                         thumbSize = DpSize(8.dp, 8.dp),
                                         interactionSource =
-                                            remember {
-                                                remember { MutableInteractionSource() }
-                                            },
+                                            remember { MutableInteractionSource() },
                                         colors =
                                             SliderDefaults.colors().copy(
                                                 thumbColor = Color(0xFFA259FF),

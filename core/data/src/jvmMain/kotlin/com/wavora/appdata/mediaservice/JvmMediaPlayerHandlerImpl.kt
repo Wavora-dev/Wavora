@@ -456,7 +456,7 @@ class JvmMediaPlayerHandlerImpl(
             }
         val track =
             queueData.value.data.listTracks
-                ?.find { it.videoId == videoId }
+                .find { it.videoId == videoId }
         _nowPlayingState.update {
             it.copy(
                 mediaItem = mediaItem,
@@ -1126,7 +1126,7 @@ class JvmMediaPlayerHandlerImpl(
         // Local Add Prefix to PlaylistID to differentiate between local and remote
         // Local: LC-PlaylistID
         val playlistId = _queueData.value.data.playlistId ?: return
-        Logger.w("Check loadMore", playlistId.toString())
+        Logger.w("Check loadMore", playlistId)
         val continuation = _queueData.value.data.continuation
         Logger.w("Check loadMore", continuation.toString())
         if (continuation != null) {

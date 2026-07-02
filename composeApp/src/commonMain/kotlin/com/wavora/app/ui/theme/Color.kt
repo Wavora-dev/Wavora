@@ -1,5 +1,6 @@
 package com.wavora.app.ui.theme
 
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
 // ===== Wavora Brand Colors — source of truth =====
@@ -15,6 +16,15 @@ val wavoraTextDisabled = Color(0xFF6B6B7A)
 val wavoraGradientStart = Color(0xFFA259FF)
 val wavoraGradientMid = Color(0xFF6A5CFF)
 val wavoraGradientEnd = Color(0xFF00D4FF)
+
+// Single shared brush instance for the 3-stop brand gradient (violet -> mid -> cyan).
+// Used both for progress-bar/track fills (as a background) and, via
+// Modifier.wavoraIconGradient() in UIExt.kt, to paint icon glyphs directly with no
+// background shape behind them.
+val wavoraIconGradientBrush: Brush =
+    Brush.horizontalGradient(
+        colors = listOf(wavoraGradientStart, wavoraGradientMid, wavoraGradientEnd),
+    )
 
 // ===== Material Theme aliases (reference brand tokens) =====
 val md_theme_dark_primary = wavoraPrimary

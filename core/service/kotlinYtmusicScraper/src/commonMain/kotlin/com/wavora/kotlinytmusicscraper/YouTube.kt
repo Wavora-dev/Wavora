@@ -568,25 +568,25 @@ class YouTube {
                                     ?.text!!,
                         thumbnail =
                             response.header
-                                ?.musicImmersiveHeaderRenderer
+                                .musicImmersiveHeaderRenderer
                                 ?.thumbnail
                                 ?.musicThumbnailRenderer
                                 ?.getThumbnailUrl()
                                 ?: response.header
-                                    ?.musicVisualHeaderRenderer
+                                    .musicVisualHeaderRenderer
                                     ?.foregroundThumbnail
                                     ?.musicThumbnailRenderer
                                     ?.getThumbnailUrl()!!,
                         shuffleEndpoint =
                             response.header
-                                ?.musicImmersiveHeaderRenderer
+                                .musicImmersiveHeaderRenderer
                                 ?.playButton
                                 ?.buttonRenderer
                                 ?.navigationEndpoint
                                 ?.watchEndpoint,
                         radioEndpoint =
                             response.header
-                                ?.musicImmersiveHeaderRenderer
+                                .musicImmersiveHeaderRenderer
                                 ?.startRadioButton
                                 ?.buttonRenderer
                                 ?.navigationEndpoint
@@ -604,14 +604,14 @@ class YouTube {
                         ?.mapNotNull(ArtistPage::fromSectionListRendererContent)!!,
                 description =
                     response.header
-                        ?.musicImmersiveHeaderRenderer
+                        .musicImmersiveHeaderRenderer
                         ?.description
                         ?.runs
                         ?.firstOrNull()
                         ?.text,
                 subscribers =
                     response.header
-                        ?.musicImmersiveHeaderRenderer
+                        .musicImmersiveHeaderRenderer
                         ?.subscriptionButton
                         ?.subscribeButtonRenderer
                         ?.longSubscriberCountText
@@ -1730,12 +1730,12 @@ class YouTube {
             val rawResponse = ytMusic
                 .getAccountSwitcherEndpoint(customCookie)
                 .bodyAsText()
-            Logger.d(TAG, "getAccountListWithPageId: raw response length=\${rawResponse.length}")
+            Logger.d(TAG, "getAccountListWithPageId: raw response length=${rawResponse.length}")
             val res = rawResponse.removePrefix(")]}'\n")
             val accountSwitcherEndpointResponse = try {
                 ytMusic.normalJson.decodeFromString<AccountSwitcherEndpointResponse>(res)
             } catch (e: Exception) {
-                Logger.e(TAG, "getAccountListWithPageId: JSON decode failed — \${e.message}. First 300 chars: \${res.take(300)}")
+                Logger.e(TAG, "getAccountListWithPageId: JSON decode failed — ${e.message}. First 300 chars: ${res.take(300)}")
                 throw e
             }
             Logger.d(TAG, "Account List Response: $accountSwitcherEndpointResponse")

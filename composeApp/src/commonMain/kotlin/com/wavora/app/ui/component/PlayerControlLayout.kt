@@ -28,7 +28,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
+import com.wavora.app.extension.wavoraIconGradient
+import com.wavora.app.ui.theme.wavoraIconGradientBrush
 import com.wavora.domain.mediaservice.handler.ControlState
 import com.wavora.domain.mediaservice.handler.RepeatState
 import com.wavora.app.ui.theme.seed
@@ -110,9 +113,21 @@ fun PlayerControlLayout(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.SkipPrevious,
-                    tint = if (controllerState.isPreviousAvailable) Color.White else Color.Gray,
+                    tint = Color.White,
                     contentDescription = "",
-                    modifier = Modifier.size(mediumIcon.first),
+                    modifier =
+                        Modifier
+                            .size(mediumIcon.first)
+                            // Gradient painted on the glyph, no background shape. Disabled
+                            // state swaps to a dim solid color instead of the gradient.
+                            .wavoraIconGradient(
+                                brush =
+                                    if (controllerState.isPreviousAvailable) {
+                                        wavoraIconGradientBrush
+                                    } else {
+                                        SolidColor(Color(0xFF3D3D5C))
+                                    },
+                            ),
                 )
             }
         }
@@ -138,14 +153,14 @@ fun PlayerControlLayout(
                             imageVector = Icons.Rounded.PlayCircle,
                             tint = Color.White,
                             contentDescription = "",
-                            modifier = Modifier.size(bigIcon.first),
+                            modifier = Modifier.size(bigIcon.first).wavoraIconGradient(),
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Rounded.PauseCircle,
                             tint = Color.White,
                             contentDescription = "",
-                            modifier = Modifier.size(bigIcon.first),
+                            modifier = Modifier.size(bigIcon.first).wavoraIconGradient(),
                         )
                     }
                 }
@@ -171,9 +186,19 @@ fun PlayerControlLayout(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.SkipNext,
-                    tint = if (controllerState.isNextAvailable) Color.White else Color.Gray,
+                    tint = Color.White,
                     contentDescription = "",
-                    modifier = Modifier.size(mediumIcon.first),
+                    modifier =
+                        Modifier
+                            .size(mediumIcon.first)
+                            .wavoraIconGradient(
+                                brush =
+                                    if (controllerState.isNextAvailable) {
+                                        wavoraIconGradientBrush
+                                    } else {
+                                        SolidColor(Color(0xFF3D3D5C))
+                                    },
+                            ),
                 )
             }
         }

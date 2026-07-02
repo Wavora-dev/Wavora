@@ -19,6 +19,9 @@ import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
@@ -38,8 +41,6 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -50,6 +51,7 @@ import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
+import com.wavora.app.ui.theme.wavoraIconGradientBrush
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -567,3 +569,32 @@ fun hsvToColor(
         alpha = 1f,
     )
 }
+
+/**
+ * Paints the wavora violet -> cyan gradient directly onto whatever this modifier is
+ * applied to (an Icon's white/opaque pixels), with NO background shape behind it.
+ *
+ * How: draws the content normally (e.g. a white Icon, used as an alpha mask), then
+ * composites [brush] on top using BlendMode.SrcAtop, which only paints where the
+ * content already drew opaque pixels. graphicsLayer(alpha = 0.99f) forces an offscreen
+ * compositing layer, which SrcAtop needs to work correctly here.
+ *
+ * Use this instead of Modifier.background(brush = ...).clip(CircleShape) when only the
+ * icon glyph itself should be gradient-filled, not a filled shape behind it.
+ */
+fun Modifier.wavoraIconGradient(
+    brush: Brush = wavoraIconGradientBrush,
+    enabled: Boolean = true,
+): Modifier =
+    if (!enabled) {
+        this
+    } else {
+        this
+            .graphicsLayer(alpha = 0.99f)
+            .drawWithCache {
+                onDrawWithContent {
+                    drawContent()
+                    drawRect(brush = brush, blendMode = BlendMode.SrcAtop)
+                }
+            }
+    }

@@ -118,8 +118,8 @@ fun LibraryScreen(
     viewModel: LibraryViewModel = koinViewModel(),
     navController: NavController,
     onScrolling: (onTop: Boolean) -> Unit = {},
-    val cannotBeEmptyString = stringResource(Res.string.playlist_name_cannot_be_empty)
 ) {
+    val cannotBeEmptyString = stringResource(Res.string.playlist_name_cannot_be_empty)
     val density = LocalDensity.current
 
     val loggedIn by viewModel.youtubeLoggedIn.collectAsStateWithLifecycle(initialValue = false)

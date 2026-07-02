@@ -357,45 +357,46 @@ fun SettingScreen(
     sharedViewModel: SharedViewModel = koinInject(),
 ) {
     val checking = stringResource(Res.string.checking)
-    val language = stringResource(Res.string.language)
+    val languageLabel = stringResource(Res.string.language)
     val change = stringResource(Res.string.change)
     val warning = stringResource(Res.string.warning)
     val changeLanguageWarning = stringResource(Res.string.change_language_warning)
     val cancel = stringResource(Res.string.cancel)
     val contentCountry = stringResource(Res.string.content_country)
-    val quality = stringResource(Res.string.quality)
-    val downloadQuality = stringResource(Res.string.download_quality)
-    val videoQuality = stringResource(Res.string.video_quality)
-    val videoDownloadQuality = stringResource(Res.string.video_download_quality)
-    val proxyType = stringResource(Res.string.proxy_type)
+    val qualityLabel = stringResource(Res.string.quality)
+    val downloadQualityLabel = stringResource(Res.string.download_quality)
+    val videoQualityLabel = stringResource(Res.string.video_quality)
+    val videoDownloadQualityLabel = stringResource(Res.string.video_download_quality)
+    val proxyTypeLabel = stringResource(Res.string.proxy_type)
+    val http = stringResource(Res.string.http)
     val socks = stringResource(Res.string.socks)
-    val proxyHost = stringResource(Res.string.proxy_host)
+    val proxyHostLabel = stringResource(Res.string.proxy_host)
     val proxyHostMessage = stringResource(Res.string.proxy_host_message)
     val invalidHost = stringResource(Res.string.invalid_host)
-    val proxyPort = stringResource(Res.string.proxy_port)
+    val proxyPortLabel = stringResource(Res.string.proxy_port)
     val proxyPortMessage = stringResource(Res.string.proxy_port_message)
     val invalidPort = stringResource(Res.string.invalid_port)
-    val proxyUsername = stringResource(Res.string.proxy_username)
+    val proxyUsernameLabel = stringResource(Res.string.proxy_username)
     val proxyUsernameMessage = stringResource(Res.string.proxy_username_message)
-    val proxyPassword = stringResource(Res.string.proxy_password)
+    val proxyPasswordLabel = stringResource(Res.string.proxy_password)
     val proxyPasswordMessage = stringResource(Res.string.proxy_password_message)
-    val crossfadeDuration = stringResource(Res.string.crossfade_duration)
+    val crossfadeDurationLabel = stringResource(Res.string.crossfade_duration)
     val crossfadeAuto = stringResource(Res.string.crossfade_auto)
-    val mainLyricsProvider = stringResource(Res.string.main_lyrics_provider)
+    val mainLyricsProviderLabel = stringResource(Res.string.main_lyrics_provider)
     val wavoraLyrics = stringResource(Res.string.wavora_lyrics)
     val youtubeTranscript = stringResource(Res.string.youtube_transcript)
     val lrclib = stringResource(Res.string.lrclib)
     val betterLyrics = stringResource(Res.string.better_lyrics)
-    val translationLanguage = stringResource(Res.string.translation_language)
+    val translationLanguageLabel = stringResource(Res.string.translation_language)
     val invalidLanguageCode = stringResource(Res.string.invalid_language_code)
     val translationLanguageMessage = stringResource(Res.string.translation_language_message)
-    val youtubeSubtitleLanguage = stringResource(Res.string.youtube_subtitle_language)
+    val youtubeSubtitleLanguageLabel = stringResource(Res.string.youtube_subtitle_language)
     val youtubeSubtitleLanguageMessage = stringResource(Res.string.youtube_subtitle_language_message)
     val contributorName = stringResource(Res.string.contributor_name)
     val set = stringResource(Res.string.set)
     val contributorEmail = stringResource(Res.string.contributor_email)
     val invalid = stringResource(Res.string.invalid)
-    val aiProvider = stringResource(Res.string.ai_provider)
+    val aiProviderLabel = stringResource(Res.string.ai_provider)
     val openai = stringResource(Res.string.openai)
     val gemini = stringResource(Res.string.gemini)
     val openaiApiCompatible = stringResource(Res.string.openai_api_compatible)
@@ -410,7 +411,7 @@ fun SettingScreen(
     val clearDownloadedCache = stringResource(Res.string.clear_downloaded_cache)
     val clearThumbnailCache = stringResource(Res.string.clear_thumbnail_cache)
     val clearCanvasCache = stringResource(Res.string.clear_canvas_cache)
-    val limitPlayerCache = stringResource(Res.string.limit_player_cache)
+    val limitPlayerCacheLabel = stringResource(Res.string.limit_player_cache)
     val backupFrequency = stringResource(Res.string.backup_frequency)
     val daily = stringResource(Res.string.daily)
     val weekly = stringResource(Res.string.weekly)
@@ -629,7 +630,7 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = language,
+                                title = languageLabel,
                                 selectOne =
                                     SettingAlertState.SelectData(
                                         listSelect =
@@ -691,7 +692,7 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = quality,
+                                title = qualityLabel,
                                 selectOne =
                                     SettingAlertState.SelectData(
                                         listSelect =
@@ -715,7 +716,7 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = downloadQuality,
+                                title = downloadQualityLabel,
                                 selectOne =
                                     SettingAlertState.SelectData(
                                         listSelect =
@@ -744,7 +745,7 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = videoQuality,
+                                title = videoQualityLabel,
                                 selectOne =
                                     SettingAlertState.SelectData(
                                         listSelect =
@@ -767,7 +768,7 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = videoDownloadQuality,
+                                title = videoDownloadQualityLabel,
                                 selectOne =
                                     SettingAlertState.SelectData(
                                         listSelect =
@@ -837,7 +838,7 @@ fun SettingScreen(
                             onClick = {
                                 viewModel.setAlertData(
                                     SettingAlertState(
-                                        title = proxyType,
+                                        title = proxyTypeLabel,
                                         selectOne =
                                             SettingAlertState.SelectData(
                                                 listSelect =
@@ -867,15 +868,15 @@ fun SettingScreen(
                         )
                         SettingItem(
                             title = stringResource(Res.string.proxy_host),
-                            subtitle = proxyHost,
+                            subtitle = proxyHostLabel,
                             onClick = {
                                 viewModel.setAlertData(
                                     SettingAlertState(
-                                        title = proxyHost,
+                                        title = proxyHostLabel,
                                         message = proxyHostMessage,
                                         textField =
                                             SettingAlertState.TextFieldData(
-                                                label = proxyHost,
+                                                label = proxyHostLabel,
                                                 value = proxyHost,
                                                 verifyCodeBlock = {
                                                     isValidProxyHost(it) to invalidHost
@@ -900,11 +901,11 @@ fun SettingScreen(
                             onClick = {
                                 viewModel.setAlertData(
                                     SettingAlertState(
-                                        title = proxyPort,
+                                        title = proxyPortLabel,
                                         message = proxyPortMessage,
                                         textField =
                                             SettingAlertState.TextFieldData(
-                                                label = proxyPort,
+                                                label = proxyPortLabel,
                                                 value = proxyPort.toString(),
                                                 verifyCodeBlock = {
                                                     (it.toIntOrNull() != null) to invalidPort
@@ -925,15 +926,15 @@ fun SettingScreen(
                         )
                         SettingItem(
                             title = stringResource(Res.string.proxy_username),
-                            subtitle = proxyUsername,
+                            subtitle = proxyUsernameLabel,
                             onClick = {
                                 viewModel.setAlertData(
                                     SettingAlertState(
-                                        title = proxyUsername,
+                                        title = proxyUsernameLabel,
                                         message = proxyUsernameMessage,
                                         textField =
                                             SettingAlertState.TextFieldData(
-                                                label = proxyUsername,
+                                                label = proxyUsernameLabel,
                                                 value = proxyUsername,
                                             ),
                                         confirm =
@@ -959,11 +960,11 @@ fun SettingScreen(
                             onClick = {
                                 viewModel.setAlertData(
                                     SettingAlertState(
-                                        title = proxyPassword,
+                                        title = proxyPasswordLabel,
                                         message = proxyPasswordMessage,
                                         textField =
                                             SettingAlertState.TextFieldData(
-                                                label = proxyPassword,
+                                                label = proxyPasswordLabel,
                                                 value = proxyPassword,
                                             ),
                                         confirm =
@@ -1067,7 +1068,7 @@ fun SettingScreen(
                             onClick = {
                                 viewModel.setAlertData(
                                     SettingAlertState(
-                                        title = crossfadeDuration,
+                                        title = crossfadeDurationLabel,
                                         selectOne =
                                             SettingAlertState.SelectData(
                                                 listSelect =
@@ -1144,7 +1145,7 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = mainLyricsProvider,
+                                title = mainLyricsProviderLabel,
                                 selectOne =
                                     SettingAlertState.SelectData(
                                         listSelect =
@@ -1182,10 +1183,10 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = translationLanguage,
+                                title = translationLanguageLabel,
                                 textField =
                                     SettingAlertState.TextFieldData(
-                                        label = translationLanguage,
+                                        label = translationLanguageLabel,
                                         value = translationLanguage ?: "",
                                         verifyCodeBlock = {
                                             (it.length == 2 && it.isTwoLetterCode()) to
@@ -1205,14 +1206,14 @@ fun SettingScreen(
                 )
                 SettingItem(
                     title = stringResource(Res.string.youtube_subtitle_language),
-                    subtitle = youtubeSubtitleLanguage,
+                    subtitle = youtubeSubtitleLanguageLabel,
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = youtubeSubtitleLanguage,
+                                title = youtubeSubtitleLanguageLabel,
                                 textField =
                                     SettingAlertState.TextFieldData(
-                                        label = youtubeSubtitleLanguage,
+                                        label = youtubeSubtitleLanguageLabel,
                                         value = youtubeSubtitleLanguage,
                                         verifyCodeBlock = {
                                             (it.length == 2 && it.isTwoLetterCode()) to
@@ -1304,7 +1305,7 @@ fun SettingScreen(
                     onClick = {
                         viewModel.setAlertData(
                             SettingAlertState(
-                                title = aiProvider,
+                                title = aiProviderLabel,
                                 selectOne =
                                     SettingAlertState.SelectData(
                                         listSelect =
@@ -1706,7 +1707,7 @@ fun SettingScreen(
                         onClick = {
                             viewModel.setAlertData(
                                 SettingAlertState(
-                                    title = limitPlayerCache,
+                                    title = limitPlayerCacheLabel,
                                     selectOne =
                                         SettingAlertState.SelectData(
                                             listSelect =

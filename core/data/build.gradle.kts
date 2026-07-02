@@ -14,9 +14,8 @@ plugins {
 
 kotlin {
     jvmToolchain(21)
-    compilerOptions {
-        freeCompilerArgs.add("-Xmulti-dollar-interpolation")
-    }
+    // compilerOptions block intentionally empty; -Xmulti-dollar-interpolation is
+    // stable in Kotlin 2.4 and no longer needs an explicit flag.
     // Target declarations - add or remove as needed below. These define
     // which platforms this KMP module supports.
     // See: https://kotlinlang.org/docs/multiplatform-discover-project.html#targets

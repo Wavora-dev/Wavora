@@ -36,6 +36,31 @@ compose.resources {
     generateResClass = always
 }
 
+// See desktopApp/build.gradle.kts for the full explanation: libs.native.tray
+// transitively pulls an older org.jetbrains.compose.ui, which can shadow the
+// project's own compose-ui jar on the runtime classpath and crash with
+// NoSuchMethodError inside NativeTray's composable icon rendering. Pin it
+// here too since native-tray is also declared in this module.
+configurations.all {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "org.jetbrains.compose.ui" ||
+            requested.group == "org.jetbrains.compose.runtime" ||
+            requested.group == "org.jetbrains.compose.foundation" ||
+            requested.group == "org.jetbrains.compose.animation"
+        ) {
+            useVersion(libs.versions.composeMultiplatform.get())
+            because("Pin compose-ui transitively pulled in by libs.native.tray to the project's Compose Multiplatform version to avoid duplicate compose-ui jars on the runtime classpath.")
+        }
+        // NOTE: org.jetbrains.compose.material and org.jetbrains.compose.material3 are
+        // intentionally excluded above. Unlike ui/runtime/foundation/animation, those two
+        // artifact families do NOT share Compose Multiplatform's version number (e.g. CMP
+        // 1.11.1 pairs with material3 1.11.0-alpha07). Forcing them to
+        // composeMultiplatform's version resolves to an unpublished artifact and breaks
+        // the build. They're pinned to their correct, independent versions via the
+        // root build.gradle.kts `force()` block instead.
+    }
+}
+
 kotlin {
     compilerOptions {
         // -Xwhen-guards, -Xcontext-parameters, -Xmulti-dollar-interpolation are now stable

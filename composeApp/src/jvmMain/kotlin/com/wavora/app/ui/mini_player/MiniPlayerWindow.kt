@@ -134,6 +134,7 @@ fun MiniPlayerWindow(
             sharedViewModel = sharedViewModel,
             onClose = onCloseRequest,
             windowState = windowState,
+            window = window,
         )
     }
 }

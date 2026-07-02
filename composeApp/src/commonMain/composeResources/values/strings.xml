@@ -543,10 +543,10 @@
     <string name="youtube_setup_step1_title">Step 1 — Open YouTube Music in your browser</string>
     <string name="youtube_setup_step1_desc">Go to music.youtube.com and log in with your Google account normally.</string>
     <string name="youtube_setup_step1_button">Open YouTube Music</string>
-    <string name="youtube_setup_step2_title">Step 2 — Open DevTools</string>
-    <string name="youtube_setup_step2_desc">Press F12 (or Ctrl+Shift+I) to open DevTools, then go to the Application tab.</string>
-    <string name="youtube_setup_step3_title">Step 3 — Copy your cookies</string>
-    <string name="youtube_setup_step3_desc">Go to Application → Cookies → https://music.youtube.com. Then open the Console tab and run this command to get all cookies as a single string:</string>
+    <string name="youtube_setup_step2_title">Step 2 — Open DevTools → Network tab</string>
+    <string name="youtube_setup_step2_desc">Press F12 (or Ctrl+Shift+I) to open DevTools, click the Network tab, then reload the page (F5) so requests start showing up.</string>
+    <string name="youtube_setup_step3_title">Step 3 — Copy the Cookie header</string>
+    <string name="youtube_setup_step3_desc">Click any request to music.youtube.com in the list. In the Headers panel, scroll to "Request Headers" and find "cookie". Click it to select the full value, then copy it (Ctrl+C).</string>
     <string name="youtube_setup_step3_copy_command">Copy command</string>
     <string name="youtube_setup_step4_title">Step 4 — Paste your cookies here</string>
     <string name="youtube_setup_step4_placeholder">Paste your YouTube Music cookies…</string>

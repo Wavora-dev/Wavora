@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Launch
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Launch
@@ -78,7 +79,6 @@ import wavora.composeapp.generated.resources.discord_setup_step4_placeholder
 import wavora.composeapp.generated.resources.discord_setup_step4_title
 import wavora.composeapp.generated.resources.discord_setup_subtitle
 import wavora.composeapp.generated.resources.discord_setup_title
-import wavora.composeapp.generated.resources.youtube_setup_command
 import wavora.composeapp.generated.resources.youtube_setup_connect
 import wavora.composeapp.generated.resources.youtube_setup_connecting
 import wavora.composeapp.generated.resources.youtube_setup_error
@@ -87,7 +87,6 @@ import wavora.composeapp.generated.resources.youtube_setup_step1_desc
 import wavora.composeapp.generated.resources.youtube_setup_step1_title
 import wavora.composeapp.generated.resources.youtube_setup_step2_desc
 import wavora.composeapp.generated.resources.youtube_setup_step2_title
-import wavora.composeapp.generated.resources.youtube_setup_step3_copy_command
 import wavora.composeapp.generated.resources.youtube_setup_step3_desc
 import wavora.composeapp.generated.resources.youtube_setup_step3_title
 import wavora.composeapp.generated.resources.youtube_setup_step4_placeholder
@@ -156,7 +155,6 @@ private fun YouTubeDesktopSetup(
     val settingsViewModel: SettingsViewModel = koinInject()
     val validationState by viewModel.cookieValidation.collectAsState()
     var cookie by remember { mutableStateOf("") }
-    val jsCommand = stringResource(Res.string.youtube_setup_command)
 
     LaunchedEffect(validationState) {
         if (validationState is LogInViewModel.CookieValidationState.Success) {
@@ -199,7 +197,7 @@ private fun YouTubeDesktopSetup(
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF0000)),
                     shape = RoundedCornerShape(8.dp),
                 ) {
-                    Icon(Icons.Rounded.Launch, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.AutoMirrored.Rounded.Launch, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(stringResource(Res.string.youtube_setup_step1_button), style = typo().labelMedium)
                 }
@@ -217,42 +215,6 @@ private fun YouTubeDesktopSetup(
                 Text(stringResource(Res.string.youtube_setup_step3_title), style = typo().labelMedium, color = Color.White)
                 Spacer(Modifier.height(4.dp))
                 Text(stringResource(Res.string.youtube_setup_step3_desc), style = typo().bodySmall, color = Color.White.copy(alpha = 0.7f))
-                Spacer(Modifier.height(10.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFF0D1117))
-                        .border(1.dp, wavoraBorder, RoundedCornerShape(6.dp))
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = jsCommand,
-                        style = typo().bodySmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 10.sp,
-                        ),
-                        color = Color(0xFF58A6FF),
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(
-                        onClick = {
-                            val clip = StringSelection(jsCommand)
-                            Toolkit.getDefaultToolkit().systemClipboard.setContents(clip, null)
-                            showToast("Command copied!")
-                        },
-                        modifier = Modifier.size(32.dp),
-                    ) {
-                        Icon(
-                            Icons.Rounded.ContentCopy,
-                            contentDescription = stringResource(Res.string.youtube_setup_step3_copy_command),
-                            tint = wavoraPrimary,
-                            modifier = Modifier.size(16.dp),
-                        )
-                    }
-                }
             }
 
             // Step 4
@@ -374,7 +336,7 @@ private fun SpotifyDesktopSetup(
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1DB954)),
                     shape = RoundedCornerShape(8.dp),
                 ) {
-                    Icon(Icons.Rounded.Launch, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Icon(Icons.AutoMirrored.Rounded.Launch, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(stringResource(Res.string.spotify_setup_step1_button), style = typo().labelMedium)
                 }
@@ -521,7 +483,7 @@ actual fun DiscordWebView(
                     shape = RoundedCornerShape(8.dp),
                 ) {
                     Icon(
-                        Icons.Rounded.Launch,
+                        Icons.AutoMirrored.Rounded.Launch,
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                     )

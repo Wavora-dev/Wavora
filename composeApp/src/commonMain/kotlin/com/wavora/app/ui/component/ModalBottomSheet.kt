@@ -73,7 +73,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -96,11 +95,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedbackFilter
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.input.pointer.pointerInput
@@ -1102,7 +1099,7 @@ fun QueueBottomSheet(
                             style = LocalAppTypography.current.bodySmall,
                             modifier = Modifier.padding(horizontal = 8.dp),
                         )
-                        Switch(
+                        GradientSwitch(
                             checked = endlessQueueEnable,
                             onCheckedChange = {
                                 coroutineScope.launch {
@@ -1399,11 +1396,11 @@ fun NowPlayingBottomSheet(
     setSleepTimerEnable: Boolean = false,
     changeMainLyricsProviderEnable: Boolean = false,
     onNavigateToOtherScreen: () -> Unit = {},
-    val radioString = stringResource(Res.string.radio)
     onDelete: (() -> Unit)? = null,
     onLibraryDelete: (() -> Unit)? = null,
     dataStoreManager: DataStoreManager = koinInject<DataStoreManager>(),
 ) {
+    val radioString = stringResource(Res.string.radio)
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
     val modelBottomSheetState =

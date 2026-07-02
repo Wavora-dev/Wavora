@@ -54,6 +54,8 @@ import wavora.composeapp.generated.resources.vote_submitted
 import java.io.FileOutputStream
 import kotlin.math.abs
 
+private const val TAG = "NowPlayingViewModel"
+
 class NowPlayingViewModel(
     private val dataStoreManager: DataStoreManager,
     private val songRepository: SongRepository,
@@ -243,7 +245,7 @@ class NowPlayingViewModel(
                     val song = mediaPlayerHandler.nowPlayingState.first().songEntity ?: return@collectLatest
                     val isVideo = mediaPlayerHandler.nowPlayingState.first().mediaItem.isVideo()
                     val dur = (timeline.total / 1000).toInt().takeIf { it > 0 }
-                        ?: (song.durationSeconds ?: 0)
+                        ?: song.durationSeconds
                     getLyricsFromFormat(isVideo, song, dur)
                 }
             }
@@ -413,7 +415,7 @@ class NowPlayingViewModel(
                 when (res) {
                     is Resource.Success if (data != null) -> {
                         updateLyrics(song.videoId, duration, data, false, LyricsProvider.LRCLIB)
-                        insertLyrics(data.toLyricsEntity(song.videoId) ?: return@collectLatest)
+                        insertLyrics(data.toLyricsEntity(song.videoId))
                         getAITranslationLyrics(song.videoId, data)
                     }
                     else -> getSavedLyrics(song.toTrack().copy(durationSeconds = duration))

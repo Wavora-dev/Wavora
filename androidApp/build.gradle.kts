@@ -158,6 +158,12 @@ dependencies {
     // Coroutines
     implementation(libs.coroutines.android)
 
+    // Kermit logging (used directly in SimpMusicApplication.kt to set the min log
+    // severity). :common already depends on it, but that's an `implementation`
+    // dependency inside :common, so it isn't exposed to modules that depend on
+    // :common -- androidApp needs its own declaration to compile.
+    implementation(libs.kermit.logging)
+
     // Glance
     implementation(libs.glance)
     implementation(libs.glance.appwidget)

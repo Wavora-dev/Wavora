@@ -36,7 +36,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -77,6 +76,7 @@ import com.wavora.app.ui.navigation.destination.list.ArtistDestination
 import com.wavora.app.ui.navigation.destination.list.PlaylistDestination
 import com.wavora.app.ui.navigation.destination.player.FullscreenDestination
 import com.wavora.app.ui.navigation.graph.AppNavigationGraph
+import com.wavora.app.ui.screen.home.OnboardingScreen
 import com.wavora.app.ui.screen.MiniPlayer
 import com.wavora.app.ui.screen.player.NowPlayingScreen
 import com.wavora.app.ui.screen.player.NowPlayingScreenContent
@@ -89,6 +89,7 @@ import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownTypography
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.runBlocking
@@ -118,7 +119,7 @@ import wavora.composeapp.generated.resources.yes
 import kotlin.time.ExperimentalTime
 import com.wavora.app.ui.theme.LocalAppTypography
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalTime::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalTime::class, ExperimentalFoundationApi::class, ExperimentalHazeMaterialsApi::class)
 @Composable
 fun App(viewModel: SharedViewModel = koinInject()) {
     val windowSize = currentWindowAdaptiveInfo().windowSizeClass
@@ -472,6 +473,12 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                                                 bottom = 4.dp,
                                             )
                                     } else {
+                                        // Reverted to hazeEffect (real blur) at user's request,
+                                        // testing whether it behaves acceptably in practice on
+                                        // this hardware despite skiko.renderApi=SOFTWARE. If the
+                                        // washed-out/violet-bleed artifact returns, the solid
+                                        // md_theme_dark_background fallback from the previous
+                                        // fix is the known-good alternative.
                                         Modifier
                                             .fillMaxWidth()
                                             .height(84.dp)

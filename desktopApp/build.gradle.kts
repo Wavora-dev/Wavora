@@ -110,6 +110,40 @@ project.configurations.create("desktopRuntimeClasspath") {
     extendsFrom(project.configurations.getByName("jvmRuntimeClasspath"))
 }
 
+// Force a single, consistent Compose Multiplatform UI version across every
+// configuration (including the desktopRuntimeClasspath sibling above, whose
+// comment already notes it breaks the normal version "lock chain").
+//
+// Root cause of the runtime crash this fixes:
+//   java.lang.NoSuchMethodError: ...BackHandler_jbKt.getLocalCompatNavigationEventDispatcherOwner()
+// `libs.native.tray` (io.github.kdroidfilter:composenativetray) transitively
+// pulls its own, older org.jetbrains.compose.ui artifacts. Because
+// native-tray is declared in BOTH :composeApp and :desktopApp, and the
+// custom desktopRuntimeClasspath configuration above doesn't get the same
+// version alignment as the default jvmRuntimeClasspath, the packaged app
+// ends up with two different compose-ui jars on its runtime classpath. The
+// JVM silently loads whichever copy comes first, which can be the older one
+// — missing newer APIs like the predictive-back compositionlocal above,
+// hence the NoSuchMethodError when NativeTray() renders its composable icon.
+// Forcing every configuration to the project's own Compose Multiplatform
+// version guarantees only one (correct) compose-ui jar is ever present.
+configurations.all {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "org.jetbrains.compose.ui" ||
+            requested.group == "org.jetbrains.compose.runtime" ||
+            requested.group == "org.jetbrains.compose.foundation" ||
+            requested.group == "org.jetbrains.compose.animation"
+        ) {
+            useVersion(libs.versions.composeMultiplatform.get())
+            because("Pin compose-ui transitively pulled in by libs.native.tray to the project's Compose Multiplatform version to avoid duplicate compose-ui jars on the runtime classpath (NoSuchMethodError in NativeTray's composable icon rendering).")
+        }
+        // NOTE: org.jetbrains.compose.material and org.jetbrains.compose.material3 are
+        // intentionally excluded above — see composeApp/build.gradle.kts for the full
+        // explanation. They don't share Compose Multiplatform's version number, and
+        // forcing them to it resolves to an unpublished artifact and breaks the build.
+    }
+}
+
 // Conveyor per-arch artifacts. These configurations are created by the
 // Conveyor plugin's `apply()`; we just feed them the right native compose
 // binaries for cross-build from any host OS.

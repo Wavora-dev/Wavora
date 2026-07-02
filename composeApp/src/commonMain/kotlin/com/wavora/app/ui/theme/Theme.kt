@@ -56,8 +56,9 @@ fun AppTheme(
             CompositionLocalProvider(
                 LocalContentColor provides DarkColors.onSurface,
                 LocalAppTypography provides typography,
-                content,
-            )
+            ) {
+                content()
+            }
         },
         typography = typography,
     )

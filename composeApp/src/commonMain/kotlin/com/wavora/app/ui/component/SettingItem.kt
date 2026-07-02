@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -99,7 +98,7 @@ fun SettingItem(
             }
             if (switch != null) {
                 Spacer(Modifier.width(10.dp))
-                Switch(
+                GradientSwitch(
                     modifier = Modifier.wrapContentWidth(),
                     checked = switch.first,
                     onCheckedChange = {

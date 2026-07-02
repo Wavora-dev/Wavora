@@ -772,8 +772,6 @@ internal class PlaylistRepositoryImpl(
     override fun getChartPlaylist(): Flow<Resource<List<ChartItem>>> =
         flow {
             // chart.wavora.org is not available; return empty list
-            emit(Resource.Success(emptyList()))
-        }               emit(Resource.Error<List<ChartItem>>(exception.message ?: "Unknown error"))
-                }
+            emit(Resource.Success(emptyList<ChartItem>()))
         }.flowOn(Dispatchers.IO)
 }

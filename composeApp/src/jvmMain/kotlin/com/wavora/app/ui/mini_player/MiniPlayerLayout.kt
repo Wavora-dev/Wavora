@@ -4,6 +4,9 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.SolidColor
+import com.wavora.app.extension.wavoraIconGradient
+import com.wavora.app.ui.theme.wavoraIconGradientBrush
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -212,8 +215,19 @@ fun CompactMiniLayout(
                 ) {
                     RippleIconButton(
                         resId = Res.drawable.baseline_skip_previous_24,
-                        modifier = Modifier.size(28.dp),
-                        tint = if (controllerState.isPreviousAvailable) Color(0xFFA259FF) else Color(0xFF3D3D5C),
+                        modifier =
+                            Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .wavoraIconGradient(
+                                    brush =
+                                        if (controllerState.isPreviousAvailable) {
+                                            wavoraIconGradientBrush
+                                        } else {
+                                            SolidColor(Color(0xFF3D3D5C))
+                                        },
+                                ),
+                        tint = Color.White,
                         onClick = {
                             if (controllerState.isPreviousAvailable) {
                                 onUIEvent(UIEvent.Previous)
@@ -223,14 +237,30 @@ fun CompactMiniLayout(
 
                     PlayPauseButton(
                         isPlaying = controllerState.isPlaying,
-                        modifier = Modifier.size(36.dp),
+                        modifier =
+                            Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .wavoraIconGradient(),
+
                         onClick = { onUIEvent(UIEvent.PlayPause) },
                     )
 
                     RippleIconButton(
                         resId = Res.drawable.baseline_skip_next_24,
-                        modifier = Modifier.size(28.dp),
-                        tint = if (controllerState.isNextAvailable) Color(0xFFA259FF) else Color(0xFF3D3D5C),
+                        modifier =
+                            Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .wavoraIconGradient(
+                                    brush =
+                                        if (controllerState.isNextAvailable) {
+                                            wavoraIconGradientBrush
+                                        } else {
+                                            SolidColor(Color(0xFF3D3D5C))
+                                        },
+                                ),
+                        tint = Color.White,
                         onClick = {
                             if (controllerState.isNextAvailable) {
                                 onUIEvent(UIEvent.Next)
@@ -355,9 +385,20 @@ fun MediumMiniLayout(
                         }
 
                         RippleIconButton(
-                            resId = Res.drawable.baseline_skip_previous_24,
-                            modifier = Modifier.size(28.dp),
-                            tint = if (controllerState.isPreviousAvailable) Color(0xFFA259FF) else Color(0xFF3D3D5C),
+                        resId = Res.drawable.baseline_skip_previous_24,
+                        modifier =
+                            Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .wavoraIconGradient(
+                                    brush =
+                                        if (controllerState.isPreviousAvailable) {
+                                            wavoraIconGradientBrush
+                                        } else {
+                                            SolidColor(Color(0xFF3D3D5C))
+                                        },
+                                ),
+                        tint = Color.White,
                             onClick = {
                                 if (controllerState.isPreviousAvailable) {
                                     onUIEvent(UIEvent.Previous)
@@ -366,15 +407,31 @@ fun MediumMiniLayout(
                         )
 
                         PlayPauseButton(
-                            isPlaying = controllerState.isPlaying,
-                            modifier = Modifier.size(36.dp),
+                        isPlaying = controllerState.isPlaying,
+                        modifier =
+                            Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .wavoraIconGradient(),
+
                             onClick = { onUIEvent(UIEvent.PlayPause) },
                         )
 
                         RippleIconButton(
-                            resId = Res.drawable.baseline_skip_next_24,
-                            modifier = Modifier.size(28.dp),
-                            tint = if (controllerState.isNextAvailable) Color(0xFFA259FF) else Color(0xFF3D3D5C),
+                        resId = Res.drawable.baseline_skip_next_24,
+                        modifier =
+                            Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .wavoraIconGradient(
+                                    brush =
+                                        if (controllerState.isNextAvailable) {
+                                            wavoraIconGradientBrush
+                                        } else {
+                                            SolidColor(Color(0xFF3D3D5C))
+                                        },
+                                ),
+                        tint = Color.White,
                             onClick = {
                                 if (controllerState.isNextAvailable) {
                                     onUIEvent(UIEvent.Next)
@@ -670,9 +727,20 @@ fun SquareMiniLayout(
 
                 // Previous
                 RippleIconButton(
-                    resId = Res.drawable.baseline_skip_previous_24,
-                    modifier = Modifier.size(36.dp),
-                    tint = if (controllerState.isPreviousAvailable) Color(0xFFA259FF) else Color(0xFF3D3D5C),
+                        resId = Res.drawable.baseline_skip_previous_24,
+                        modifier =
+                            Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .wavoraIconGradient(
+                                    brush =
+                                        if (controllerState.isPreviousAvailable) {
+                                            wavoraIconGradientBrush
+                                        } else {
+                                            SolidColor(Color(0xFF3D3D5C))
+                                        },
+                                ),
+                        tint = Color.White,
                     onClick = {
                         if (controllerState.isPreviousAvailable) {
                             onUIEvent(UIEvent.Previous)
@@ -682,16 +750,32 @@ fun SquareMiniLayout(
 
                 // Play/Pause
                 PlayPauseButton(
-                    isPlaying = controllerState.isPlaying,
-                    modifier = Modifier.size(52.dp),
+                        isPlaying = controllerState.isPlaying,
+                        modifier =
+                            Modifier
+                                .size(52.dp)
+                                .clip(CircleShape)
+                                .wavoraIconGradient(),
+
                     onClick = { onUIEvent(UIEvent.PlayPause) },
                 )
 
                 // Next
                 RippleIconButton(
-                    resId = Res.drawable.baseline_skip_next_24,
-                    modifier = Modifier.size(36.dp),
-                    tint = if (controllerState.isNextAvailable) Color(0xFFA259FF) else Color(0xFF3D3D5C),
+                        resId = Res.drawable.baseline_skip_next_24,
+                        modifier =
+                            Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .wavoraIconGradient(
+                                    brush =
+                                        if (controllerState.isNextAvailable) {
+                                            wavoraIconGradientBrush
+                                        } else {
+                                            SolidColor(Color(0xFF3D3D5C))
+                                        },
+                                ),
+                        tint = Color.White,
                     onClick = {
                         if (controllerState.isNextAvailable) {
                             onUIEvent(UIEvent.Next)
@@ -878,9 +962,20 @@ fun ExpandedMiniLayout(
                         }
 
                         RippleIconButton(
-                            resId = Res.drawable.baseline_skip_previous_24,
-                            modifier = Modifier.size(28.dp),
-                            tint = if (controllerState.isPreviousAvailable) Color(0xFFA259FF) else Color(0xFF3D3D5C),
+                        resId = Res.drawable.baseline_skip_previous_24,
+                        modifier =
+                            Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .wavoraIconGradient(
+                                    brush =
+                                        if (controllerState.isPreviousAvailable) {
+                                            wavoraIconGradientBrush
+                                        } else {
+                                            SolidColor(Color(0xFF3D3D5C))
+                                        },
+                                ),
+                        tint = Color.White,
                             onClick = {
                                 if (controllerState.isPreviousAvailable) {
                                     onUIEvent(UIEvent.Previous)
@@ -889,17 +984,33 @@ fun ExpandedMiniLayout(
                         )
 
                         PlayPauseButton(
-                            isPlaying = controllerState.isPlaying,
-                            modifier = Modifier.size(40.dp),
+                        isPlaying = controllerState.isPlaying,
+                        modifier =
+                            Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .wavoraIconGradient(),
+
                             onClick = {
                                 onUIEvent(UIEvent.PlayPause)
                             },
                         )
 
                         RippleIconButton(
-                            resId = Res.drawable.baseline_skip_next_24,
-                            modifier = Modifier.size(32.dp),
-                            tint = if (controllerState.isNextAvailable) Color(0xFFA259FF) else Color(0xFF3D3D5C),
+                        resId = Res.drawable.baseline_skip_next_24,
+                        modifier =
+                            Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .wavoraIconGradient(
+                                    brush =
+                                        if (controllerState.isNextAvailable) {
+                                            wavoraIconGradientBrush
+                                        } else {
+                                            SolidColor(Color(0xFF3D3D5C))
+                                        },
+                                ),
+                        tint = Color.White,
                             onClick = {
                                 if (controllerState.isNextAvailable) {
                                     onUIEvent(UIEvent.Next)

@@ -11,6 +11,7 @@ import com.sun.jna.Pointer
 import com.sun.jna.Structure
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.net.URI
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -687,7 +688,7 @@ class MacOSMediaIntegration private constructor() {
      */
     private fun downloadImageData(urlString: String): ByteArray? =
         try {
-            val url = URL(urlString)
+            val url = URI.create(urlString).toURL()
             url.openStream().use { it.readBytes() }
         } catch (e: Exception) {
             Logger.e(TAG, "Failed to download image: ${e.message}")

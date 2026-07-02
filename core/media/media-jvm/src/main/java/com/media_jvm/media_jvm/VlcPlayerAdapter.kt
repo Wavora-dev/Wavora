@@ -366,6 +366,13 @@ class VlcPlayerAdapter(
             currentLoadJob?.cancel()
 
             localCurrentMediaItemIndex = mediaItemIndex
+            // Release any precached VLC players that fall outside the new precache window
+            // (current+1..current+maxPrecacheCount). Without this, jumping around the queue
+            // (tapping a track, shuffle, repeated skips) leaks native VLC player instances —
+            // each one already prepared/buffering — which is a direct contributor to sustained
+            // high CPU usage on Desktop. The track we're about to play, if already precached,
+            // is unaffected: it's matched and reused by mediaId inside loadAndPlayTrackInternal.
+            clearPrecacheExceptCurrentInternal()
             currentPlayer?.release()
             currentPlayer = null
             currentPlayerIsVideo = false

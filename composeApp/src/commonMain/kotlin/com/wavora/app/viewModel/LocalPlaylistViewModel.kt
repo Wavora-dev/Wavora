@@ -998,7 +998,7 @@ class LocalPlaylistViewModel(
                     },
                     onError = { message ->
                         log("changeLocalPlaylistItemPosition (synced): error $message")
-                        makeToast(message ?: getString(Res.string.error))
+                        makeToast(message)
                         hideLoadingDialog()
                     },
                 )

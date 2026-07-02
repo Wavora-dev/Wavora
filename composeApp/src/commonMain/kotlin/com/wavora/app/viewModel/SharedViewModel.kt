@@ -12,7 +12,6 @@ import com.wavora.domain.model.entities.LocalPlaylistEntity
 import com.wavora.domain.model.entities.PlaylistEntity
 import com.wavora.domain.repository.CacheRepository
 import com.wavora.common.Config.DOWNLOAD_CACHE
-import com.wavora.domain.manager.DataStoreManager.Values.TRUE
 import com.wavora.domain.model.entities.NewFormatEntity
 import com.wavora.domain.model.model.canvas.CanvasResult
 import com.wavora.domain.model.model.download.DownloadProgress

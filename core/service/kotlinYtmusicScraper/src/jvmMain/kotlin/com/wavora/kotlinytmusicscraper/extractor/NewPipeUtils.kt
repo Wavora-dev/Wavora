@@ -81,7 +81,7 @@ class NewPipeDownloaderImpl(
     }
 
     private fun okhttp3.Response.toNewPipeResponse(): Response {
-        val rawBytes = body?.bytes() ?: ByteArray(0)
+        val rawBytes = body.bytes() ?: ByteArray(0)
         return Response(
             code,
             message,

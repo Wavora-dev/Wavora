@@ -65,6 +65,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import com.wavora.app.extension.wavoraIconGradient
+import androidx.compose.ui.graphics.SolidColor
+import com.wavora.app.ui.theme.wavoraIconGradientBrush
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -399,11 +402,24 @@ fun FullscreenPlayer(
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.SkipPrevious,
-                                    tint = if (controllerState.isPreviousAvailable) Color(0xFFA259FF) else Color(0xFF3D3D5C),
+                                    tint = Color.White,
                                     contentDescription = "",
                                     modifier =
                                         Modifier
-                                            .size(36.dp),
+                                            .size(36.dp)
+                                            // Gradient painted on the glyph itself, no
+                                            // background shape. Disabled state swaps to a
+                                            // dim solid color instead of the gradient
+                                            // (matches how it looked before any of the
+                                            // circle-background gradient work).
+                                            .wavoraIconGradient(
+                                                brush =
+                                                    if (controllerState.isPreviousAvailable) {
+                                                        wavoraIconGradientBrush
+                                                    } else {
+                                                        SolidColor(Color(0xFF3D3D5C))
+                                                    },
+                                            ),
                                 )
                             }
                             FilledTonalIconButton(
@@ -424,11 +440,12 @@ fun FullscreenPlayer(
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.Replay5,
-                                    tint = Color(0xFF00D4FF),
+                                    tint = Color.White,
                                     contentDescription = "",
                                     modifier =
                                         Modifier
-                                            .size(36.dp),
+                                            .size(36.dp)
+                                            .wavoraIconGradient(),
                                 )
                             }
                             FilledTonalIconButton(
@@ -440,12 +457,7 @@ fun FullscreenPlayer(
                                     Modifier
                                         .size(64.dp)
                                         .aspectRatio(1f)
-                                        .clip(CircleShape)
-                                        .background(
-                                            brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                                                colors = listOf(Color(0xFFA259FF), Color(0xFF6A5CFF), Color(0xFF00D4FF)),
-                                            ),
-                                        ),
+                                        .clip(CircleShape),
                                 onClick = {
                                     sharedViewModel.onUIEvent(UIEvent.PlayPause)
                                 },
@@ -458,7 +470,8 @@ fun FullscreenPlayer(
                                             contentDescription = "",
                                             modifier =
                                                 Modifier
-                                                    .size(48.dp),
+                                                    .size(48.dp)
+                                                    .wavoraIconGradient(),
                                         )
                                     } else {
                                         Icon(
@@ -467,7 +480,8 @@ fun FullscreenPlayer(
                                             contentDescription = "",
                                             modifier =
                                                 Modifier
-                                                    .size(48.dp),
+                                                    .size(48.dp)
+                                                    .wavoraIconGradient(),
                                         )
                                     }
                                 }
@@ -490,11 +504,12 @@ fun FullscreenPlayer(
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.Forward5,
-                                    tint = Color(0xFF00D4FF),
+                                    tint = Color.White,
                                     contentDescription = "",
                                     modifier =
                                         Modifier
-                                            .size(36.dp),
+                                            .size(36.dp)
+                                            .wavoraIconGradient(),
                                 )
                             }
                             FilledTonalIconButton(
@@ -516,11 +531,19 @@ fun FullscreenPlayer(
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.SkipNext,
-                                    tint = if (controllerState.isNextAvailable) Color(0xFFA259FF) else Color(0xFF3D3D5C),
+                                    tint = Color.White,
                                     contentDescription = "",
                                     modifier =
                                         Modifier
-                                            .size(36.dp),
+                                            .size(36.dp)
+                                            .wavoraIconGradient(
+                                                brush =
+                                                    if (controllerState.isNextAvailable) {
+                                                        wavoraIconGradientBrush
+                                                    } else {
+                                                        SolidColor(Color(0xFF3D3D5C))
+                                                    },
+                                            ),
                                 )
                             }
                         }
@@ -608,22 +631,36 @@ fun FullscreenPlayer(
                                                     Alignment.TopCenter,
                                                 ),
                                         track = { sliderState ->
-                                            SliderDefaults.Track(
+                                            // Custom track (not SliderDefaults.Track): Material3's
+                                            // SliderColors.activeTrackColor only accepts a solid
+                                            // Color, not a Brush, so a gradient track needs to be
+                                            // hand-drawn. Same visual pattern as the MiniPlayer
+                                            // progress bar (MiniPlayer.kt).
+                                            val fraction =
+                                                ((sliderState.value - sliderState.valueRange.start) /
+                                                    (sliderState.valueRange.endInclusive - sliderState.valueRange.start))
+                                                    .coerceIn(0f, 1f)
+                                            Box(
                                                 modifier =
                                                     Modifier
-                                                        .height(5.dp),
-                                                enabled = true,
-                                                sliderState = sliderState,
-                                                colors =
-                                                    SliderDefaults.colors().copy(
-                                                        thumbColor = Color(0xFFA259FF),
-                                                        activeTrackColor = Color(0xFFA259FF),
-                                                        inactiveTrackColor = Color(0xFF1F1F2E),
-                                                    ),
-                                                thumbTrackGapSize = 0.dp,
-                                                drawTick = { _, _ -> },
-                                                drawStopIndicator = null,
-                                            )
+                                                        .fillMaxWidth()
+                                                        .height(5.dp)
+                                                        .background(Color(0xFF1F1F2E), RoundedCornerShape(4.dp)),
+                                            ) {
+                                                Box(
+                                                    modifier =
+                                                        Modifier
+                                                            .fillMaxWidth(fraction)
+                                                            .fillMaxHeight()
+                                                            .background(
+                                                                brush =
+                                                                    Brush.horizontalGradient(
+                                                                        colors = listOf(Color(0xFFA259FF), Color(0xFF6A5CFF), Color(0xFF00D4FF)),
+                                                                    ),
+                                                                shape = RoundedCornerShape(4.dp),
+                                                            ),
+                                                )
+                                            }
                                         },
                                         thumb = {
                                             SliderDefaults.Thumb(
@@ -636,9 +673,7 @@ fun FullscreenPlayer(
                                                         ),
                                                 thumbSize = DpSize(8.dp, 8.dp),
                                                 interactionSource =
-                                                    remember {
-                                                        remember { MutableInteractionSource() }
-                                                    },
+                                                    remember { MutableInteractionSource() },
                                                 colors =
                                                     SliderDefaults.colors().copy(
                                                         thumbColor = Color(0xFFA259FF),

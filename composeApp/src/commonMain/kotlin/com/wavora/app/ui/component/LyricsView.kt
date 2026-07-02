@@ -1101,9 +1101,7 @@ fun FullscreenLyricsSheet(
                                                 ),
                                         thumbSize = DpSize(8.dp, 8.dp),
                                         interactionSource =
-                                            remember {
-                                                remember { MutableInteractionSource() }
-                                            },
+                                            remember { MutableInteractionSource() },
                                         colors =
                                             SliderDefaults.colors().copy(
                                                 thumbColor = Color.White,

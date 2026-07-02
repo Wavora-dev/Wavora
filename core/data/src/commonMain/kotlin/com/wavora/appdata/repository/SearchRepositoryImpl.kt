@@ -72,7 +72,8 @@ internal class SearchRepositoryImpl(
                                 }
                         }
 
-                        emit(Resource.Success<ArrayList<SongsResult>>(listSongs))
+                        // Same continuation-boundary overlap risk as getSearchDataVideo above.
+                        emit(Resource.Success<ArrayList<SongsResult>>(ArrayList(listSongs.distinctBy { it.videoId })))
                     }.onFailure { e ->
                         Logger.d("Search", "Error: ${e.message}")
                         emit(Resource.Error<ArrayList<SongsResult>>(e.message.toString()))
@@ -108,7 +109,10 @@ internal class SearchRepositoryImpl(
                                 }
                         }
 
-                        emit(Resource.Success<ArrayList<VideosResult>>(listSongs))
+                        // Continuation pages from YouTube can overlap with the previous page at
+                        // the boundary, duplicating a videoId. Dedup before emitting so the
+                        // Compose `key = { "video_$id" }` in SearchScreen never sees a repeat.
+                        emit(Resource.Success<ArrayList<VideosResult>>(ArrayList(listSongs.distinctBy { it.videoId })))
                     }.onFailure { e ->
                         Logger.d("Search", "Error: ${e.message}")
                         emit(Resource.Error<ArrayList<VideosResult>>(e.message.toString()))
@@ -145,7 +149,8 @@ internal class SearchRepositoryImpl(
                                     count++
                                 }
                         }
-                        emit(Resource.Success<ArrayList<PlaylistsResult>>(listPlaylist))
+                        // Same continuation-boundary overlap risk as getSearchDataVideo above.
+                        emit(Resource.Success<ArrayList<PlaylistsResult>>(ArrayList(listPlaylist.distinctBy { it.browseId })))
                     }.onFailure { e ->
                         Logger.d("Search", "Error: ${e.message}")
                         emit(Resource.Error<ArrayList<PlaylistsResult>>(e.message.toString()))
@@ -180,7 +185,8 @@ internal class SearchRepositoryImpl(
                                     count++
                                 }
                         }
-                        emit(Resource.Success<ArrayList<PlaylistsResult>>(listPlaylist))
+                        // Same continuation-boundary overlap risk as getSearchDataVideo above.
+                        emit(Resource.Success<ArrayList<PlaylistsResult>>(ArrayList(listPlaylist.distinctBy { it.browseId })))
                     }.onFailure { e ->
                         Logger.d("Search", "Error: ${e.message}")
                         emit(Resource.Error<ArrayList<PlaylistsResult>>(e.message.toString()))
@@ -215,7 +221,8 @@ internal class SearchRepositoryImpl(
                                     count++
                                 }
                         }
-                        emit(Resource.Success<ArrayList<ArtistsResult>>(listArtist))
+                        // Same continuation-boundary overlap risk as getSearchDataVideo above.
+                        emit(Resource.Success<ArrayList<ArtistsResult>>(ArrayList(listArtist.distinctBy { it.browseId })))
                     }.onFailure { e ->
                         Logger.d("Search", "Error: ${e.message}")
                         emit(Resource.Error<ArrayList<ArtistsResult>>(e.message.toString()))
@@ -250,7 +257,8 @@ internal class SearchRepositoryImpl(
                                     count++
                                 }
                         }
-                        emit(Resource.Success<ArrayList<AlbumsResult>>(listAlbum))
+                        // Same continuation-boundary overlap risk as getSearchDataVideo above.
+                        emit(Resource.Success<ArrayList<AlbumsResult>>(ArrayList(listAlbum.distinctBy { it.browseId })))
                     }.onFailure { e ->
                         Logger.d("Search", "Error: ${e.message}")
                         emit(Resource.Error<ArrayList<AlbumsResult>>(e.message.toString()))
@@ -285,7 +293,8 @@ internal class SearchRepositoryImpl(
                                     count++
                                 }
                         }
-                        emit(Resource.Success<ArrayList<PlaylistsResult>>(listPlaylist))
+                        // Same continuation-boundary overlap risk as getSearchDataVideo above.
+                        emit(Resource.Success<ArrayList<PlaylistsResult>>(ArrayList(listPlaylist.distinctBy { it.browseId })))
                     }.onFailure { e ->
                         Logger.d("Search", "Error: ${e.message}")
                         emit(Resource.Error<ArrayList<PlaylistsResult>>(e.message.toString()))

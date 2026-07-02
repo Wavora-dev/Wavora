@@ -224,6 +224,11 @@ No account is required for basic playback. Log in with your Google account to un
 - Animated blur background on the Now Playing screen
 - Translucent bottom navigation bar
 - Themes follow system dark/light mode
+- Configurable content country/region and app language
+
+### Updates & Maintenance
+- Manual and automatic update checks, with configurable auto-check on launch
+- Keep-alive background service option (Android) to reduce playback interruptions from system battery optimization
 
 ### Privacy & Network
 - No analytics, no telemetry
@@ -365,6 +370,16 @@ Wavora es un reproductor de música gratuito y de código abierto que transmite 
 - Soporte para teclas multimedia y widget de pantalla de bloqueo en macOS
 - Protocolo `wavora://` para deep links en Windows
 - Motor de reproducción VLC
+
+### 🎨 Personalización
+- País/región de contenido e idioma de la app configurables
+- Efecto Liquid Glass en Android 16+
+- Fondo con blur animado en la pantalla de reproducción
+- Barra de navegación inferior translúcida
+
+### 🔄 Actualizaciones
+- Chequeo manual y automático de actualizaciones (activable/desactivable)
+- Servicio en segundo plano "keep-alive" en Android para reducir cortes de reproducción por optimización de batería del sistema
 
 ---
 

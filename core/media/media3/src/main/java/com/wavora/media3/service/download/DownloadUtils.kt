@@ -15,9 +15,6 @@ import androidx.media3.exoplayer.offline.DownloadManager
 import androidx.media3.exoplayer.offline.DownloadNotificationHelper
 import androidx.media3.exoplayer.offline.DownloadRequest
 import androidx.media3.exoplayer.offline.DownloadService
-import coil3.ImageLoader
-import coil3.request.CachePolicy
-import coil3.request.ImageRequest
 import com.wavora.common.MERGING_DATA_TYPE
 import com.wavora.domain.model.entities.DownloadState
 import com.wavora.domain.extension.now
@@ -52,10 +49,10 @@ internal class DownloadUtils(
     databaseProvider: DatabaseProvider,
 ) : DownloadHandler {
     private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    // Reuse a single ImageLoader for thumbnail checks instead of allocating a new one per track.
-    // Each ImageLoader has its own thread pool and bitmap memory — leaking N instances during
-    // bulk playlist downloads is a direct contributor to the Android OOM.
-    private val thumbnailImageLoader: ImageLoader by lazy { ImageLoader(context) }
+    // NOTE: downloadTrack() used to fetch each thumbnail via Coil's ImageLoader just to
+    // measure pixel dimensions and guess isVideo. That allocated bitmap memory per track and
+    // was a direct contributor to OOM during bulk playlist downloads. It's been replaced with
+    // a URL-pattern check (see downloadTrack below) — no image is fetched anymore.
 
     private val dataSourceFactory =
         ResolvingDataSource.Factory(
@@ -176,17 +173,19 @@ internal class DownloadUtils(
         title: String,
         thumbnail: String,
     ) {
-        var isVideo = false
-        val request =
-            ImageRequest
-                .Builder(context)
-                .data(thumbnail)
-                .diskCachePolicy(CachePolicy.ENABLED)
-                .build()
-        val imageResult = thumbnailImageLoader.execute(request)
-        if (imageResult.image?.height != imageResult.image?.width && imageResult.image != null) {
-            isVideo = true
-        }
+        // A song's thumbnail URL is rewritten to the square w544/h544 format when it's
+        // stored (see Track.toSongEntity()); real videos keep their original 16:9-style
+        // URL (sddefault/maxresdefault/hqdefault/etc). This mirrors the same check already
+        // used in ModelToEntity.kt and AllExt.kt, and avoids an unreliable network image
+        // fetch just to measure pixel dimensions. Default to "not a video" when the URL is
+        // empty/ambiguous, since audio tracks are the overwhelmingly common case.
+        val isSongThumbnail = thumbnail.contains("w544") && thumbnail.contains("h544")
+        val looksLikeVideoThumbnail =
+            thumbnail.contains("maxresdefault") ||
+                thumbnail.contains("sddefault") ||
+                thumbnail.contains("hqdefault") ||
+                thumbnail.contains("hq720")
+        val isVideo = !isSongThumbnail && looksLikeVideoThumbnail
         val downloadRequest =
             DownloadRequest
                 .Builder(videoId, videoId.toUri())

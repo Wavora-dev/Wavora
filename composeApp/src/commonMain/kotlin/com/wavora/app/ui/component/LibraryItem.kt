@@ -102,7 +102,10 @@ fun LibraryItem(
             LibraryItemType.FavoritePlaylist -> stringResource(Res.string.no_favorite_playlists)
             is LibraryItemType.RecentlyAdded -> stringResource(Res.string.recently_added)
             is LibraryItemType.CanvasSong -> stringResource(Res.string.most_played)
-            else -> return
+            is LibraryItemType.YouTubePlaylist,
+            is LibraryItemType.LocalPlaylist,
+            LibraryItemType.FavoritePodcasts,
+            -> return
         }
     Box {
         if (showBottomSheet) {

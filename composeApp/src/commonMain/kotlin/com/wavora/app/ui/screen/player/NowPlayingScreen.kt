@@ -111,6 +111,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.StrokeCap
@@ -147,6 +148,7 @@ import com.wavora.app.extension.GradientOffset
 import com.wavora.app.extension.KeepScreenOn
 import com.wavora.app.extension.formatDuration
 import com.wavora.app.extension.getColorFromPalette
+import com.wavora.app.extension.wavoraIconGradient
 import com.wavora.app.extension.getScreenSizeInfo
 import com.wavora.app.extension.hsvToColor
 import com.wavora.app.extension.isElementVisible
@@ -172,7 +174,6 @@ import com.wavora.app.ui.theme.blackMoreOverlay
 import com.wavora.app.ui.theme.md_theme_dark_background
 import com.wavora.app.ui.theme.overlay
 import com.wavora.app.ui.theme.typo
-import com.wavora.app.ui.theme.wavoraPrimary
 import com.wavora.app.ui.theme.wavoraBorder
 import com.wavora.app.viewModel.LyricsProvider
 import com.wavora.app.viewModel.NowPlayingBottomSheetUIEvent
@@ -910,9 +911,7 @@ fun NowPlayingScreenContent(
                                     },
                                     indication = null,
                                     interactionSource =
-                                        remember {
-                                            remember { MutableInteractionSource() }
-                                        },
+                                        remember { MutableInteractionSource() },
                                 ),
                     ) {
                         // ── Layer 0: per-page backdrop (adjacent pages only) ──
@@ -1150,6 +1149,7 @@ fun NowPlayingScreenContent(
                                                     ),
                                         )
                                     }
+                                    }
 
                                     // Inline video player (current page + isVideo + shouldShowVideo).
                                     androidx.compose.animation.AnimatedVisibility(
@@ -1190,9 +1190,7 @@ fun NowPlayingScreenContent(
                                                             onClick = { showHideFullscreenOverlay = !showHideFullscreenOverlay },
                                                             indication = null,
                                                             interactionSource =
-                                                                remember {
-                                                                    remember { MutableInteractionSource() }
-                                                                },
+                                                                remember { MutableInteractionSource() },
                                                         ),
                                             ) {
                                                 Crossfade(targetState = showHideFullscreenOverlay) {
@@ -1217,12 +1215,15 @@ fun NowPlayingScreenContent(
                                                                     onDismiss()
                                                                     navController.navigate(FullscreenDestination)
                                                                 },
-                                                                Modifier.align(Alignment.TopEnd),
+                                                                Modifier
+                                                                    .align(Alignment.TopEnd)
+                                                                    .clip(CircleShape)
+                                                                    .wavoraIconGradient(),
                                                             ) {
                                                                 Icon(
                                                                     painter = painterResource(Res.drawable.baseline_fullscreen_24),
                                                                     contentDescription = "",
-                                                                    tint = wavoraPrimary,
+                                                                    tint = Color.White,
                                                                 )
                                                             }
                                                             Row(
@@ -1240,19 +1241,19 @@ fun NowPlayingScreenContent(
                                                                         Modifier
                                                                             .size(48.dp)
                                                                             .aspectRatio(1f)
-                                                                            .clip(CircleShape),
+                                                                            .clip(CircleShape)
+                                                                            .wavoraIconGradient(),
                                                                     onClick = {
                                                                         sharedViewModel.onUIEvent(UIEvent.Backward)
                                                                     },
                                                                 ) {
                                                                     Icon(
                                                                         imageVector = Icons.Rounded.Replay5,
-                                                                        tint = wavoraPrimary,
+                                                                        tint = Color.White,
                                                                         contentDescription = "",
                                                                         modifier =
                                                                             Modifier
-                                                                                .size(36.dp)
-                                                                                .alpha(0.8f),
+                                                                                .size(36.dp),
                                                                     )
                                                                 }
                                                                 FilledTonalIconButton(
@@ -1264,28 +1265,32 @@ fun NowPlayingScreenContent(
                                                                         Modifier
                                                                             .size(48.dp)
                                                                             .aspectRatio(1f)
-                                                                            .clip(CircleShape),
+                                                                            .clip(CircleShape)
+                                                                            .wavoraIconGradient(),
                                                                     onClick = {
                                                                         sharedViewModel.onUIEvent(UIEvent.Forward)
                                                                     },
                                                                 ) {
                                                                     Icon(
                                                                         imageVector = Icons.Rounded.Forward5,
-                                                                        tint = wavoraPrimary,
+                                                                        tint = Color.White,
                                                                         contentDescription = "",
                                                                         modifier =
                                                                             Modifier
-                                                                                .size(36.dp)
-                                                                                .alpha(0.8f),
+                                                                                .size(36.dp),
                                                                     )
                                                                 }
                                                             }
                                                             if (screenDataState.lyricsData != null) {
                                                                 IconButton(
+                                                                    modifier =
+                                                                        Modifier
+                                                                            .align(Alignment.BottomEnd)
+                                                                            .clip(CircleShape)
+                                                                            .wavoraIconGradient(),
                                                                     onClick = {
                                                                         internalShowSubtitle = !internalShowSubtitle
                                                                     },
-                                                                    Modifier.align(Alignment.BottomEnd),
                                                                 ) {
                                                                     Icon(
                                                                         imageVector =
@@ -1295,7 +1300,7 @@ fun NowPlayingScreenContent(
                                                                                 Icons.Filled.Subtitles
                                                                             },
                                                                         contentDescription = "",
-                                                                        tint = wavoraPrimary,
+                                                                        tint = Color.White,
                                                                     )
                                                                 }
                                                             }
@@ -1414,34 +1419,52 @@ fun NowPlayingScreenContent(
                         }
                     },
                     navigationIcon = {
-                        IconButton(onClick = {
-                            onDismiss()
-                        }) {
+                        IconButton(
+                            modifier =
+                                Modifier
+                                    .clip(CircleShape)
+                                    .wavoraIconGradient(),
+                            onClick = {
+                                onDismiss()
+                            },
+                        ) {
                             Icon(
                                 imageVector = dismissIcon,
                                 contentDescription = "",
-                                tint = wavoraPrimary,
+                                tint = Color.White,
                             )
                         }
                     },
                     actions = {
                         // Desktop mini player button (JVM only)
                         if (getPlatform() == Platform.Desktop) {
-                            IconButton(onClick = { toggleMiniPlayer() }) {
+                            IconButton(
+                                modifier =
+                                    Modifier
+                                        .clip(CircleShape)
+                                        .wavoraIconGradient(),
+                                onClick = { toggleMiniPlayer() },
+                            ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
                                     contentDescription = "Mini Player",
-                                    tint = wavoraPrimary,
+                                    tint = Color.White,
                                 )
                             }
                         }
-                        IconButton(onClick = {
-                            showSheet = true
-                        }) {
+                        IconButton(
+                            modifier =
+                                Modifier
+                                    .clip(CircleShape)
+                                    .wavoraIconGradient(),
+                            onClick = {
+                                showSheet = true
+                            },
+                        ) {
                             Icon(
                                 painter = painterResource(Res.drawable.baseline_more_vert_24),
                                 contentDescription = "",
-                                tint = wavoraPrimary,
+                                tint = Color.White,
                             )
                         }
                     },
@@ -1618,12 +1641,12 @@ fun NowPlayingScreenContent(
                                                                 .aspectRatio(1f)
                                                                 .clip(
                                                                     CircleShape,
-                                                                ),
+                                                                ).wavoraIconGradient(),
                                                         onClick = {
                                                             sharedViewModel.addToYouTubeLiked()
                                                         },
                                                     ) {
-                                                        Icon(imageVector = Icons.Rounded.CheckCircle, tint = wavoraPrimary, contentDescription = "")
+                                                        Icon(imageVector = Icons.Rounded.CheckCircle, tint = Color.White, contentDescription = "")
                                                     }
                                                 } else {
                                                     IconButton(
@@ -1633,14 +1656,14 @@ fun NowPlayingScreenContent(
                                                                 .aspectRatio(1f)
                                                                 .clip(
                                                                     CircleShape,
-                                                                ),
+                                                                ).wavoraIconGradient(),
                                                         onClick = {
                                                             sharedViewModel.addToYouTubeLiked()
                                                         },
                                                     ) {
                                                         Icon(
                                                             imageVector = Icons.Rounded.AddCircleOutline,
-                                                            tint = wavoraPrimary,
+                                                            tint = Color.White,
                                                             contentDescription = "",
                                                         )
                                                     }
@@ -1735,22 +1758,43 @@ fun NowPlayingScreenContent(
                                                                 Alignment.TopCenter,
                                                             ),
                                                     track = { sliderState ->
-                                                        SliderDefaults.Track(
+                                                        // Custom track (not SliderDefaults.Track):
+                                                        // SliderColors only takes a solid Color for
+                                                        // activeTrackColor, not a Brush. Keeps the
+                                                        // existing crossfade rainbow behavior (as a
+                                                        // solid animated color) and uses the wavora
+                                                        // gradient otherwise, matching MiniPlayer /
+                                                        // FullscreenPlayer.
+                                                        val fraction =
+                                                            ((sliderState.value - sliderState.valueRange.start) /
+                                                                (sliderState.valueRange.endInclusive - sliderState.valueRange.start))
+                                                                .coerceIn(0f, 1f)
+                                                        val trackBrush =
+                                                            if (timelineState.isCrossfading) {
+                                                                SolidColor(sliderTrackColor)
+                                                            } else {
+                                                                Brush.horizontalGradient(
+                                                                    colors = listOf(Color(0xFFA259FF), Color(0xFF6A5CFF), Color(0xFF00D4FF)),
+                                                                )
+                                                            }
+                                                        Box(
                                                             modifier =
                                                                 Modifier
-                                                                    .height(5.dp),
-                                                            enabled = true,
-                                                            sliderState = sliderState,
-                                                            colors =
-                                                                SliderDefaults.colors().copy(
-                                                                    thumbColor = sliderTrackColor,
-                                                                    activeTrackColor = sliderTrackColor,
-                                                                    inactiveTrackColor = Color(0xFF1F1F2E),
-                                                                ),
-                                                            thumbTrackGapSize = 0.dp,
-                                                            drawTick = { _, _ -> },
-                                                            drawStopIndicator = null,
-                                                        )
+                                                                    .fillMaxWidth()
+                                                                    .height(5.dp)
+                                                                    .background(Color(0xFF1F1F2E), RoundedCornerShape(4.dp)),
+                                                        ) {
+                                                            Box(
+                                                                modifier =
+                                                                    Modifier
+                                                                        .fillMaxWidth(fraction)
+                                                                        .fillMaxHeight()
+                                                                        .background(
+                                                                            brush = trackBrush,
+                                                                            shape = RoundedCornerShape(4.dp),
+                                                                        ),
+                                                            )
+                                                        }
                                                     },
                                                     thumb = {
                                                         SliderDefaults.Thumb(
@@ -1763,9 +1807,7 @@ fun NowPlayingScreenContent(
                                                                     ),
                                                             thumbSize = DpSize(8.dp, 8.dp),
                                                             interactionSource =
-                                                                remember {
-                                                                    remember { MutableInteractionSource() }
-                                                                },
+                                                                remember { MutableInteractionSource() },
                                                             colors =
                                                                 SliderDefaults.colors().copy(
                                                                     thumbColor = sliderTrackColor,
@@ -1841,12 +1883,13 @@ fun NowPlayingScreenContent(
                                                 Modifier
                                                     .size(24.dp)
                                                     .aspectRatio(1f)
-                                                    .clip(CircleShape),
+                                                    .clip(CircleShape)
+                                                    .wavoraIconGradient(),
                                             onClick = {
                                                 showInfoBottomSheet = true
                                             },
                                         ) {
-                                            Icon(imageVector = Icons.Outlined.Info, tint = wavoraPrimary, contentDescription = "")
+                                            Icon(imageVector = Icons.Outlined.Info, tint = Color.White, contentDescription = "")
                                         }
 
                                         Row(
@@ -1859,14 +1902,15 @@ fun NowPlayingScreenContent(
                                                     Modifier
                                                         .size(24.dp)
                                                         .aspectRatio(1f)
-                                                        .clip(CircleShape),
+                                                        .clip(CircleShape)
+                                                        .wavoraIconGradient(),
                                                 onClick = {
                                                     showAddToPlaylistDirectly = true
                                                 },
                                             ) {
                                                 Icon(
                                                     painter = painterResource(Res.drawable.baseline_playlist_add_24),
-                                                    tint = wavoraPrimary,
+                                                    tint = Color.White,
                                                     contentDescription = "Add to Playlist",
                                                 )
                                             }
@@ -1877,21 +1921,22 @@ fun NowPlayingScreenContent(
                                                     Modifier
                                                         .size(24.dp)
                                                         .aspectRatio(1f)
-                                                        .clip(CircleShape),
+                                                        .clip(CircleShape)
+                                                        .wavoraIconGradient(),
                                                 onClick = {
                                                     showQueueBottomSheet = true
                                                 },
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.AutoMirrored.Rounded.QueueMusic,
-                                                    tint = wavoraPrimary,
+                                                    tint = Color.White,
                                                     contentDescription = "",
                                                 )
                                             }
                                         }
                                     }
                                 }
-                                this@Column.AnimatedVisibility(
+                                androidx.compose.animation.AnimatedVisibility(
                                     visible = !showHideControlLayout,
                                     enter = fadeIn(),
                                     exit = fadeOut(),
@@ -1911,9 +1956,7 @@ fun NowPlayingScreenContent(
                                                     },
                                                     indication = null,
                                                     interactionSource =
-                                                        remember {
-                                                            remember { MutableInteractionSource() }
-                                                        },
+                                                        remember { MutableInteractionSource() },
                                                 ),
                                         contentAlignment = Alignment.BottomStart,
                                     ) {
@@ -1941,7 +1984,7 @@ fun NowPlayingScreenContent(
                                                     .fillMaxWidth()
                                                     .animateContentSize(),
                                         ) {
-                                            this@Column.AnimatedVisibility(
+                                            AnimatedVisibility(
                                                 visible = canvasSubtitleLineIndex > -1,
                                                 enter = fadeIn() + expandVertically(),
                                                 exit = fadeOut() + shrinkVertically(),
@@ -2110,14 +2153,14 @@ fun NowPlayingScreenContent(
                                                                         .aspectRatio(1f)
                                                                         .clip(
                                                                             CircleShape,
-                                                                        ),
+                                                                        ).wavoraIconGradient(),
                                                                 onClick = {
                                                                     sharedViewModel.addToYouTubeLiked()
                                                                 },
                                                             ) {
                                                                 Icon(
                                                                     imageVector = Icons.Rounded.CheckCircle,
-                                                                    tint = wavoraPrimary,
+                                                                    tint = Color.White,
                                                                     contentDescription = "",
                                                                 )
                                                             }
@@ -2129,14 +2172,14 @@ fun NowPlayingScreenContent(
                                                                         .aspectRatio(1f)
                                                                         .clip(
                                                                             CircleShape,
-                                                                        ),
+                                                                        ).wavoraIconGradient(),
                                                                 onClick = {
                                                                     sharedViewModel.addToYouTubeLiked()
                                                                 },
                                                             ) {
                                                                 Icon(
                                                                     imageVector = Icons.Rounded.AddCircleOutline,
-                                                                    tint = wavoraPrimary,
+                                                                    tint = Color.White,
                                                                     contentDescription = "",
                                                                 )
                                                             }
@@ -2200,6 +2243,12 @@ fun NowPlayingScreenContent(
                                         if (canVoteLyrics || canVoteTranslatedLyrics) {
                                             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                                                 IconButton(
+                                                    modifier =
+                                                        Modifier
+                                                            .size(24.dp)
+                                                            .aspectRatio(1f)
+                                                            .clip(CircleShape)
+                                                            .wavoraIconGradient(),
                                                     onClick = {
                                                         showVoteDialog = true
                                                     },
@@ -2207,7 +2256,7 @@ fun NowPlayingScreenContent(
                                                     Icon(
                                                         imageVector = Icons.Rounded.ThumbsUpDown,
                                                         contentDescription = stringResource(Res.string.rate_lyrics),
-                                                        tint = wavoraPrimary,
+                                                        tint = Color.White,
                                                         modifier = Modifier.size(16.dp),
                                                     )
                                                 }
@@ -2576,7 +2625,19 @@ fun NowPlayingScreenContent(
                                     )
                                 }
                             } else {
-                                PlayPauseButton(isPlaying = controllerState.isPlaying, modifier = Modifier.size(48.dp)) {
+                                PlayPauseButton(
+                                    isPlaying = controllerState.isPlaying,
+                                    // Gradient background added only at this call site (not in
+                                    // the shared PlayPauseButton composable, which the MiniPlayer
+                                    // also uses and wasn't reported as an issue there). Icon tint
+                                    // is white by default inside PlayPauseButton, so it already
+                                    // reads correctly against the gradient fill.
+                                    modifier =
+                                        Modifier
+                                            .size(48.dp)
+                                            .clip(CircleShape)
+                                            .wavoraIconGradient(),
+                                ) {
                                     sharedViewModel.onUIEvent(UIEvent.PlayPause)
                                 }
                             }
@@ -2588,21 +2649,31 @@ fun NowPlayingScreenContent(
                                 .wrapContentSize(Alignment.Center)
                                 .align(Alignment.BottomCenter),
                     ) {
-                        LinearProgressIndicator(
-                            progress = { timelineState.current.toFloat() / timelineState.total },
+                        // Custom track (not LinearProgressIndicator): its `color` param only
+                        // takes a solid Color, not a Brush. Same gradient pattern as the rest
+                        // of the player screens.
+                        val collapsedFraction = (timelineState.current.toFloat() / timelineState.total).coerceIn(0f, 1f)
+                        Box(
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
                                     .height(1.dp)
-                                    .background(
-                                        color = Color.Transparent,
-                                        shape = RoundedCornerShape(4.dp),
-                                    ),
-                            color = wavoraPrimary,
-                            trackColor = wavoraBorder,
-                            strokeCap = StrokeCap.Round,
-                            drawStopIndicator = {},
-                        )
+                                    .background(wavoraBorder, RoundedCornerShape(4.dp)),
+                        ) {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth(collapsedFraction)
+                                        .fillMaxHeight()
+                                        .background(
+                                            brush =
+                                                Brush.horizontalGradient(
+                                                    colors = listOf(Color(0xFFA259FF), Color(0xFF6A5CFF), Color(0xFF00D4FF)),
+                                                ),
+                                            shape = RoundedCornerShape(4.dp),
+                                        ),
+                            )
+                        }
                     }
                 }
             }

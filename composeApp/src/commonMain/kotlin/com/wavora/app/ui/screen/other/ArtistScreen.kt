@@ -75,6 +75,7 @@ import com.wavora.app.ui.component.NowPlayingBottomSheet
 import com.wavora.app.ui.component.SongFullWidthItems
 import com.wavora.app.ui.navigation.destination.list.AlbumDestination
 import com.wavora.app.ui.navigation.destination.list.ArtistDestination
+import com.wavora.app.ui.navigation.destination.library.LibraryDestination
 import com.wavora.app.ui.navigation.destination.list.MoreAlbumsDestination
 import com.wavora.app.ui.navigation.destination.list.PlaylistDestination
 import com.wavora.app.ui.theme.md_theme_dark_background
