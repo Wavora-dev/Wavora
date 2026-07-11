@@ -259,7 +259,6 @@ Wavora is a **Kotlin Multiplatform** project. Shared Kotlin code targets both `a
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/4.png" width="220"/>
   <img src="docs/screenshots/5.png" width="220"/>
   <img src="docs/screenshots/6.png" width="220"/>
 </p>
