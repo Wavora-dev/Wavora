@@ -73,6 +73,7 @@ import com.wavora.app.extension.getColorFromPalette
 import com.wavora.app.extension.getScreenSizeInfo
 import com.wavora.app.extension.rgbFactor
 import com.wavora.app.ui.theme.md_theme_dark_background
+import com.wavora.app.ui.theme.wavoraSurface
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import org.jetbrains.compose.resources.painterResource
@@ -195,7 +196,7 @@ fun CollapsingToolbarParallaxEffect(
                     colors =
                         IconButtonDefaults.iconButtonColors().copy(
                             containerColor =
-                                Color.DarkGray.copy(
+                                wavoraSurface.copy(
                                     alpha = 0.8f,
                                 ),
                             contentColor =

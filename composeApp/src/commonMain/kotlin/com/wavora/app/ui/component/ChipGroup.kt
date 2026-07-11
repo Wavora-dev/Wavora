@@ -13,10 +13,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.wavora.app.ui.theme.wavoraBorder
+import com.wavora.app.ui.theme.wavoraTextSecondary
+import org.jetbrains.compose.resources.stringResource
+import wavora.composeapp.generated.resources.Res
+import wavora.composeapp.generated.resources.done
 
 @Composable
 fun Chip(
@@ -27,7 +31,6 @@ fun Chip(
 ) {
     InfiniteBorderAnimationView(
         isAnimated = isAnimated && isSelected,
-        brush = Brush.sweepGradient(listOf(Color.Gray, Color.White)),
         backgroundColor = Color.Transparent,
         contentPadding = 0.dp,
         borderWidth = 1.dp,
@@ -41,9 +44,9 @@ fun Chip(
                     FilterChipDefaults.elevatedFilterChipColors(
                         containerColor = Color.Transparent,
                         iconColor = Color.White,
-                        selectedContainerColor = Color.DarkGray.copy(alpha = 0.8f),
-                        labelColor = Color.LightGray,
-                        selectedLabelColor = Color.LightGray,
+                        selectedContainerColor = wavoraBorder.copy(alpha = 0.8f),
+                        labelColor = wavoraTextSecondary,
+                        selectedLabelColor = Color.White,
                     ),
                 onClick = { onClick.invoke() },
                 label = {
@@ -54,7 +57,7 @@ fun Chip(
                         enabled = true,
                         selected = isSelected,
                         selectedBorderColor = Color.Transparent,
-                        borderColor = Color.Gray.copy(alpha = 0.8f),
+                        borderColor = wavoraBorder,
                     ),
                 selected = isSelected,
                 leadingIcon = {
@@ -62,7 +65,7 @@ fun Chip(
                         if (it) {
                             Icon(
                                 imageVector = Icons.Filled.Done,
-                                contentDescription = "Done icon",
+                                contentDescription = stringResource(Res.string.done),
                                 modifier = Modifier.size(FilterChipDefaults.IconSize),
                             )
                         }

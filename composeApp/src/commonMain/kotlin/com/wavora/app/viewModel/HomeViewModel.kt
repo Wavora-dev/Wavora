@@ -1,8 +1,6 @@
 package com.wavora.app.viewModel
 
 import androidx.lifecycle.viewModelScope
-import com.wavora.common.SELECTED_LANGUAGE
-import com.wavora.common.SUPPORTED_LANGUAGE
 import com.wavora.domain.model.entities.SongEntity
 import com.wavora.domain.model.model.home.HomeDataCombine
 import com.wavora.domain.model.model.home.HomeItem
@@ -27,7 +25,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.music_video
 import wavora.composeapp.generated.resources.new_release
@@ -65,8 +62,6 @@ class HomeViewModel(
 
     val loading = MutableStateFlow<Boolean>(true)
     val loadingChart = MutableStateFlow<Boolean>(true)
-    private var regionCode: String = ""
-    private var language: String = ""
 
     private val _songEntity: MutableStateFlow<SongEntity?> = MutableStateFlow(null)
     val songEntity: StateFlow<SongEntity?> = _songEntity
@@ -87,24 +82,26 @@ class HomeViewModel(
     val mainHomeThumbnail: StateFlow<String?> = _mainHomeThumbnail
 
     init {
-        if (runBlocking { dataStoreManager.cookie.first() }.isEmpty() &&
-            runBlocking {
+        // Was two nested `runBlocking` calls here, executed synchronously during ViewModel
+        // construction (i.e. on the thread that first resolves this Koin singleton, typically
+        // the main thread at cold start). showLogInAlert is only ever consumed reactively via
+        // collectAsStateWithLifecycle() in HomeScreen, so resolving it inside a coroutine instead
+        // has no behavioral effect beyond arriving a frame later.
+        viewModelScope.launch {
+            if (dataStoreManager.cookie.first().isEmpty() &&
                 dataStoreManager.shouldShowLogInRequiredAlert.first() == TRUE
+            ) {
+                _showLogInAlert.update { true }
             }
-        ) {
-            _showLogInAlert.update { true }
         }
         homeJob = Job()
         viewModelScope.launch {
             regionCodeChart.value = dataStoreManager.chartKey.first()
             exploreChart(regionCodeChart.value ?: "ZZ")
-            language = dataStoreManager.getString(SELECTED_LANGUAGE).first()
-                ?: SUPPORTED_LANGUAGE.codes.first()
             //  refresh when region change
             val job1 =
                 launch {
                     dataStoreManager.location.distinctUntilChanged().collect {
-                        regionCode = it
                         getHomeItemList(params.value)
                     }
                 }
@@ -112,7 +109,6 @@ class HomeViewModel(
             val job2 =
                 launch {
                     dataStoreManager.language.distinctUntilChanged().collect {
-                        language = it
                         getHomeItemList(params.value)
                     }
                 }
@@ -182,12 +178,6 @@ class HomeViewModel(
     fun getHomeItemList(params: String? = null) {
         loading.value = true
         _homeListState.value = ListState.LOADING
-        language =
-            runBlocking {
-                dataStoreManager.getString(SELECTED_LANGUAGE).first()
-                    ?: SUPPORTED_LANGUAGE.codes.first()
-            }
-        regionCode = runBlocking { dataStoreManager.location.first() }
         homeJob?.cancel()
         homeJob =
             viewModelScope.launch {

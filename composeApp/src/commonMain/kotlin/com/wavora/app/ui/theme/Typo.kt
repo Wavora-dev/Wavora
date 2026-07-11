@@ -12,6 +12,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import org.jetbrains.compose.resources.Font
 import wavora.composeapp.generated.resources.Res
+import wavora.composeapp.generated.resources.poppins_bold
 import wavora.composeapp.generated.resources.poppins_medium
 
 /**
@@ -26,7 +27,15 @@ val LocalAppTypography: ProvidableCompositionLocal<Typography> =
 @Composable
 fun fontFamily(): FontFamily =
     FontFamily(
+        // Normal is intentionally backed by poppins_medium (not poppins_regular) — this is
+        // Wavora's existing visual identity for body text and is left untouched.
         Font(Res.font.poppins_medium, FontWeight.Normal, FontStyle.Normal),
+        // poppins_bold.ttf was already bundled in resources but never referenced anywhere, so
+        // every FontWeight.Bold/SemiBold TextStyle below was rendered as OS-synthesized fake
+        // bold instead of the real bundled typeface. Registering it here fixes FontWeight.Bold
+        // exactly; FontWeight.SemiBold (there's no dedicated semibold asset bundled) now matches
+        // against this closer neighbor instead of only ever synthesizing off Normal.
+        Font(Res.font.poppins_bold, FontWeight.Bold, FontStyle.Normal),
     )
 
 @Composable
@@ -64,28 +73,28 @@ fun typo(): Typography {
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Normal,
                     fontFamily = fontFamily,
-                    color = Color(0xFFA8A8A8),
+                    color = wavoraTextSecondary,
                 ),
             bodyMedium =
                 TextStyle(
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Normal,
                     fontFamily = fontFamily,
-                    color = Color(0xFFA8A8A8),
+                    color = wavoraTextSecondary,
                 ),
             bodyLarge =
                 TextStyle(
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Normal,
                     fontFamily = fontFamily,
-                    color = Color(0xFFA8A8A8),
+                    color = wavoraTextSecondary,
                 ),
             displayLarge =
                 TextStyle(
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Normal,
                     fontFamily = fontFamily,
-                    color = Color(0xFFA8A8A8),
+                    color = wavoraTextSecondary,
                 ),
             headlineMedium =
                 TextStyle(
@@ -106,14 +115,14 @@ fun typo(): Typography {
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = fontFamily,
-                    color = Color(0xFFA8A8A8),
+                    color = wavoraTextSecondary,
                 ),
             labelSmall =
                 TextStyle(
                     fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     fontFamily = fontFamily,
-                    color = Color(0xFFA8A8A8),
+                    color = wavoraTextSecondary,
                 ),
             // ...
         )

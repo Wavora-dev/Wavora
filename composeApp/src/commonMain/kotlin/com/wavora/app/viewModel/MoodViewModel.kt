@@ -1,7 +1,6 @@
 package com.wavora.app.viewModel
 
 import androidx.lifecycle.viewModelScope
-import com.wavora.common.SELECTED_LANGUAGE
 import com.wavora.domain.model.model.mood.moodmoments.MoodsMomentObject
 import com.wavora.domain.manager.DataStoreManager
 import com.wavora.domain.repository.HomeRepository
@@ -11,12 +10,12 @@ import com.wavora.app.viewModel.base.BaseViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
 class MoodViewModel(
+    // Kept for DI wiring parity with other ViewModels built from the same Koin module; no longer
+    // read directly now that the dead regionCode/language fields below have been removed.
     dataStoreManager: DataStoreManager,
     private val homeRepository: HomeRepository,
 ) : BaseViewModel() {
@@ -24,20 +23,9 @@ class MoodViewModel(
     var moodsMomentObject: StateFlow<MoodsMomentObject?> = _moodsMomentObject
     var loading = MutableStateFlow<Boolean>(false)
 
-    private var regionCode: String? = null
-    private var language: String? = null
-
-    init {
-        regionCode = runBlocking { dataStoreManager.location.first() }
-        language = runBlocking { dataStoreManager.getString(SELECTED_LANGUAGE).first() }
-    }
-
     fun getMood(params: String) {
         loading.value = true
         viewModelScope.launch {
-//            mainRepository.getMood(params, regionCode!!, SUPPORTED_LANGUAGE.serverCodes[SUPPORTED_LANGUAGE.codes.indexOf(language!!)]).collect{ values ->
-//                _moodsMomentObject.value = values
-//            }
             homeRepository.getMoodData(params).collect { values ->
                 Logger.w("MoodViewModel", "getMood: $values")
                 when (values) {

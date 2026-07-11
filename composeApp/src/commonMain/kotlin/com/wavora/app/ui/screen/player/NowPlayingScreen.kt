@@ -174,7 +174,12 @@ import com.wavora.app.ui.theme.blackMoreOverlay
 import com.wavora.app.ui.theme.md_theme_dark_background
 import com.wavora.app.ui.theme.overlay
 import com.wavora.app.ui.theme.typo
+import com.wavora.app.ui.theme.wavoraAccentDark
+import com.wavora.app.ui.theme.wavoraBackground
 import com.wavora.app.ui.theme.wavoraBorder
+import com.wavora.app.ui.theme.wavoraIconGradientBrush
+import com.wavora.app.ui.theme.wavoraPrimary
+import com.wavora.app.ui.theme.wavoraSecondary
 import com.wavora.app.viewModel.LyricsProvider
 import com.wavora.app.viewModel.NowPlayingBottomSheetUIEvent
 import com.wavora.app.viewModel.NowPlayingBottomSheetViewModel
@@ -220,6 +225,17 @@ import wavora.composeapp.generated.resources.show
 import wavora.composeapp.generated.resources.spotify_lyrics_provider
 import wavora.composeapp.generated.resources.unsynced
 import wavora.composeapp.generated.resources.view_count
+import wavora.composeapp.generated.resources.add_to_liked_songs
+import wavora.composeapp.generated.resources.added_to_liked_songs
+import wavora.composeapp.generated.resources.collapse_now_playing
+import wavora.composeapp.generated.resources.enter_fullscreen_player
+import wavora.composeapp.generated.resources.forward_5_seconds
+import wavora.composeapp.generated.resources.hide_subtitles
+import wavora.composeapp.generated.resources.more
+import wavora.composeapp.generated.resources.queue
+import wavora.composeapp.generated.resources.replay_5_seconds
+import wavora.composeapp.generated.resources.show_subtitles
+import wavora.composeapp.generated.resources.song_info
 import kotlin.math.roundToLong
 import com.wavora.app.ui.theme.LocalAppTypography
 
@@ -292,6 +308,18 @@ fun NowPlayingScreenContent(
     val controllerState by sharedViewModel.controllerState.collectAsStateWithLifecycle()
     val screenDataState by sharedViewModel.nowPlayingScreenData.collectAsStateWithLifecycle()
     val timelineState by sharedViewModel.timeline.collectAsStateWithLifecycle()
+    // PROMPT_04 Compose perf audit: `TimeLine` bundles `current` (ticks 10x/sec while playing)
+    // together with `isCrossfading`/`loading` (change only a couple of times per song, at most).
+    // Reading `timelineState.isCrossfading`/`.loading` directly subscribes that read site to the
+    // WHOLE `TimeLine` object, so every composable doing that was being invalidated on every
+    // position tick even though the boolean it actually cares about almost never changes.
+    // `derivedStateOf` makes the derived State only report "changed" when its OWN computed value
+    // changes, not whenever the upstream State's reference changes — this only helps because
+    // these two fields are read at several sites that do NOT also need `current` in the same
+    // expression (verified below; the few sites that mix `current` and `total` together are left
+    // reading `timelineState` directly, since they need a fresh value every tick regardless).
+    val isCrossfadingState by remember { derivedStateOf { timelineState.isCrossfading } }
+    val isLoadingState by remember { derivedStateOf { timelineState.loading } }
     val likeStatus by sharedViewModel.likeStatus.collectAsStateWithLifecycle()
 
     val shouldShowVideo by sharedViewModel.getVideo.collectAsStateWithLifecycle()
@@ -478,11 +506,11 @@ fun NowPlayingScreenContent(
                 // Blend album color with Wavora purple for a branded gradient
                 val blendedColor = androidx.compose.ui.graphics.lerp(
                     albumColor,
-                    Color(0xFF1A0B2E),
+                    wavoraAccentDark,
                     0.35f,
                 )
                 startColor.animateTo(blendedColor)
-                endColor.animateTo(Color(0xFF0B0B0F))
+                endColor.animateTo(wavoraBackground)
             }
     }
 
@@ -546,8 +574,8 @@ fun NowPlayingScreenContent(
     // rememberInfiniteTransition runs continuously even when invisible, wasting GPU.
     // By gating it behind isCrossfading we stop the animation when it's not needed.
     var rainbowHue by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(timelineState.isCrossfading) {
-        if (timelineState.isCrossfading) {
+    LaunchedEffect(isCrossfadingState) {
+        if (isCrossfadingState) {
             while (isActive) {
                 rainbowHue = (rainbowHue + 3f) % 360f
                 delay(8) // ~120fps equivalent hue sweep
@@ -556,7 +584,7 @@ fun NowPlayingScreenContent(
     }
     val rainbowColor = hsvToColor(rainbowHue, 1f, 1f)
     val sliderTrackColor by animateColorAsState(
-        targetValue = if (timelineState.isCrossfading) rainbowColor else Color(0xFFA259FF),
+        targetValue = if (isCrossfadingState) rainbowColor else wavoraPrimary,
         animationSpec = tween(300),
         label = "sliderCrossfadeColor",
     )
@@ -792,7 +820,7 @@ fun NowPlayingScreenContent(
                         .diskCacheKey(screenDataState.thumbnailURL + "BIGGER")
                         .crossfade(550)
                         .build(),
-                contentDescription = "",
+                contentDescription = null,
                 contentScale = ContentScale.FillHeight,
                 placeholder = painterResource(Res.drawable.holder),
                 error = painterResource(Res.drawable.holder),
@@ -1125,7 +1153,7 @@ fun NowPlayingScreenContent(
                                                     .diskCacheKey(artworkUrl + "BIGGER")
                                                     .crossfade(550)
                                                     .build(),
-                                            contentDescription = "",
+                                            contentDescription = null,
                                             onSuccess = {
                                                 sharedViewModel.setBitmap(
                                                     it.result.image.toImageBitmap(),
@@ -1222,7 +1250,7 @@ fun NowPlayingScreenContent(
                                                             ) {
                                                                 Icon(
                                                                     painter = painterResource(Res.drawable.baseline_fullscreen_24),
-                                                                    contentDescription = "",
+                                                                    contentDescription = stringResource(Res.string.enter_fullscreen_player),
                                                                     tint = Color.White,
                                                                 )
                                                             }
@@ -1250,7 +1278,7 @@ fun NowPlayingScreenContent(
                                                                     Icon(
                                                                         imageVector = Icons.Rounded.Replay5,
                                                                         tint = Color.White,
-                                                                        contentDescription = "",
+                                                                        contentDescription = stringResource(Res.string.replay_5_seconds),
                                                                         modifier =
                                                                             Modifier
                                                                                 .size(36.dp),
@@ -1274,7 +1302,7 @@ fun NowPlayingScreenContent(
                                                                     Icon(
                                                                         imageVector = Icons.Rounded.Forward5,
                                                                         tint = Color.White,
-                                                                        contentDescription = "",
+                                                                        contentDescription = stringResource(Res.string.forward_5_seconds),
                                                                         modifier =
                                                                             Modifier
                                                                                 .size(36.dp),
@@ -1299,7 +1327,12 @@ fun NowPlayingScreenContent(
                                                                             } else {
                                                                                 Icons.Filled.Subtitles
                                                                             },
-                                                                        contentDescription = "",
+                                                                        contentDescription =
+                                                                            if (internalShowSubtitle) {
+                                                                                stringResource(Res.string.hide_subtitles)
+                                                                            } else {
+                                                                                stringResource(Res.string.show_subtitles)
+                                                                            },
                                                                         tint = Color.White,
                                                                     )
                                                                 }
@@ -1430,7 +1463,7 @@ fun NowPlayingScreenContent(
                         ) {
                             Icon(
                                 imageVector = dismissIcon,
-                                contentDescription = "",
+                                contentDescription = stringResource(Res.string.collapse_now_playing),
                                 tint = Color.White,
                             )
                         }
@@ -1463,7 +1496,7 @@ fun NowPlayingScreenContent(
                         ) {
                             Icon(
                                 painter = painterResource(Res.drawable.baseline_more_vert_24),
-                                contentDescription = "",
+                                contentDescription = stringResource(Res.string.more),
                                 tint = Color.White,
                             )
                         }
@@ -1646,7 +1679,7 @@ fun NowPlayingScreenContent(
                                                             sharedViewModel.addToYouTubeLiked()
                                                         },
                                                     ) {
-                                                        Icon(imageVector = Icons.Rounded.CheckCircle, tint = Color.White, contentDescription = "")
+                                                        Icon(imageVector = Icons.Rounded.CheckCircle, tint = Color.White, contentDescription = stringResource(Res.string.added_to_liked_songs))
                                                     }
                                                 } else {
                                                     IconButton(
@@ -1664,7 +1697,7 @@ fun NowPlayingScreenContent(
                                                         Icon(
                                                             imageVector = Icons.Rounded.AddCircleOutline,
                                                             tint = Color.White,
-                                                            contentDescription = "",
+                                                            contentDescription = stringResource(Res.string.add_to_liked_songs),
                                                         )
                                                     }
                                                 }
@@ -1693,7 +1726,7 @@ fun NowPlayingScreenContent(
                                                         .height(24.dp),
                                                 contentAlignment = Alignment.Center,
                                             ) {
-                                                Crossfade(timelineState.loading) {
+                                                Crossfade(isLoadingState) {
                                                     if (it) {
                                                         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                                                             LinearProgressIndicator(
@@ -1706,8 +1739,8 @@ fun NowPlayingScreenContent(
                                                                         ).clip(
                                                                             RoundedCornerShape(8.dp),
                                                                         ),
-                                                                color = Color.Gray,
-                                                                trackColor = Color.DarkGray,
+                                                                color = wavoraPrimary,
+                                                                trackColor = wavoraBorder,
                                                                 strokeCap = StrokeCap.Round,
                                                             )
                                                         }
@@ -1724,11 +1757,8 @@ fun NowPlayingScreenContent(
                                                                         ).clip(
                                                                             RoundedCornerShape(8.dp),
                                                                         ),
-                                                                color = Color.Gray,
-                                                                trackColor =
-                                                                    Color.Gray.copy(
-                                                                        alpha = 0.6f,
-                                                                    ),
+                                                                color = wavoraSecondary,
+                                                                trackColor = wavoraBorder,
                                                                 strokeCap = StrokeCap.Round,
                                                                 drawStopIndicator = {},
                                                             )
@@ -1773,16 +1803,14 @@ fun NowPlayingScreenContent(
                                                             if (timelineState.isCrossfading) {
                                                                 SolidColor(sliderTrackColor)
                                                             } else {
-                                                                Brush.horizontalGradient(
-                                                                    colors = listOf(Color(0xFFA259FF), Color(0xFF6A5CFF), Color(0xFF00D4FF)),
-                                                                )
+                                                                wavoraIconGradientBrush
                                                             }
                                                         Box(
                                                             modifier =
                                                                 Modifier
                                                                     .fillMaxWidth()
                                                                     .height(5.dp)
-                                                                    .background(Color(0xFF1F1F2E), RoundedCornerShape(4.dp)),
+                                                                    .background(wavoraBorder, RoundedCornerShape(4.dp)),
                                                         ) {
                                                             Box(
                                                                 modifier =
@@ -1812,7 +1840,7 @@ fun NowPlayingScreenContent(
                                                                 SliderDefaults.colors().copy(
                                                                     thumbColor = sliderTrackColor,
                                                                     activeTrackColor = sliderTrackColor,
-                                                                    inactiveTrackColor = Color(0xFF1F1F2E),
+                                                                    inactiveTrackColor = wavoraBorder,
                                                                 ),
                                                             enabled = true,
                                                         )
@@ -1889,7 +1917,7 @@ fun NowPlayingScreenContent(
                                                 showInfoBottomSheet = true
                                             },
                                         ) {
-                                            Icon(imageVector = Icons.Outlined.Info, tint = Color.White, contentDescription = "")
+                                            Icon(imageVector = Icons.Outlined.Info, tint = Color.White, contentDescription = stringResource(Res.string.song_info))
                                         }
 
                                         Row(
@@ -1930,7 +1958,7 @@ fun NowPlayingScreenContent(
                                                 Icon(
                                                     imageVector = Icons.AutoMirrored.Rounded.QueueMusic,
                                                     tint = Color.White,
-                                                    contentDescription = "",
+                                                    contentDescription = stringResource(Res.string.queue),
                                                 )
                                             }
                                         }
@@ -2161,7 +2189,7 @@ fun NowPlayingScreenContent(
                                                                 Icon(
                                                                     imageVector = Icons.Rounded.CheckCircle,
                                                                     tint = Color.White,
-                                                                    contentDescription = "",
+                                                                    contentDescription = stringResource(Res.string.added_to_liked_songs),
                                                                 )
                                                             }
                                                         } else {
@@ -2180,7 +2208,7 @@ fun NowPlayingScreenContent(
                                                                 Icon(
                                                                     imageVector = Icons.Rounded.AddCircleOutline,
                                                                     tint = Color.White,
-                                                                    contentDescription = "",
+                                                                    contentDescription = stringResource(Res.string.add_to_liked_songs),
                                                                 )
                                                             }
                                                         }
@@ -2615,12 +2643,12 @@ fun NowPlayingScreenContent(
                             sharedViewModel.onUIEvent(UIEvent.ToggleLike)
                         }
                         Spacer(modifier = Modifier.width(15.dp))
-                        Crossfade(targetState = timelineState.loading, label = "") {
+                        Crossfade(targetState = isLoadingState, label = "") {
                             if (it) {
                                 Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(18.dp),
-                                        color = Color.LightGray,
+                                        color = wavoraPrimary,
                                         strokeWidth = 3.dp,
                                     )
                                 }
@@ -2666,10 +2694,7 @@ fun NowPlayingScreenContent(
                                         .fillMaxWidth(collapsedFraction)
                                         .fillMaxHeight()
                                         .background(
-                                            brush =
-                                                Brush.horizontalGradient(
-                                                    colors = listOf(Color(0xFFA259FF), Color(0xFF6A5CFF), Color(0xFF00D4FF)),
-                                                ),
+                                            brush = wavoraIconGradientBrush,
                                             shape = RoundedCornerShape(4.dp),
                                         ),
                             )

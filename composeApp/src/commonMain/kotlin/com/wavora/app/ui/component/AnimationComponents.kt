@@ -35,7 +35,16 @@ import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.wavora.app.ui.theme.md_theme_dark_background
+import com.wavora.app.ui.theme.wavoraGradientEnd
+import com.wavora.app.ui.theme.wavoraGradientStart
 import kotlinx.coroutines.delay
+
+// Hoisted so the default `brush` parameter below doesn't allocate a new Brush on every
+// call site that omits it -- Kotlin evaluates default-parameter expressions at each
+// call, so a function-call default would otherwise run Brush.sweepGradient(...) again
+// on every recomposition that doesn't pass an explicit brush.
+private val defaultBorderAnimationBrush =
+    Brush.sweepGradient(listOf(wavoraGradientStart, wavoraGradientEnd, wavoraGradientStart))
 
 /**
  * A [Surface] with an infinite border animation.
@@ -46,7 +55,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun InfiniteBorderAnimationView(
     isAnimated: Boolean = false,
-    brush: Brush = Brush.sweepGradient(listOf(Color.Gray, Color.White)),
+    brush: Brush = defaultBorderAnimationBrush,
     backgroundColor: Color = MaterialTheme.colorScheme.background,
     contentPadding: Dp = 0.dp,
     borderWidth: Dp = 1.dp,
@@ -111,7 +120,7 @@ fun InfiniteBorderAnimationView(
 @Composable
 fun LimitedBorderAnimationView(
     isAnimated: Boolean = false,
-    brush: Brush = Brush.sweepGradient(listOf(Color.Gray, Color.White)),
+    brush: Brush = defaultBorderAnimationBrush,
     backgroundColor: Color = MaterialTheme.colorScheme.background,
     contentPadding: Dp = 0.dp,
     borderWidth: Dp = 1.dp,

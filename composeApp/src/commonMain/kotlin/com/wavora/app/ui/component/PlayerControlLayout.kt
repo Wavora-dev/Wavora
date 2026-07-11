@@ -37,6 +37,16 @@ import com.wavora.domain.mediaservice.handler.RepeatState
 import com.wavora.app.ui.theme.seed
 import com.wavora.app.ui.theme.transparent
 import com.wavora.app.viewModel.UIEvent
+import org.jetbrains.compose.resources.stringResource
+import wavora.composeapp.generated.resources.Res
+import wavora.composeapp.generated.resources.shuffle
+import wavora.composeapp.generated.resources.previous_track
+import wavora.composeapp.generated.resources.play
+import wavora.composeapp.generated.resources.pause
+import wavora.composeapp.generated.resources.next_track
+import wavora.composeapp.generated.resources.repeat_off
+import wavora.composeapp.generated.resources.repeat_all
+import wavora.composeapp.generated.resources.repeat_one
 
 @Composable
 fun PlayerControlLayout(
@@ -79,14 +89,14 @@ fun PlayerControlLayout(
                         Icon(
                             imageVector = Icons.Rounded.Shuffle,
                             tint = Color.White,
-                            contentDescription = "",
+                            contentDescription = stringResource(Res.string.shuffle),
                             modifier = Modifier.size(smallIcon.first),
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Rounded.Shuffle,
                             tint = seed,
-                            contentDescription = "Shuffle",
+                            contentDescription = stringResource(Res.string.shuffle),
                             modifier = Modifier.size(smallIcon.first),
                         )
                     }
@@ -114,7 +124,7 @@ fun PlayerControlLayout(
                 Icon(
                     imageVector = Icons.Rounded.SkipPrevious,
                     tint = Color.White,
-                    contentDescription = "",
+                    contentDescription = stringResource(Res.string.previous_track),
                     modifier =
                         Modifier
                             .size(mediumIcon.first)
@@ -152,14 +162,14 @@ fun PlayerControlLayout(
                         Icon(
                             imageVector = Icons.Rounded.PlayCircle,
                             tint = Color.White,
-                            contentDescription = "",
+                            contentDescription = stringResource(Res.string.play),
                             modifier = Modifier.size(bigIcon.first).wavoraIconGradient(),
                         )
                     } else {
                         Icon(
                             imageVector = Icons.Rounded.PauseCircle,
                             tint = Color.White,
-                            contentDescription = "",
+                            contentDescription = stringResource(Res.string.pause),
                             modifier = Modifier.size(bigIcon.first).wavoraIconGradient(),
                         )
                     }
@@ -187,7 +197,7 @@ fun PlayerControlLayout(
                 Icon(
                     imageVector = Icons.Rounded.SkipNext,
                     tint = Color.White,
-                    contentDescription = "",
+                    contentDescription = stringResource(Res.string.next_track),
                     modifier =
                         Modifier
                             .size(mediumIcon.first)
@@ -223,7 +233,7 @@ fun PlayerControlLayout(
                             Icon(
                                 imageVector = Icons.Rounded.Repeat,
                                 tint = Color.White,
-                                contentDescription = "",
+                                contentDescription = stringResource(Res.string.repeat_off),
                                 modifier = Modifier.size(smallIcon.first),
                             )
                         }
@@ -232,7 +242,7 @@ fun PlayerControlLayout(
                             Icon(
                                 imageVector = Icons.Rounded.Repeat,
                                 tint = seed,
-                                contentDescription = "Repeat all",
+                                contentDescription = stringResource(Res.string.repeat_all),
                                 modifier = Modifier.size(smallIcon.first),
                             )
                         }
@@ -241,7 +251,7 @@ fun PlayerControlLayout(
                             Icon(
                                 imageVector = Icons.Rounded.RepeatOne,
                                 tint = seed,
-                                contentDescription = "Repeat one",
+                                contentDescription = stringResource(Res.string.repeat_one),
                                 modifier = Modifier.size(smallIcon.first),
                             )
                         }

@@ -33,7 +33,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDateTime
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.added_local_playlist
@@ -167,8 +166,6 @@ class LibraryViewModel(
             }
         }
     }
-
-    fun getYouTubeLoggedIn(): Boolean = runBlocking { dataStoreManager.loggedIn.first() } == DataStoreManager.TRUE
 
     fun getPlaylistFavorite() {
         viewModelScope.launch {

@@ -380,6 +380,12 @@ internal class CrossfadeExoPlayerAdapter(
     }
 
     override fun pause() {
+        Logger.d(
+            "PB_TRACE",
+            "t=${java.time.Instant.now()} thread=${Thread.currentThread().name} " +
+                "CrossfadeExoPlayerAdapter.pause() CALLED | state=$internalState playWhenReady=$internalPlayWhenReady " +
+                "isCrossfading=$isCrossfading song=${currentPlayer?.currentMediaItem?.mediaId}",
+        )
         Logger.d(TAG, "pause() called (state: $internalState, playWhenReady: $internalPlayWhenReady)")
         coroutineScope.launch {
             forwardingPlayer.suppressPlaybackEnded = false
@@ -467,9 +473,33 @@ internal class CrossfadeExoPlayerAdapter(
     ) {
         if (mediaItemIndex !in playlist.indices) return
 
-        coroutineScope.launch {
-            val shouldPlay = internalPlayWhenReady
+        // ROOT CAUSE FIX (see PROMPT_02 Playback Transition Report): `shouldPlay` MUST be
+        // captured here, synchronously, on the caller's thread — NOT inside the coroutine below.
+        // The auto-advance path (STATE_ENDED -> handleTrackEndInternal() -> seekToNext() ->
+        // this function) calls this synchronously from Player.Listener.onPlaybackStateChanged(),
+        // i.e. from ExoPlayer's own internal application thread, at the exact instant we know
+        // for a fact playback was active. Reading `internalPlayWhenReady` here, before any
+        // coroutine dispatch happens, means nothing else can have run in between — no queued
+        // MediaSession/Bluetooth/Android Auto PLAY_PAUSE command, no sleep timer firing, no
+        // concurrent pause() coroutine — because control hasn't been yielded back to a dispatcher
+        // yet. Previously this read happened INSIDE `coroutineScope.launch { }`, which is an
+        // async dispatch with no ordering guarantee relative to other coroutines already queued
+        // on the same scope (e.g. a pause() call racing in from a different thread) — a classic
+        // TOCTOU (time-of-check-to-time-of-use) window. If `pause()` (which also assigns
+        // `internalPlayWhenReady = false` inside its own `coroutineScope.launch { }`) happened to
+        // run before this one during that window, the NEW track would silently start paused even
+        // though the transition itself succeeded — matching the "next song ends up Paused" bug
+        // exactly, and only intermittently, because it required a second unrelated event to land
+        // inside a narrow, non-deterministic async gap. Capturing the value synchronously closes
+        // that gap entirely instead of masking it.
+        val shouldPlay = internalPlayWhenReady
+        Logger.d(
+            "PB_TRACE",
+            "t=${java.time.Instant.now()} thread=${Thread.currentThread().name} " +
+                "CrossfadeExoPlayerAdapter.seekTo(index=$mediaItemIndex) shouldPlay captured synchronously = $shouldPlay",
+        )
 
+        coroutineScope.launch {
             // Cancel any ongoing crossfade
             if (isCrossfading) {
                 Logger.d(TAG, "seekTo: Cancelling crossfade")
@@ -1315,6 +1345,24 @@ internal class CrossfadeExoPlayerAdapter(
 
         val listener =
             object : Player.Listener {
+                override fun onPlayWhenReadyChanged(
+                    playWhenReady: Boolean,
+                    reason: Int,
+                ) {
+                    // Fase 1 instrumentation (see PROMPT_02 Playback Transition Report). This is
+                    // the RAW ExoPlayer event — MediaPlayerListener (the domain-layer
+                    // abstraction) doesn't propagate playWhenReady changes on their own, only
+                    // derived isPlaying changes, so this is the only place this specific signal
+                    // is visible at all.
+                    Logger.d(
+                        "PB_TRACE",
+                        "t=${java.time.Instant.now()} thread=${Thread.currentThread().name} " +
+                            "CrossfadeExoPlayerAdapter.onPlayWhenReadyChanged($playWhenReady, reason=$reason) | " +
+                            "internalState=$internalState internalPlayWhenReady=$internalPlayWhenReady " +
+                            "isCurrentPlayer=${player == currentPlayer} song=${player.currentMediaItem?.mediaId}",
+                    )
+                }
+
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     when (playbackState) {
                         Player.STATE_ENDED -> {
@@ -1451,6 +1499,16 @@ internal class CrossfadeExoPlayerAdapter(
                         Logger.d(TAG, "Ignoring onPlaybackStateChanged from non-current player")
                         return
                     }
+                    // PROMPT_02/06 instrumentation: merged into this pre-existing onEvents
+                    // instead of a second override (Kotlin doesn't allow two `onEvents` overrides
+                    // with the same signature in one Player.Listener — a duplicate was
+                    // mistakenly added here in the PROMPT_02 pass and is fixed by this merge).
+                    Logger.d(
+                        "PB_TRACE",
+                        "t=${java.time.Instant.now()} thread=${Thread.currentThread().name} " +
+                            "CrossfadeExoPlayerAdapter.onEvents(${(0 until events.size()).map { events.get(it) }}) | " +
+                            "isCurrentPlayer=${player == currentPlayer}",
+                    )
                     val shouldBePlaying =
                         !(player.playbackState == Player.STATE_ENDED || !player.playWhenReady)
                     if (events.containsAny(
@@ -1515,6 +1573,12 @@ internal class CrossfadeExoPlayerAdapter(
      * Handle track end - mirrors GstreamerPlayerAdapter.handleTrackEndInternal()
      */
     private fun handleTrackEndInternal() {
+        Logger.d(
+            "PB_TRACE",
+            "t=${java.time.Instant.now()} thread=${Thread.currentThread().name} " +
+                "CrossfadeExoPlayerAdapter.handleTrackEndInternal() | internalPlayWhenReady=$internalPlayWhenReady " +
+                "repeatMode=$internalRepeatMode crossfadeEnabled=$crossfadeEnabled index=$localCurrentMediaItemIndex",
+        )
         // Check if crossfade should be used
         val shouldCrossfade =
             crossfadeEnabled &&

@@ -105,6 +105,9 @@ import wavora.composeapp.generated.resources.unknown
 import wavora.composeapp.generated.resources.videos
 import com.wavora.app.ui.theme.LocalAppTypography
 
+// Hoisted -- was allocated inline on every recomposition of the canvas row.
+private val canvasShineBrush = Brush.sweepGradient(listOf(Color.Transparent, Color.White))
+
 @Composable
 @ExperimentalMaterial3Api
 fun ArtistScreen(
@@ -181,7 +184,7 @@ fun ArtistScreen(
                                         val canvas = canvasUrl ?: return@Row
                                         LimitedBorderAnimationView(
                                             isAnimated = true,
-                                            brush = Brush.sweepGradient(listOf(Color.Transparent, Color.White)),
+                                            brush = canvasShineBrush,
                                             backgroundColor = Color.Transparent,
                                             contentPadding = 2.dp,
                                             borderWidth = 1.dp,
@@ -232,7 +235,7 @@ fun ArtistScreen(
                                 }
                                 LimitedBorderAnimationView(
                                     isAnimated = !isFollowed,
-                                    brush = Brush.sweepGradient(listOf(Color.Gray, Color.White)),
+                                    // brush omitted: matches the component's default brand gradient
                                     backgroundColor = Color.Transparent,
                                     contentPadding = 0.dp,
                                     borderWidth = 2.dp,

@@ -19,13 +19,17 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlin.reflect.KClass
 
 class AppViewModel(
     private val dataStoreManager: DataStoreManager,
     private val updateRepository: UpdateRepository,
 ) : BaseViewModel() {
+
+    // ── Simple key-value persistence (e.g. one-shot promo flags) ───────────
+    suspend fun getString(key: String): String? = dataStoreManager.getString(key).first()
+
+    suspend fun putString(key: String, value: String) = dataStoreManager.putString(key, value)
 
     // ── Flags ─────────────────────────────────────────────────────────────
     var isFirstLiked: Boolean = false
@@ -61,6 +65,19 @@ class AppViewModel(
         viewModelScope, SharingStarted.WhileSubscribed(5000L), 0,
     )
 
+    // ── Location (country/region code, e.g. YT Music content region) ───────
+    // Backed by the same DataStore key MainActivity seeds during first-time
+    // locale migration ("location"). Primed once at app startup so it's
+    // already warm by the time anything downstream needs it.
+    private val _location = MutableStateFlow("")
+    val location: StateFlow<String> = _location
+
+    fun getLocation() {
+        viewModelScope.launch {
+            dataStoreManager.location.collectLatest { _location.value = it }
+        }
+    }
+
     init {
         viewModelScope.launch {
             if (dataStoreManager.appVersion.first() != VersionManager.getVersionName()) {
@@ -69,7 +86,12 @@ class AppViewModel(
             }
             dataStoreManager.openApp()
         }
-        runBlocking {
+        // Was `runBlocking` here, executed synchronously during ViewModel construction (i.e. on
+        // the thread that first resolves this Koin singleton, typically the main thread at cold
+        // start). Moved into its own coroutine so DataStore's disk I/O never blocks the caller;
+        // these flags aren't read anywhere until after construction completes, so resolving them
+        // a frame later has no behavioral effect.
+        viewModelScope.launch {
             dataStoreManager.getString("miniplayer_guide").first().let { isFirstMiniplayer = it != STATUS_DONE }
             dataStoreManager.getString("suggest_guide").first().let { isFirstSuggestions = it != STATUS_DONE }
             dataStoreManager.getString("liked_guide").first().let { isFirstLiked = it != STATUS_DONE }
@@ -83,7 +105,11 @@ class AppViewModel(
     fun showNotificationPermissionDialog() { _showNotificationPermissionDialog.value = true }
     fun dismissNotificationPermissionDialog(doNotShowAgain: Boolean) {
         _showNotificationPermissionDialog.value = false
-        if (doNotShowAgain) putString("notification_permission_do_not_ask", "true")
+        if (doNotShowAgain) {
+            viewModelScope.launch {
+                dataStoreManager.putString("notification_permission_do_not_ask", "true")
+            }
+        }
     }
 
     // ── Reload / recreate ─────────────────────────────────────────────────
@@ -91,10 +117,6 @@ class AppViewModel(
     fun reloadDestinationDone() { _reloadDestination.value = null }
     fun activityRecreate() { _recreateActivity.value = true }
     fun activityRecreateDone() { _recreateActivity.value = false }
-
-    // ── DataStore helpers ─────────────────────────────────────────────────
-    fun getString(key: String): String? = runBlocking { dataStoreManager.getString(key).first() }
-    fun putString(key: String, value: String) = runBlocking { dataStoreManager.putString(key, value) }
 
     // ── Review / lyrics share ─────────────────────────────────────────────
     fun onDoneReview(isDismissOnly: Boolean = true) {
@@ -111,7 +133,18 @@ class AppViewModel(
     }
 
     // ── Update ────────────────────────────────────────────────────────────
-    fun shouldCheckForUpdate(): Boolean = runBlocking { dataStoreManager.autoCheckForUpdates.first() == TRUE }
+    // Used for the *automatic* startup check only. Reads the autoCheckForUpdates preference
+    // inside the coroutine instead of via a blocking runBlocking() call on the caller's thread
+    // (previously executed synchronously in MainActivity.onCreate()/runDesktopApp() before the
+    // first frame). checkForUpdate() itself stays unconditional below, since it's also called
+    // directly by the manual "check for update" button in Settings, which must always run
+    // regardless of this preference.
+    fun checkForUpdateIfEnabled() {
+        viewModelScope.launch {
+            if (dataStoreManager.autoCheckForUpdates.first() != TRUE) return@launch
+            checkForUpdate()
+        }
+    }
 
     fun checkForUpdate() {
         viewModelScope.launch {

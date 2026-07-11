@@ -293,6 +293,12 @@ class VlcPlayerAdapter(
     }
 
     override fun pause() {
+        Logger.d(
+            "PB_TRACE",
+            "t=${java.time.Instant.now()} thread=${Thread.currentThread().name} " +
+                "VlcPlayerAdapter.pause() CALLED | state=$internalState playWhenReady=$internalPlayWhenReady " +
+                "isCrossfading=$isCrossfading song=${currentPlayer?.let { playlist.getOrNull(localCurrentMediaItemIndex)?.mediaId }}",
+        )
         Logger.d(TAG, "pause() called (current state: $internalState)")
         coroutineScope.launch {
             // Cancel any ongoing crossfade and await completion before proceeding
@@ -353,9 +359,23 @@ class VlcPlayerAdapter(
     ) {
         if (mediaItemIndex !in playlist.indices) return
 
-        coroutineScope.launch {
-            val shouldPlay = internalPlayWhenReady
+        // ROOT CAUSE FIX (see PROMPT_02 Playback Transition Report) — same fix as
+        // CrossfadeExoPlayerAdapter.seekTo() on Android, same underlying bug: `shouldPlay` must
+        // be captured synchronously here, before the coroutine below is even launched, not read
+        // from inside it. handleTrackEndInternal() -> seekToNext() -> this function runs
+        // synchronously from the VLC end-reached callback, at the exact instant we know playback
+        // was active. Reading `internalPlayWhenReady` later, inside `coroutineScope.launch { }`,
+        // left a TOCTOU window where a concurrently-dispatched pause() (which also mutates
+        // `internalPlayWhenReady` inside its own coroutine) could run first and silently leave
+        // the next track paused, intermittently, whenever some other event landed in that gap.
+        val shouldPlay = internalPlayWhenReady
+        Logger.d(
+            "PB_TRACE",
+            "t=${java.time.Instant.now()} thread=${Thread.currentThread().name} " +
+                "VlcPlayerAdapter.seekTo(index=$mediaItemIndex) shouldPlay captured synchronously = $shouldPlay",
+        )
 
+        coroutineScope.launch {
             // Cancel any ongoing crossfade and await completion
             if (isCrossfading) {
                 Logger.d(TAG, "seekTo: Cancelling crossfade")
@@ -1363,6 +1383,12 @@ class VlcPlayerAdapter(
      * Handle track end
      */
     private fun handleTrackEndInternal() {
+        Logger.d(
+            "PB_TRACE",
+            "t=${java.time.Instant.now()} thread=${Thread.currentThread().name} " +
+                "VlcPlayerAdapter.handleTrackEndInternal() | internalPlayWhenReady=$internalPlayWhenReady " +
+                "repeatMode=$internalRepeatMode crossfadeEnabled=$crossfadeEnabled index=$localCurrentMediaItemIndex",
+        )
         // If crossfade is already in progress (triggered by position update before track ended),
         // don't interrupt it. The old player ending is expected — the crossfade will complete
         // and finalizeCrossfade() will handle the transition.

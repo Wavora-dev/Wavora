@@ -122,6 +122,12 @@ import com.wavora.app.ui.navigation.destination.login.SpotifyLoginDestination
 import com.wavora.app.ui.theme.DarkColors
 import com.wavora.app.ui.theme.md_theme_dark_primary
 import com.wavora.app.ui.theme.typo
+import com.wavora.app.ui.theme.wavoraBorder
+import com.wavora.app.ui.theme.wavoraGradientMid
+import com.wavora.app.ui.theme.wavoraPrimary
+import com.wavora.app.ui.theme.wavoraSecondary
+import com.wavora.app.ui.theme.wavoraSurface
+import com.wavora.app.ui.theme.wavoraTextDisabled
 import com.wavora.app.ui.theme.white
 import com.wavora.app.utils.VersionManager
 import com.wavora.app.viewModel.SettingAlertState
@@ -328,6 +334,8 @@ import wavora.composeapp.generated.resources.user_interface
 import wavora.composeapp.generated.resources.version
 import wavora.composeapp.generated.resources.version_format
 import wavora.composeapp.generated.resources.video_download_quality
+import wavora.composeapp.generated.resources.download_video_for_video_tracks
+import wavora.composeapp.generated.resources.when_off_only_audio_is_downloaded_for_video_tracks_regular_songs_are_not_affected
 import wavora.composeapp.generated.resources.video_quality
 import wavora.composeapp.generated.resources.warning
 import wavora.composeapp.generated.resources.weekly
@@ -337,6 +345,8 @@ import wavora.composeapp.generated.resources.youtube_account
 import wavora.composeapp.generated.resources.youtube_subtitle_language
 import wavora.composeapp.generated.resources.youtube_subtitle_language_message
 import wavora.composeapp.generated.resources.youtube_transcript
+import wavora.composeapp.generated.resources.combine_local_and_youtube_liked_songs
+import wavora.composeapp.generated.resources.combine_local_and_youtube_liked_songs_description
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -468,6 +478,7 @@ fun SettingScreen(
     val quality by viewModel.quality.collectAsStateWithLifecycle()
     val downloadQuality by viewModel.downloadQuality.collectAsStateWithLifecycle()
     val videoDownloadQuality by viewModel.videoDownloadQuality.collectAsStateWithLifecycle()
+    val downloadVideoEnabled by viewModel.downloadVideoEnabled.map { it == TRUE }.collectAsStateWithLifecycle(initialValue = true)
     val keepYoutubePlaylistOffline by viewModel.keepYouTubePlaylistOffline.collectAsStateWithLifecycle()
     val localTrackingEnabled by viewModel.localTrackingEnabled.collectAsStateWithLifecycle(initialValue = false)
     val combineLocalAndYouTubeLiked by viewModel.combineLocalAndYouTubeLiked.collectAsStateWithLifecycle()
@@ -784,6 +795,12 @@ fun SettingScreen(
                             ),
                         )
                     },
+                )
+                SettingItem(
+                    title = stringResource(Res.string.download_video_for_video_tracks),
+                    subtitle = stringResource(Res.string.when_off_only_audio_is_downloaded_for_video_tracks_regular_songs_are_not_affected),
+                    smallSubtitle = true,
+                    switch = (downloadVideoEnabled to { viewModel.setDownloadVideoEnabled(it) }),
                 )
                 SettingItem(
                     title = stringResource(Res.string.send_back_listening_data_to_google),
@@ -1778,7 +1795,7 @@ fun SettingScreen(
                                             .width(
                                                 (fraction.playerCache * width).dp,
                                             ).background(
-                                                Color(0xD5FFFF00),
+                                                wavoraSecondary,
                                             ).fillMaxHeight(),
                                 )
                             }
@@ -1789,7 +1806,7 @@ fun SettingScreen(
                                             .width(
                                                 (fraction.canvasCache * width).dp,
                                             ).background(
-                                                Color.Cyan,
+                                                wavoraGradientMid,
                                             ).fillMaxHeight(),
                                 )
                             }
@@ -1800,7 +1817,7 @@ fun SettingScreen(
                                             .width(
                                                 (fraction.thumbCache * width).dp,
                                             ).background(
-                                                Color.Magenta,
+                                                wavoraTextDisabled,
                                             ).fillMaxHeight(),
                                 )
                             }
@@ -1822,7 +1839,7 @@ fun SettingScreen(
                                             .width(
                                                 (fraction.freeSpace * width).dp,
                                             ).background(
-                                                Color.DarkGray,
+                                                wavoraBorder,
                                             ).fillMaxHeight(),
                                 )
                             }
@@ -1867,7 +1884,7 @@ fun SettingScreen(
                                 .size(12.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    Color.Yellow,
+                                    wavoraSecondary,
                                 ),
                         )
                         Spacer(Modifier.width(8.dp))
@@ -1882,7 +1899,7 @@ fun SettingScreen(
                                 .size(12.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    Color.Cyan,
+                                    wavoraGradientMid,
                                 ),
                         )
                         Spacer(Modifier.width(8.dp))
@@ -1897,7 +1914,7 @@ fun SettingScreen(
                                 .size(12.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    Color.Magenta,
+                                    wavoraTextDisabled,
                                 ),
                         )
                         Spacer(Modifier.width(8.dp))
@@ -1927,7 +1944,7 @@ fun SettingScreen(
                                 .size(12.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    Color.LightGray,
+                                    wavoraBorder,
                                 ),
                         )
                         Spacer(Modifier.width(8.dp))
@@ -2171,7 +2188,7 @@ fun SettingScreen(
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.large,
-                color = Color(0xFF242424),
+                color = wavoraSurface,
                 tonalElevation = AlertDialogDefaults.TonalElevation,
                 shadowElevation = 1.dp,
             ) {

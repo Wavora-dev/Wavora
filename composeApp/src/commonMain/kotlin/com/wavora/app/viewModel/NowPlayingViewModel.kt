@@ -30,7 +30,6 @@ import com.wavora.domain.utils.toTrack
 import com.wavora.app.expect.getDownloadFolderPath
 import com.wavora.app.expect.ui.toByteArray
 import com.wavora.app.viewModel.base.BaseViewModel
-import com.wavora.logger.LogLevel
 import com.wavora.logger.Logger
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,9 +42,10 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.added_to_youtube_liked
 import wavora.composeapp.generated.resources.error
@@ -114,7 +114,7 @@ class NowPlayingViewModel(
                 canvasData = null,
                 lyricsData = null,
                 songInfoData = null,
-                playlistName = mediaPlayerHandler.queueData.value?.data?.playlistName ?: "",
+                playlistName = playerSession.queue.value.data.playlistName ?: "",
             )
         }
         state.mediaItem.let { now ->
@@ -153,7 +153,14 @@ class NowPlayingViewModel(
         _nowPlayingScreenData.update { it.copy(bitmap = bitmap) }
     }
 
-    fun blurFullscreenLyrics(): Boolean = runBlocking { dataStoreManager.blurFullscreenLyrics.first() == TRUE }
+    // Cached in-memory so blurFullscreenLyrics() below can return synchronously without ever
+    // touching disk on the calling thread. This is called directly from a Composable body
+    // (NowPlayingScreen), so the previous `runBlocking { ... }` re-read DataStore on every
+    // recomposition — a real jank risk on the most performance-sensitive screen in the app.
+    private val _blurFullscreenLyricsFlag: StateFlow<String> =
+        dataStoreManager.blurFullscreenLyrics.stateIn(viewModelScope, SharingStarted.Eagerly, FALSE)
+
+    fun blurFullscreenLyrics(): Boolean = _blurFullscreenLyricsFlag.value == TRUE
 
     // ── Like status ───────────────────────────────────────────────────────
     private fun getLikeStatus(videoId: String?) {
@@ -168,11 +175,11 @@ class NowPlayingViewModel(
 
     fun addToYouTubeLiked() {
         viewModelScope.launch {
-            val videoId = mediaPlayerHandler.nowPlaying.first()?.mediaId
+            val videoId = playerSession.currentSong.first()?.mediaId
             if (videoId != null) {
                 val like = likeStatus.value
                 if (!like) {
-                    songRepository.addToYouTubeLiked(mediaPlayerHandler.nowPlaying.first()?.mediaId)
+                    songRepository.addToYouTubeLiked(playerSession.currentSong.first()?.mediaId)
                         .collect { response ->
                             if (response == 200) {
                                 makeToast(getString(Res.string.added_to_youtube_liked))
@@ -180,7 +187,7 @@ class NowPlayingViewModel(
                             } else makeToast(getString(Res.string.error))
                         }
                 } else {
-                    songRepository.removeFromYouTubeLiked(mediaPlayerHandler.nowPlaying.first()?.mediaId)
+                    songRepository.removeFromYouTubeLiked(playerSession.currentSong.first()?.mediaId)
                         .collect {
                             if (it == 200) {
                                 makeToast(getString(Res.string.removed_from_youtube_liked))
@@ -351,7 +358,7 @@ class NowPlayingViewModel(
             val artist = if (artistName?.firstOrNull() != null && artistName.firstOrNull()?.contains("Various Artists") == false) {
                 artistName.firstOrNull()
             } else {
-                mediaPlayerHandler.nowPlaying.first()?.metadata?.artist ?: ""
+                playerSession.currentSong.first()?.metadata?.artist ?: ""
             }
             resetLyricsVoteState()
             when (dataStoreManager.lyricsProvider.first()) {

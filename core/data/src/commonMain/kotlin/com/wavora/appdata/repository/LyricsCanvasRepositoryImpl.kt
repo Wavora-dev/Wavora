@@ -33,7 +33,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import com.wavora.aiservice.AiClient
-import com.wavora.lyrics.WavoraLyricsClient
+import com.wavora.lyrics.LyricsManager
 import com.wavora.lyrics.models.request.LyricsBody
 import com.wavora.lyrics.models.request.TranslatedLyricsBody
 import com.wavora.lyrics.parser.parseTtmlLyrics
@@ -45,7 +45,13 @@ internal class LyricsCanvasRepositoryImpl(
     private val localDataSource: LocalDataSource,
     private val youTube: YouTube,
     private val spotify: Spotify,
-    private val simpMusicLyrics: WavoraLyricsClient,
+    // Field name kept as `simpMusicLyrics` on purpose: it is unrelated to the
+    // api-lyrics.wavora.org migration (it predates it, from this project's
+    // original fork) and is referenced only within this file, so renaming it
+    // would be a purely cosmetic, non-functional change outside this
+    // integration's scope. Its *type* is what changed: LyricsManager now
+    // talks to the new Cloudflare Workers backend instead of the dead API.
+    private val simpMusicLyrics: LyricsManager,
     private val aiClient: AiClient,
 ) : LyricsCanvasRepository {
     override fun getSavedLyrics(videoId: String): Flow<LyricsEntity?> = flow { emit(localDataSource.getSavedLyrics(videoId)) }.flowOn(Dispatchers.IO)

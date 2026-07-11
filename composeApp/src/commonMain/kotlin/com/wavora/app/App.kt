@@ -107,7 +107,11 @@ import wavora.composeapp.generated.resources.cancel
 import wavora.composeapp.generated.resources.do_not_show_again
 import wavora.composeapp.generated.resources.download
 import wavora.composeapp.generated.resources.good_night
+import wavora.composeapp.generated.resources.later
 import wavora.composeapp.generated.resources.notification
+import wavora.composeapp.generated.resources.notification_primer_allow
+import wavora.composeapp.generated.resources.notification_primer_description
+import wavora.composeapp.generated.resources.notification_primer_title
 import wavora.composeapp.generated.resources.sleep_timer_off
 import wavora.composeapp.generated.resources.this_app_needs_to_access_your_notification
 import wavora.composeapp.generated.resources.this_link_is_not_supported
@@ -121,7 +125,17 @@ import com.wavora.app.ui.theme.LocalAppTypography
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalTime::class, ExperimentalFoundationApi::class, ExperimentalHazeMaterialsApi::class)
 @Composable
-fun App(viewModel: SharedViewModel = koinInject()) {
+fun App(
+    viewModel: SharedViewModel = koinInject(),
+    // ── First-run notification permission priming (Android only) ──────────
+    // Whether the OS-level POST_NOTIFICATIONS permission hasn't been asked/declined yet.
+    // MainActivity computes this synchronously (SDK check + persisted flags) and decides
+    // *whether* to offer it; App decides *when* — never while onboarding is on screen.
+    // Desktop/iOS never pass this, so it defaults to false and the primer never appears there.
+    shouldOfferNotificationPermission: Boolean = false,
+    onRequestNotificationPermission: () -> Unit = {},
+    onNotificationPermissionDeclined: () -> Unit = {},
+) {
     val windowSize = currentWindowAdaptiveInfo().windowSizeClass
     val navController = rememberNavController()
 
@@ -332,13 +346,30 @@ fun App(viewModel: SharedViewModel = koinInject()) {
 
     var shouldShowCafecitoDialog by rememberSaveable { mutableStateOf(false) }
     var showOnboarding by rememberSaveable { mutableStateOf(false) }
+    var showNotificationPermissionPrimer by rememberSaveable { mutableStateOf(false) }
     val openAppTime by viewModel.openAppTime.collectAsStateWithLifecycle()
 
-    // Show Cafecito dialog only on first launch ever (openAppTime == 1)
+    // First-ever launch: show onboarding, and nothing else on top of it.
+    // Everything that used to fire in this same instant (the Cafecito support dialog,
+    // the notification-permission ask) is deliberately spaced out below so a brand-new
+    // user only ever deals with one thing at a time.
     LaunchedEffect(openAppTime) {
         if (openAppTime == 1) {
-            shouldShowCafecitoDialog = true
             showOnboarding = true
+        } else if (openAppTime > 1 && shouldOfferNotificationPermission) {
+            // Not the very first session (onboarding already ran, or this device skipped it) —
+            // safe to offer the notification-permission primer right away.
+            showNotificationPermissionPrimer = true
+        }
+    }
+
+    // Cafecito "support the app" ask — moved off the first-launch moment entirely.
+    // Asking for money before the user has even played a song reads as tone-deaf; asking
+    // after a handful of real sessions (and once onboarding + permission priming are long
+    // done) respects the moment instead of competing with it.
+    LaunchedEffect(openAppTime) {
+        if (openAppTime == 7) {
+            shouldShowCafecitoDialog = true
         }
     }
 
@@ -541,7 +572,64 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                 // Onboarding — shown on very first launch
                 if (showOnboarding) {
                     OnboardingScreen(
-                    onFinish = { showOnboarding = false },
+                        onFinish = {
+                            showOnboarding = false
+                            // Only once the user has actually finished meeting the app do we
+                            // consider asking for the notification permission.
+                            if (shouldOfferNotificationPermission) {
+                                showNotificationPermissionPrimer = true
+                            }
+                        },
+                    )
+                }
+
+                // Notification permission primer — a plain-language "why" shown once, in-app,
+                // before the OS system dialog ever appears. Replaces firing the system prompt
+                // synchronously in MainActivity.onCreate() (before the user had seen anything).
+                if (showNotificationPermissionPrimer) {
+                    AlertDialog(
+                        onDismissRequest = {
+                            showNotificationPermissionPrimer = false
+                            onNotificationPermissionDeclined()
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    showNotificationPermissionPrimer = false
+                                    onRequestNotificationPermission()
+                                },
+                            ) {
+                                Text(
+                                    stringResource(Res.string.notification_primer_allow),
+                                    style = LocalAppTypography.current.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                )
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(
+                                onClick = {
+                                    showNotificationPermissionPrimer = false
+                                    onNotificationPermissionDeclined()
+                                },
+                            ) {
+                                Text(
+                                    stringResource(Res.string.later),
+                                    style = LocalAppTypography.current.bodySmall,
+                                )
+                            }
+                        },
+                        title = {
+                            Text(
+                                stringResource(Res.string.notification_primer_title),
+                                style = LocalAppTypography.current.labelSmall,
+                            )
+                        },
+                        text = {
+                            Text(
+                                stringResource(Res.string.notification_primer_description),
+                                style = LocalAppTypography.current.bodySmall,
+                            )
+                        },
                     )
                 }
 
@@ -743,14 +831,14 @@ fun App(viewModel: SharedViewModel = koinInject()) {
                         },
                         title = {
                             Text(
-                                "Welcome to Wavora 👋",
+                                "Enjoying Wavora? ☕",
                                 style = LocalAppTypography.current.labelSmall.copy(fontWeight = FontWeight.Bold),
                             )
                         },
                         text = {
                             Column {
                                 Text(
-                                    "Wavora is free and always will be.\n\nIf you enjoy the app, consider buying me a coffee — it helps keep development going and new features coming.",
+                                    "Wavora is free and always will be.\n\nIf you've been enjoying it, consider buying me a coffee — it helps keep development going and new features coming.",
                                     style = LocalAppTypography.current.bodySmall,
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))

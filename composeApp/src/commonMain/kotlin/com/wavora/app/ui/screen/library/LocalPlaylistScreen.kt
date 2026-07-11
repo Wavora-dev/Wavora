@@ -4,7 +4,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutLinearInEasing
-
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -181,7 +180,10 @@ import wavora.composeapp.generated.resources.cancel
 import wavora.composeapp.generated.resources.created_at
 import wavora.composeapp.generated.resources.download_button
 import wavora.composeapp.generated.resources.downloaded
+import wavora.composeapp.generated.resources.download
 import wavora.composeapp.generated.resources.downloading
+import wavora.composeapp.generated.resources.more
+import wavora.composeapp.generated.resources.shuffle
 import wavora.composeapp.generated.resources.reload
 import wavora.composeapp.generated.resources.sort_by
 import wavora.composeapp.generated.resources.suggest
@@ -191,7 +193,19 @@ import wavora.composeapp.generated.resources.unsync_playlist_warning
 import wavora.composeapp.generated.resources.warning
 import wavora.composeapp.generated.resources.yes
 import wavora.composeapp.generated.resources.your_playlist
+import wavora.composeapp.generated.resources.change_order
+import wavora.composeapp.generated.resources.done
+import wavora.composeapp.generated.resources.sort_playlist
 import com.wavora.app.ui.theme.LocalAppTypography
+import com.wavora.app.ui.theme.wavoraBorder
+import com.wavora.app.ui.theme.wavoraSecondary
+import com.wavora.app.ui.theme.wavoraTextSecondary
+
+// "AI suggestions" accent gradient (blue -> pink), intentionally distinct from the
+// wavoraIconGradientBrush violet/cyan brand gradient used for playback -- it's a
+// deliberate visual cue that this control triggers an AI action, not a color that
+// drifted off-brand. Defined once here instead of being hardcoded twice further down.
+private val aiSuggestGradientColors = listOf(Color(0xFF4C82EF), Color(0xFFD96570))
 
 private const val TAG = "LocalPlaylistScreen"
 
@@ -715,11 +729,7 @@ fun LocalPlaylistScreen(
                                                                 val offsetDraw = width * progressAnimated
                                                                 val brush =
                                                                     Brush.linearGradient(
-                                                                        colors =
-                                                                            listOf(
-                                                                                Color(0xFF4C82EF),
-                                                                                Color(0xFFD96570),
-                                                                            ),
+                                                                        colors = aiSuggestGradientColors,
                                                                         start = Offset(offsetDraw, 0f),
                                                                         end =
                                                                             Offset(
@@ -743,7 +753,7 @@ fun LocalPlaylistScreen(
                                         ) {
                                             Icon(
                                                 painter = painterResource(Res.drawable.baseline_more_vert_24),
-                                                contentDescription = "More",
+                                                contentDescription = stringResource(Res.string.more),
                                                 tint = Color.White,
                                             )
                                         }
@@ -856,7 +866,7 @@ fun LocalPlaylistScreen(
                                         ) {
                                             Icon(
                                                 imageVector = Icons.Rounded.Shuffle,
-                                                contentDescription = "Shuffle",
+                                                contentDescription = stringResource(Res.string.shuffle),
                                                 tint = Color.White,
                                                 modifier = Modifier.size(22.dp),
                                             )
@@ -921,8 +931,8 @@ fun LocalPlaylistScreen(
                                                         ) {
                                                             Icon(
                                                                 painter = painterResource(Res.drawable.baseline_downloaded),
-                                                                tint = Color(0xFF00A0CB),
-                                                                contentDescription = "",
+                                                                tint = wavoraSecondary,
+                                                                contentDescription = stringResource(Res.string.downloaded),
                                                                 modifier = Modifier.size(22.dp),
                                                             )
                                                         }
@@ -946,7 +956,7 @@ fun LocalPlaylistScreen(
                                                                         composition = composition,
                                                                         iterations = Compottie.IterateForever,
                                                                     ),
-                                                                contentDescription = "Lottie animation",
+                                                                contentDescription = stringResource(Res.string.downloading),
                                                                 modifier = Modifier.size(28.dp),
                                                             )
                                                         }
@@ -966,7 +976,7 @@ fun LocalPlaylistScreen(
                                                             Icon(
                                                                 painter = painterResource(Res.drawable.download_button),
                                                                 tint = Color.White,
-                                                                contentDescription = "Download",
+                                                                contentDescription = stringResource(Res.string.download),
                                                                 modifier = Modifier.size(22.dp),
                                                             )
                                                         }
@@ -1018,8 +1028,8 @@ fun LocalPlaylistScreen(
                                                     ) {
                                                         Icon(
                                                             painter = painterResource(Res.drawable.baseline_downloaded),
-                                                            tint = Color(0xFF00A0CB),
-                                                            contentDescription = "",
+                                                            tint = wavoraSecondary,
+                                                            contentDescription = stringResource(Res.string.downloaded),
                                                             modifier =
                                                                 Modifier
                                                                     .size(36.dp)
@@ -1045,7 +1055,7 @@ fun LocalPlaylistScreen(
                                                                     composition = composition,
                                                                     iterations = Compottie.IterateForever,
                                                                 ),
-                                                            contentDescription = "Lottie animation",
+                                                            contentDescription = stringResource(Res.string.downloading),
                                                             modifier = Modifier.fillMaxSize(),
                                                         )
                                                     }
@@ -1080,11 +1090,7 @@ fun LocalPlaylistScreen(
                                                             val width = size.width
                                                             val height = size.height
                                                             val offsetDraw = width * progressAnimated
-                                                            val gradientColors =
-                                                                listOf(
-                                                                    Color(0xFF4C82EF),
-                                                                    Color(0xFFD96570),
-                                                                )
+                                                            val gradientColors = aiSuggestGradientColors
                                                             val brush =
                                                                 Brush.linearGradient(
                                                                     colors = gradientColors,
@@ -1210,7 +1216,7 @@ fun LocalPlaylistScreen(
                                         }
                                         Spacer(modifier = Modifier.size(12.dp))
                                         HorizontalDivider(
-                                            color = Color.Gray,
+                                            color = wavoraBorder,
                                             thickness = 0.5.dp,
                                         )
                                         Spacer(modifier = Modifier.size(8.dp))
@@ -1232,7 +1238,7 @@ fun LocalPlaylistScreen(
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.AutoMirrored.Sharp.Sort,
-                                                    contentDescription = "Sort playlist",
+                                                    contentDescription = stringResource(Res.string.sort_playlist),
                                                     tint = Color.White,
                                                     modifier = Modifier.size(20.dp),
                                                 )
@@ -1260,7 +1266,7 @@ fun LocalPlaylistScreen(
                                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                                     Icon(
                                                         imageVector = Icons.AutoMirrored.Sharp.Sort,
-                                                        contentDescription = "Sort playlist",
+                                                        contentDescription = stringResource(Res.string.sort_playlist),
                                                         tint = Color.White,
                                                         modifier = Modifier.size(24.dp),
                                                     )
@@ -1272,7 +1278,7 @@ fun LocalPlaylistScreen(
                                                                     uiState.filterState.displayNameRes(),
                                                                 ),
                                                         style = LocalAppTypography.current.bodySmall,
-                                                        color = Color.Gray,
+                                                        color = wavoraTextSecondary,
                                                     )
                                                 }
                                             }
@@ -1292,12 +1298,12 @@ fun LocalPlaylistScreen(
                                                 Text(
                                                     text =
                                                         if (changingOrder) {
-                                                            "Done"
+                                                            stringResource(Res.string.done)
                                                         } else {
-                                                            "Change order"
+                                                            stringResource(Res.string.change_order)
                                                         },
                                                     style = LocalAppTypography.current.bodySmall,
-                                                    color = if (isMobilePortrait) Color.White else Color.Gray,
+                                                    color = if (isMobilePortrait) Color.White else wavoraTextSecondary,
                                                 )
                                             }
                                         }

@@ -32,14 +32,20 @@ import com.wavora.common.SUPPORTED_LOCATION
 import com.wavora.domain.model.model.intent.GenericIntent
 import com.wavora.domain.mediaservice.handler.MediaPlayerHandler
 import com.wavora.domain.mediaservice.handler.ToastType
+import com.wavora.domain.mediaservice.session.PlayerSessionAdapter
 import com.wavora.logger.Logger
 import com.wavora.media3.di.setServiceActivitySession
 import com.wavora.app.di.viewModelModule
 import com.wavora.app.service.test.notification.NotifyWork
 import com.wavora.app.utils.ComposeResUtils
 import com.wavora.app.utils.VersionManager
+import com.wavora.app.viewModel.AppViewModel
+import com.wavora.app.viewModel.NowPlayingViewModel
+import com.wavora.app.viewModel.PlayerViewModel
+import com.wavora.app.viewModel.SearchViewModel
 import com.wavora.app.viewModel.SharedViewModel
 import kotlinx.coroutines.runBlocking
+import org.koin.android.ext.android.getKoin
 import org.koin.android.ext.android.inject
 import org.koin.core.context.loadKoinModules
 import org.koin.core.context.unloadKoinModules
@@ -53,6 +59,7 @@ import java.util.concurrent.TimeUnit
 class MainActivity : AppCompatActivity() {
     val viewModel: SharedViewModel by inject()
     val mediaPlayerHandler by inject<MediaPlayerHandler>()
+    val playerSessionAdapter by inject<PlayerSessionAdapter>()
 
     private var mBound = false
     private var shouldUnbind = false
@@ -106,6 +113,24 @@ class MainActivity : AppCompatActivity() {
                 single<AppCompatActivity> { this@MainActivity }
             },
         )
+        // PROMPT_06 OOM investigation: PlayerViewModel/NowPlayingViewModel/AppViewModel/
+        // SharedViewModel/SearchViewModel are registered as Koin `single { }` (see
+        // ViewModelModule.kt — "singletons so they survive across screens"), NOT via the
+        // `viewModel { }` DSL used by every other ViewModel. Because of that, replacing them
+        // below with unloadKoinModules/loadKoinModules never goes through Android's
+        // ViewModelStore, so the framework never calls clear() on the previous instances —
+        // their init-block collectors (observing MediaPlayerHandler's app-wide hot StateFlows)
+        // kept running forever on an object graph Koin could no longer reach but the JVM still
+        // could, via those very coroutines. Every Activity recreation (every reopen of the app)
+        // leaked one more of these fully-alive ViewModel graphs — the root cause of the
+        // cumulative OutOfMemoryError reported in production after repeated open/close cycles.
+        // forceClear() is a no-op-safe (idempotent cancel) equivalent of the onCleared() that
+        // was already correctly implemented but never actually invoked in this usage pattern.
+        getKoin().getOrNull<SharedViewModel>()?.forceClear()
+        getKoin().getOrNull<PlayerViewModel>()?.forceClear()
+        getKoin().getOrNull<NowPlayingViewModel>()?.forceClear()
+        getKoin().getOrNull<AppViewModel>()?.forceClear()
+        getKoin().getOrNull<SearchViewModel>()?.forceClear()
         // Recreate view model to fix the issue of view model not getting data from the service
         unloadKoinModules(viewModelModule)
         loadKoinModules(viewModelModule)
@@ -200,20 +225,17 @@ class MainActivity : AppCompatActivity() {
             request,
         )
 
+        var shouldOfferNotificationPermission = false
         if (!EasyPermissions.hasPermissions(this, Manifest.permission.POST_NOTIFICATIONS)) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 val doNotAsk = getString("notification_permission_do_not_ask")
                 if (doNotAsk != "true") {
                     val wasAsked = getString("notification_permission_asked")
                     if (wasAsked != "true") {
-                        // First time: request system permission
-                        EasyPermissions.requestPermissions(
-                            this,
-                            runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.NOTIFICATION_REQUEST) },
-                            1,
-                            Manifest.permission.POST_NOTIFICATIONS,
-                        )
-                        putString("notification_permission_asked", "true")
+                        // First time ever: don't fire the OS dialog synchronously here — it would
+                        // be the very first thing the user sees, before Wavora itself. Defer to
+                        // an in-app primer shown by Compose at the right moment (after onboarding).
+                        shouldOfferNotificationPermission = true
                     } else {
                         // Already asked before: show custom dialog with "Don't show again"
                         viewModel.showNotificationPermissionDialog()
@@ -224,7 +246,12 @@ class MainActivity : AppCompatActivity() {
         viewModel.getLocation()
 
         setContent {
-            App(viewModel)
+            App(
+                viewModel = viewModel,
+                shouldOfferNotificationPermission = shouldOfferNotificationPermission,
+                onRequestNotificationPermission = { requestNotificationPermissionFirstTime() },
+                onNotificationPermissionDeclined = { putString("notification_permission_asked", "true") },
+            )
         }
     }
 
@@ -252,6 +279,7 @@ class MainActivity : AppCompatActivity() {
             .startService(this@MainActivity, serviceConnection)
         mediaPlayerHandler.pushPlayerError = { it ->
             pushPlayerError(it)
+            playerSessionAdapter.reportError(it)
         }
         mediaPlayerHandler.showToast = { type ->
             viewModel.makeToast(
@@ -272,19 +300,32 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkForUpdate() {
-        if (viewModel.shouldCheckForUpdate()) {
-            viewModel.checkForUpdate()
-        }
+        viewModel.checkForUpdateIfEnabled()
+    }
+
+    /**
+     * Fires the actual OS POST_NOTIFICATIONS request. Only ever called from the in-app
+     * primer dialog's "Allow" action (see App.kt), never synchronously from onCreate, so the
+     * system dialog never preempts the user's first look at the app.
+     */
+    private fun requestNotificationPermissionFirstTime() {
+        EasyPermissions.requestPermissions(
+            this,
+            runBlocking { ComposeResUtils.getResString(ComposeResUtils.StringType.NOTIFICATION_REQUEST) },
+            1,
+            Manifest.permission.POST_NOTIFICATIONS,
+        )
+        putString("notification_permission_asked", "true")
     }
 
     private fun putString(
         key: String,
         value: String,
     ) {
-        viewModel.putString(key, value)
+        runBlocking { viewModel.putString(key, value) }
     }
 
-    private fun getString(key: String): String? = viewModel.getString(key)
+    private fun getString(key: String): String? = runBlocking { viewModel.getString(key) }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)

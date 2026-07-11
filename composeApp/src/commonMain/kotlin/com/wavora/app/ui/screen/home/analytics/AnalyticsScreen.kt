@@ -77,6 +77,8 @@ import com.wavora.app.ui.navigation.destination.list.AlbumDestination
 import com.wavora.app.ui.navigation.destination.list.ArtistDestination
 import com.wavora.app.ui.screen.library.LibraryDynamicPlaylistType
 import com.wavora.app.ui.theme.typo
+import com.wavora.app.ui.theme.wavoraBorder
+import com.wavora.app.ui.theme.wavoraSurface
 import com.wavora.app.viewModel.AnalyticsUiState
 import com.wavora.app.viewModel.AnalyticsViewModel
 import com.wavora.app.viewModel.SharedViewModel
@@ -201,7 +203,7 @@ fun AnalyticsScreen(
                                         .diskCacheKey(topTrack.second.thumbnails)
                                         .crossfade(550)
                                         .build(),
-                                contentDescription = "",
+                                contentDescription = null,
                                 contentScale = ContentScale.Crop,
                                 modifier =
                                     Modifier
@@ -690,7 +692,7 @@ fun AnalyticsScreen(
                                                             .wrapContentHeight()
                                                             .fillMaxWidth(pair.first.playCount.toFloat() / maxPlays)
                                                             .clip(CircleShape)
-                                                            .background(Color.DarkGray),
+                                                            .background(wavoraBorder),
                                                 ) {
                                                     Text(
                                                         text = "",
@@ -793,7 +795,7 @@ fun AnalyticsScreen(
                                                             .fillMaxWidth(playCount.toFloat() / maxPlays)
                                                             .padding(vertical = 4.dp)
                                                             .clip(CircleShape)
-                                                            .background(Color.DarkGray),
+                                                            .background(wavoraBorder),
                                                 ) {
                                                     Text(
                                                         text = "",
@@ -852,7 +854,7 @@ fun AnalyticsScreen(
                         colors =
                             IconButtonDefaults.iconButtonColors().copy(
                                 containerColor =
-                                    Color.DarkGray.copy(
+                                    wavoraSurface.copy(
                                         alpha = 0.8f,
                                     ),
                                 contentColor =
@@ -882,7 +884,7 @@ fun AnalyticsScreen(
                         colors =
                             IconButtonDefaults.iconButtonColors().copy(
                                 containerColor =
-                                    Color.DarkGray.copy(
+                                    wavoraSurface.copy(
                                         alpha = 0.8f,
                                     ),
                                 contentColor =

@@ -481,6 +481,21 @@ internal class DataStoreManagerImpl(
         }
     }
 
+    // Defaults to TRUE: before this setting existed, a video song's video part was always
+    // downloaded alongside its audio, so an unset preference must preserve that behavior.
+    override val downloadVideoEnabled =
+        settingsDataStore.data.map { preferences ->
+            preferences[DOWNLOAD_VIDEO_ENABLED] ?: TRUE
+        }
+
+    override suspend fun setDownloadVideoEnabled(enabled: Boolean) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[DOWNLOAD_VIDEO_ENABLED] = if (enabled) TRUE else FALSE
+            }
+        }
+    }
+
     override val playerVolume: Flow<Float> =
         settingsDataStore.data.map { preferences ->
             preferences[PLAYER_VOLUME] ?: 1.0f
@@ -1430,6 +1445,8 @@ internal class DataStoreManagerImpl(
         val MAX_SONG_CACHE_SIZE = intPreferencesKey("maxSongCacheSize")
         val WATCH_VIDEO_INSTEAD_OF_PLAYING_AUDIO =
             stringPreferencesKey("watch_video_instead_of_playing_audio")
+        val DOWNLOAD_VIDEO_ENABLED =
+            stringPreferencesKey("download_video_enabled")
         val VIDEO_QUALITY = stringPreferencesKey("video_quality")
         val PLAYER_VOLUME = floatPreferencesKey("player_volume")
         val SPDC = stringPreferencesKey("sp_dc")

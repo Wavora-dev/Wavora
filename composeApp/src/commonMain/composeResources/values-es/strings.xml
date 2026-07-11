@@ -545,4 +545,23 @@
     <string name="bpm">BPM</string>
     <string name="key">Clave</string>
     <string name="scale">Escala</string>
+    <string name="home_offline_title">Sin conexión</string>
+    <string name="home_offline_subtitle">Revisá tu conexión a internet e intentá de nuevo, o escuchá tu música descargada.</string>
+    <string name="listen_to_downloaded">Escuchar música descargada</string>
+    <string name="onboarding_skip">Omitir</string>
+    <string name="onboarding_back">Atrás</string>
+    <string name="onboarding_next">Siguiente</string>
+    <string name="onboarding_get_started">Comenzar</string>
+    <string name="onboarding_page_indicator">Página %1$d de %2$d</string>
+    <string name="onboarding_page1_title">Bienvenido a Wavora</string>
+    <string name="onboarding_page1_subtitle">Escuchá millones de canciones de YouTube Music — gratis, y pensada para cuidar los detalles que otros reproductores dejan pasar.</string>
+    <string name="onboarding_page2_title">Letras que simplemente funcionan</string>
+    <string name="onboarding_page2_subtitle">Wavora tiene su propio servicio de letras. Se descargan automáticamente y sincronizadas mientras suena la canción — sin configurar nada ni buscar archivos LRC.</string>
+    <string name="onboarding_page3_title">Traducciones hechas por la comunidad</string>
+    <string name="onboarding_page3_subtitle">Leé las letras en tu idioma y ayudá a mejorarlas: votá traducciones o subí las tuyas — cada voto mejora Wavora para todos.</string>
+    <string name="onboarding_page4_title">Descargá y escuchá sin conexión</string>
+    <string name="onboarding_page4_subtitle">Guardá canciones, álbumes y playlists en tu dispositivo. ¿Sin internet? No hay problema — tu música, a tu manera.</string>
+    <string name="notification_primer_title">Controlá la música desde las notificaciones</string>
+    <string name="notification_primer_description">Wavora puede mostrar los controles de reproducción — play, pausa, siguiente — directo en tus notificaciones, para que controles la música sin abrir la app. Solo se lo pediremos a Android una vez.</string>
+    <string name="notification_primer_allow">Permitir</string>
 </resources>

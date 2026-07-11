@@ -36,7 +36,6 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.flow.singleOrNull
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import org.koin.core.component.inject
 import wavora.composeapp.generated.resources.Res
@@ -94,6 +93,9 @@ class SettingsViewModel(
     val playerCacheLimit: StateFlow<Int?> = _playerCacheLimit
     private var _playVideoInsteadOfAudio: MutableStateFlow<String?> = MutableStateFlow(null)
     val playVideoInsteadOfAudio: StateFlow<String?> = _playVideoInsteadOfAudio
+
+    private var _downloadVideoEnabled: MutableStateFlow<String?> = MutableStateFlow(null)
+    val downloadVideoEnabled: StateFlow<String?> = _downloadVideoEnabled
     private var _videoQuality: MutableStateFlow<String?> = MutableStateFlow(null)
     val videoQuality: StateFlow<String?> = _videoQuality
     private var _thumbCacheSize = MutableStateFlow<Long?>(null)
@@ -246,6 +248,7 @@ class SettingsViewModel(
         getLyricsProvider()
         getUseTranslation()
         getPlayVideoInsteadOfAudio()
+        getDownloadVideoEnabled()
         getVideoQuality()
         getSpotifyLogIn()
         getSpotifyLyrics()
@@ -993,6 +996,26 @@ class SettingsViewModel(
         }
     }
 
+    /**
+     * Controls whether the video part of a video song is downloaded alongside its audio. When
+     * false, downloads only fetch audio (works for both Android and Desktop — see DownloadUtils
+     * in core/media/media3 and core/media/media-jvm). Plain audio-only songs are unaffected.
+     */
+    fun getDownloadVideoEnabled() {
+        viewModelScope.launch {
+            dataStoreManager.downloadVideoEnabled.collect { enabled ->
+                _downloadVideoEnabled.emit(enabled)
+            }
+        }
+    }
+
+    fun setDownloadVideoEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setDownloadVideoEnabled(enabled)
+            getDownloadVideoEnabled()
+        }
+    }
+
     fun getSponsorBlockCategories() {
         viewModelScope.launch {
             dataStoreManager.getSponsorBlockCategories().let {
@@ -1005,9 +1028,7 @@ class SettingsViewModel(
     fun setSponsorBlockCategories(list: ArrayList<String>) {
         log("setSponsorBlockCategories: $list", LogLevel.WARN)
         viewModelScope.launch {
-            runBlocking(Dispatchers.IO) {
-                dataStoreManager.setSponsorBlockCategories(list)
-            }
+            dataStoreManager.setSponsorBlockCategories(list)
             getSponsorBlockCategories()
         }
     }
@@ -1298,10 +1319,8 @@ class SettingsViewModel(
         val currentPageId = dataStoreManager.pageId.first()
         val currentLoggedIn = dataStoreManager.loggedIn.first() == DataStoreManager.TRUE
         try {
-            runBlocking {
-                dataStoreManager.setCookie(cookie, "")
-                dataStoreManager.setLoggedIn(true)
-            }
+            dataStoreManager.setCookie(cookie, "")
+            dataStoreManager.setLoggedIn(true)
             return accountRepository
                 .getAccountInfo(
                     cookie,
@@ -1363,19 +1382,15 @@ class SettingsViewModel(
                     true
                 } ?: run {
                 Logger.w("getAllGoogleAccount", "addAccount: Account info is null")
-                runBlocking {
-                    dataStoreManager.setCookie(currentCookie, currentPageId)
-                    dataStoreManager.setLoggedIn(currentLoggedIn)
-                }
+                dataStoreManager.setCookie(currentCookie, currentPageId)
+                dataStoreManager.setLoggedIn(currentLoggedIn)
                 false
             }
         } catch (e: Exception) {
             e.printStackTrace()
             Logger.e("getAllGoogleAccount", "addAccount: ${e.message}")
-            runBlocking {
-                dataStoreManager.setCookie(currentCookie, currentPageId)
-                dataStoreManager.setLoggedIn(currentLoggedIn)
-            }
+            dataStoreManager.setCookie(currentCookie, currentPageId)
+            dataStoreManager.setLoggedIn(currentLoggedIn)
             return false
         }
     }

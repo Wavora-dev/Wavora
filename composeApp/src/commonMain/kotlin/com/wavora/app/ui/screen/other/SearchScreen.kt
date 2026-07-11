@@ -116,7 +116,10 @@ import wavora.composeapp.generated.resources.baseline_arrow_outward_24
 import wavora.composeapp.generated.resources.baseline_close_24
 import wavora.composeapp.generated.resources.baseline_history_24
 import wavora.composeapp.generated.resources.baseline_search_24
+import wavora.composeapp.generated.resources.clear_search
 import wavora.composeapp.generated.resources.clear_search_history
+import wavora.composeapp.generated.resources.search
+import wavora.composeapp.generated.resources.search_suggestion
 import wavora.composeapp.generated.resources.error_occurred
 import wavora.composeapp.generated.resources.everything_you_need
 import wavora.composeapp.generated.resources.holder
@@ -301,7 +304,7 @@ fun SearchScreen(
                     leadingIcon = {
                         Icon(
                             painter = painterResource(Res.drawable.baseline_search_24),
-                            contentDescription = "Search",
+                            contentDescription = stringResource(Res.string.search),
                         )
                     },
                     trailingIcon = {
@@ -316,7 +319,7 @@ fun SearchScreen(
                             ) {
                                 Icon(
                                     painter = painterResource(Res.drawable.baseline_close_24),
-                                    contentDescription = "Clear search",
+                                    contentDescription = stringResource(Res.string.clear_search),
                                 )
                             }
                         }
@@ -438,7 +441,7 @@ fun SearchScreen(
                                 ) {
                                     Icon(
                                         painter = painterResource(Res.drawable.baseline_arrow_outward_24),
-                                        contentDescription = "Search suggestion",
+                                        contentDescription = stringResource(Res.string.search_suggestion),
                                         modifier = Modifier.size(24.dp),
                                     )
                                 }

@@ -23,6 +23,7 @@ import com.wavora.app.ui.component.NormalAppBar
 import com.wavora.app.ui.theme.typo
 import com.wavora.app.viewModel.MoodViewModel
 import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import wavora.composeapp.generated.resources.*
 import com.wavora.app.ui.theme.LocalAppTypography
@@ -54,7 +55,7 @@ fun MoodScreen(
                 IconButton(onClick = { navController.navigateUp() }) {
                     Icon(
                         painterResource(Res.drawable.baseline_arrow_back_ios_new_24),
-                        contentDescription = "Back",
+                        contentDescription = stringResource(Res.string.back),
                     )
                 }
             },

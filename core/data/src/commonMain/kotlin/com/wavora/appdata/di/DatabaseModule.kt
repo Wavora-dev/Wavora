@@ -18,7 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import org.koin.dsl.module
 import com.wavora.aiservice.AiClient
-import com.wavora.lyrics.WavoraLyricsClient
+import com.wavora.lyrics.LyricsManager
 import kotlin.time.ExperimentalTime
 
 @OptIn(ExperimentalTime::class)
@@ -62,15 +62,31 @@ val databaseModule =
             YouTube()
         }
 
-        single(createdAtStart = true) {
+        // Spotify, AiClient and LyricsManager are feature-scoped (Spotify canvas/lyrics,
+        // AI lyrics translation, community lyrics) and are never touched before the user
+        // triggers one of those features. Removed createdAtStart so Koin builds them lazily,
+        // on the first real get()/inject(), instead of during Application.onCreate(). Same
+        // singleton semantics otherwise: still exactly one instance for the app's lifetime.
+        //
+        // NOTE: this alone does not defer their construction in practice today, because
+        // CommonRepository and LyricsCanvasRepository (RepositoryModule.kt) are themselves
+        // single(createdAtStart = true) and inject Spotify/AiClient/LyricsManager via
+        // get() in their module block — so Koin still builds them eagerly as a side effect of
+        // building those two repositories at startKoin() time. Fixing that requires touching
+        // RepositoryModule.kt, intentionally left out of this change.
+        single {
             Spotify()
         }
 
-        single(createdAtStart = true) {
+        single {
             AiClient()
         }
 
-        single(createdAtStart = true) {
-            WavoraLyricsClient()
+        // LyricsManager (formerly WavoraLyricsClient) now talks to the new Cloudflare
+        // Workers backend via LyricsProviderRegistry/WavoraLyricsProvider instead of the
+        // dead api-lyrics.wavora.org domain. See core/service/lyricsService's
+        // LyricsManager.kt for the full chain.
+        single {
+            LyricsManager()
         }
     }

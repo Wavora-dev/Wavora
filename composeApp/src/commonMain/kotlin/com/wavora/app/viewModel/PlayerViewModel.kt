@@ -7,9 +7,6 @@ import com.wavora.common.Config.RECOVER_TRACK_QUEUE
 import com.wavora.common.Config.SHARE
 import com.wavora.common.Config.SONG_CLICK
 import com.wavora.common.Config.VIDEO_CLICK
-import com.wavora.common.SELECTED_LANGUAGE
-import com.wavora.domain.extension.isSong
-import com.wavora.domain.extension.isVideo
 import com.wavora.domain.extension.toGenericMediaItem
 import com.wavora.domain.manager.DataStoreManager
 import com.wavora.domain.manager.DataStoreManager.Values.TRUE
@@ -21,7 +18,6 @@ import com.wavora.domain.mediaservice.handler.QueueData
 import com.wavora.domain.mediaservice.handler.RepeatState
 import com.wavora.domain.mediaservice.handler.SimpleMediaState
 import com.wavora.domain.mediaservice.handler.SleepTimerState
-import com.wavora.domain.model.entities.SongEntity
 import com.wavora.domain.model.model.browse.album.Track
 import com.wavora.domain.model.model.streams.TimeLine
 import com.wavora.domain.repository.SongRepository
@@ -33,15 +29,16 @@ import com.wavora.app.viewModel.base.BaseViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.lastOrNull
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.added_to_queue
@@ -63,7 +60,11 @@ class PlayerViewModel(
     private val _nowPlayingState = MutableStateFlow<NowPlayingTrackState?>(null)
     val nowPlayingState: StateFlow<NowPlayingTrackState?> = _nowPlayingState
 
-    fun getQueueDataState() = mediaPlayerHandler.queueData
+    // Phase 4 of the PlayerSession migration (see PROMPT_01): playerSession.queue is the same
+    // underlying data as mediaPlayerHandler.queueData, but non-null (StateFlow<out T> is
+    // covariant, so this stays binary-compatible with the 4 existing call sites that still treat
+    // the result as StateFlow<QueueData?>).
+    fun getQueueDataState() = playerSession.queue
 
     private val _controllerState = MutableStateFlow(
         ControlState(
@@ -190,13 +191,11 @@ class PlayerViewModel(
     fun setSleepTimer(minutes: Int) = mediaPlayerHandler.sleepStart(minutes)
     fun stopSleepTimer() = mediaPlayerHandler.sleepStop()
 
-    fun getLocation() {
-        runBlocking {
-            dataStoreManager.location.first()
-            dataStoreManager.quality.first()
-            dataStoreManager.getString(SELECTED_LANGUAGE).first()
-        }
-    }
+    // Cached in-memory so isUserLoggedIn() below can return synchronously without touching disk
+    // on the calling thread. It's called directly from Composable bodies in NowPlayingScreen, so
+    // the previous `runBlocking { ... }` re-read DataStore's cookie on every recomposition.
+    private val _cookieFlag: StateFlow<String> =
+        dataStoreManager.cookie.stateIn(viewModelScope, SharingStarted.Eagerly, "")
 
     fun loadSharedMediaItem(videoId: String) {
         viewModelScope.launch {
@@ -256,7 +255,13 @@ class PlayerViewModel(
 
     fun getTranslucentBottomBar() = dataStoreManager.translucentBottomBar
     fun getEnableLiquidGlass() = dataStoreManager.enableLiquidGlass
-    fun shouldStopMusicService(): Boolean = runBlocking { dataStoreManager.killServiceOnExit.first() == TRUE }
-    fun isUserLoggedIn(): Boolean = runBlocking { dataStoreManager.cookie.first().isNotEmpty() }
-    fun isCombineFavoriteAndYTLiked(): Boolean = runBlocking { dataStoreManager.combineLocalAndYouTubeLiked.first() == TRUE }
+    fun isUserLoggedIn(): Boolean = _cookieFlag.value.isNotEmpty()
+
+    /**
+     * Whether the foreground music service is safe to stop when the hosting Activity is
+     * destroyed (e.g. user pressed back / finished the Activity). We must NOT stop it while a
+     * track is actively playing, since that's a foreground media session the user expects to
+     * keep going in the background/notification. Only stop it if nothing is currently playing.
+     */
+    fun shouldStopMusicService(): Boolean = !_controllerState.value.isPlaying
 }

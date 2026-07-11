@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.wavora.domain.mediaservice.handler.MediaPlayerHandler
 import com.wavora.domain.mediaservice.handler.QueueData
+import com.wavora.domain.mediaservice.session.PlaybackState
+import com.wavora.domain.mediaservice.session.PlayerController
+import com.wavora.domain.mediaservice.session.PlayerSession
 import com.wavora.logger.LogLevel
 import com.wavora.logger.Logger
 import kotlinx.coroutines.cancel
@@ -25,6 +28,17 @@ abstract class BaseViewModel :
     ViewModel(),
     KoinComponent {
     protected val mediaPlayerHandler: MediaPlayerHandler by inject<MediaPlayerHandler>()
+
+    /**
+     * Phase 4 of the PlayerSession migration (see PROMPT_01). New ViewModel code should prefer
+     * these over [mediaPlayerHandler] where possible, since they depend on the PlayerSession/
+     * PlayerController abstractions instead of the full MediaPlayerHandler surface (point 5 of
+     * the migration). [mediaPlayerHandler] stays available and unchanged for everything that
+     * doesn't have a PlayerSession/PlayerController equivalent yet (queue editing, shuffle,
+     * repeat, like, sleep timer, etc.) — this is an addition, not a replacement.
+     */
+    protected val playerSession: PlayerSession by inject<PlayerSession>()
+    protected val playerController: PlayerController by inject<PlayerController>()
     private val _nowPlayingVideoId: MutableStateFlow<String> = MutableStateFlow("")
 
     /**
@@ -62,8 +76,19 @@ abstract class BaseViewModel :
         log("ViewModel cleared", LogLevel.WARN)
     }
 
-    init {
-        getNowPlayingVideoId()
+    /**
+     * Public equivalent of [onCleared], for the handful of ViewModels registered as Koin
+     * `single { }` (see PROMPT_06 OOM investigation) instead of the `viewModel { }` DSL —
+     * `PlayerViewModel`, `NowPlayingViewModel`, `AppViewModel`, `SharedViewModel`,
+     * `SearchViewModel`. Because those are constructed directly by Koin instead of through
+     * Android's ViewModelStore/ViewModelProvider, the framework never calls `clear()` on them
+     * when they're replaced, so [onCleared] (which is `protected`) never runs on its own.
+     * Callers that recreate those specific Koin registrations (see `MainActivity.onCreate`) must
+     * call this on the previous instance first, or its `init`-block collectors keep running
+     * forever on a now-unreachable-from-Koin, but still fully alive and active, object graph.
+     */
+    fun forceClear() {
+        onCleared()
     }
 
     fun makeToast(message: String?) {
@@ -80,8 +105,17 @@ abstract class BaseViewModel :
                 .getString(resId)
         }
 
-    // Loading dialog
-    private val _showLoadingDialog: MutableStateFlow<Pair<Boolean, String>> = MutableStateFlow(false to getString(Res.string.loading))
+    // Was `MutableStateFlow(false to getString(Res.string.loading))` here — a `getString` call
+    // (and therefore a `runBlocking`) executed directly in this property initializer, i.e. in the
+    // constructor of *every* BaseViewModel subclass, on whatever thread first resolves that
+    // ViewModel (main thread, at cold start, for the Koin-singleton ViewModels). Seeded with an
+    // empty label instead and resolved asynchronously in `init` below; the label is only ever
+    // visible while `showLoadingDialog.first == true`, and no caller shows the dialog synchronously
+    // within the same frame as ViewModel construction, so this has no visible effect. Declared
+    // above `init` (rather than below, where it used to sit) so it's guaranteed non-null by the
+    // time `init` runs — `viewModelScope.launch` uses Dispatchers.Main.immediate, which can start
+    // a coroutine body inline/synchronously when already on the main thread.
+    private val _showLoadingDialog: MutableStateFlow<Pair<Boolean, String>> = MutableStateFlow(false to "")
     val showLoadingDialog: StateFlow<Pair<Boolean, String>> get() = _showLoadingDialog
 
     fun showLoadingDialog(message: String? = null) {
@@ -92,16 +126,37 @@ abstract class BaseViewModel :
         _showLoadingDialog.value = false to getString(Res.string.loading)
     }
 
+    init {
+        getNowPlayingVideoId()
+        viewModelScope.launch {
+            _showLoadingDialog.value = false to org.jetbrains.compose.resources.getString(Res.string.loading)
+        }
+    }
+
+    /**
+     * Which item, across any list on screen, is the one currently playing — used by
+     * Library/Album/Search/ArtworkPager to highlight the now-playing row.
+     *
+     * Phase 4 of the PlayerSession migration (see PROMPT_01): this used to combine
+     * `mediaPlayerHandler.nowPlayingState` (a separately, asynchronously resolved `SongEntity`
+     * that lags behind actual playback by one DB round-trip, and in one code path could keep the
+     * *previous* track's value if the lookup came back empty) with `mediaPlayerHandler.controlState`.
+     * `playerSession.currentSong` updates at the exact moment the player transitions, so this is
+     * both simpler and more correct, not just an equivalent rewrite. `mediaId` is always equal to
+     * `SongEntity.videoId` for how this codebase builds media items, so the string this exposes
+     * to the UI doesn't change meaning.
+     */
     private fun getNowPlayingVideoId() {
         viewModelScope.launch {
-            combine(mediaPlayerHandler.nowPlayingState, mediaPlayerHandler.controlState) { nowPlayingState, controlState ->
-                Pair(nowPlayingState, controlState)
-            }.collect { (nowPlayingState, controlState) ->
-                if (controlState.isPlaying) {
-                    _nowPlayingVideoId.value = nowPlayingState.songEntity?.videoId ?: ""
-                } else {
-                    _nowPlayingVideoId.value = ""
-                }
+            combine(playerSession.currentSong, playerSession.playbackState) { song, playbackState ->
+                Pair(song, playbackState)
+            }.collect { (song, playbackState) ->
+                _nowPlayingVideoId.value =
+                    if (playbackState is PlaybackState.Playing) {
+                        song?.mediaId ?: ""
+                    } else {
+                        ""
+                    }
             }
         }
     }

@@ -121,6 +121,7 @@ import com.wavora.app.ui.navigation.destination.list.ArtistDestination
 import com.wavora.app.ui.theme.md_theme_dark_background
 import com.wavora.app.ui.theme.seed
 import com.wavora.app.ui.theme.typo
+import com.wavora.app.ui.theme.wavoraSecondary
 import com.wavora.app.viewModel.ListState
 import com.wavora.app.viewModel.PlaylistUIEvent
 import com.wavora.app.viewModel.PlaylistUIState
@@ -157,7 +158,10 @@ import wavora.composeapp.generated.resources.baseline_sensors_24
 import wavora.composeapp.generated.resources.baseline_shuffle_24
 import wavora.composeapp.generated.resources.download_button
 import wavora.composeapp.generated.resources.downloaded
+import wavora.composeapp.generated.resources.download
 import wavora.composeapp.generated.resources.downloading
+import wavora.composeapp.generated.resources.more
+import wavora.composeapp.generated.resources.shuffle
 import wavora.composeapp.generated.resources.error
 import wavora.composeapp.generated.resources.holder
 import wavora.composeapp.generated.resources.no_description
@@ -630,7 +634,7 @@ fun PlaylistScreen(
                                                         ) {
                                                             Icon(
                                                                 painter = painterResource(Res.drawable.baseline_more_vert_24),
-                                                                contentDescription = "More",
+                                                                contentDescription = stringResource(Res.string.more),
                                                                 tint = Color.White,
                                                             )
                                                         }
@@ -745,7 +749,7 @@ fun PlaylistScreen(
                                                             ) {
                                                                 Icon(
                                                                     imageVector = Icons.Rounded.Shuffle,
-                                                                    contentDescription = "Shuffle",
+                                                                    contentDescription = stringResource(Res.string.shuffle),
                                                                     tint = Color.White,
                                                                     modifier = Modifier.size(22.dp),
                                                                 )
@@ -808,8 +812,8 @@ fun PlaylistScreen(
                                                                             ) {
                                                                                 Icon(
                                                                                     painter = painterResource(Res.drawable.baseline_downloaded),
-                                                                                    tint = Color(0xFF00A0CB),
-                                                                                    contentDescription = "",
+                                                                                    tint = wavoraSecondary,
+                                                                                    contentDescription = stringResource(Res.string.downloaded),
                                                                                     modifier = Modifier.size(22.dp),
                                                                                 )
                                                                             }
@@ -833,7 +837,7 @@ fun PlaylistScreen(
                                                                                             composition = composition,
                                                                                             iterations = Compottie.IterateForever,
                                                                                         ),
-                                                                                    contentDescription = "Lottie animation",
+                                                                                    contentDescription = stringResource(Res.string.downloading),
                                                                                     modifier = Modifier.size(28.dp),
                                                                                 )
                                                                             }
@@ -856,7 +860,7 @@ fun PlaylistScreen(
                                                                                 Icon(
                                                                                     painter = painterResource(Res.drawable.download_button),
                                                                                     tint = Color.White,
-                                                                                    contentDescription = "Download",
+                                                                                    contentDescription = stringResource(Res.string.download),
                                                                                     modifier = Modifier.size(22.dp),
                                                                                 )
                                                                             }
@@ -916,8 +920,8 @@ fun PlaylistScreen(
                                                                         ) {
                                                                             Icon(
                                                                                 painter = painterResource(Res.drawable.baseline_downloaded),
-                                                                                tint = Color(0xFF00A0CB),
-                                                                                contentDescription = "",
+                                                                                tint = wavoraSecondary,
+                                                                                contentDescription = stringResource(Res.string.downloaded),
                                                                                 modifier =
                                                                                     Modifier
                                                                                         .size(36.dp)
@@ -943,7 +947,7 @@ fun PlaylistScreen(
                                                                                         composition = composition,
                                                                                         iterations = Compottie.IterateForever,
                                                                                     ),
-                                                                                contentDescription = "Lottie animation",
+                                                                                contentDescription = stringResource(Res.string.downloading),
                                                                                 modifier = Modifier.fillMaxSize(),
                                                                             )
                                                                         }

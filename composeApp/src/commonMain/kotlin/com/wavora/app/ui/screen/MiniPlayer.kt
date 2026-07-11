@@ -1,6 +1,5 @@
 package com.wavora.app.ui.screen
 
-import androidx.compose.animation.Animatable
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.SizeTransform
@@ -43,9 +42,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Speaker
 import androidx.compose.material3.Card
@@ -79,7 +75,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.rememberGraphicsLayer
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -115,7 +110,11 @@ import com.wavora.app.ui.component.PlayerControlLayout
 import com.wavora.app.ui.component.liquidGlass
 import com.wavora.app.ui.theme.transparent
 import com.wavora.app.ui.theme.typo
+import com.wavora.app.ui.theme.wavoraBorder
 import com.wavora.app.ui.theme.wavoraIconGradientBrush
+import com.wavora.app.ui.theme.wavoraPrimary
+import com.wavora.app.ui.theme.wavoraSecondary
+import com.wavora.app.ui.theme.wavoraSurface
 import com.wavora.app.viewModel.SharedViewModel
 import com.wavora.app.viewModel.UIEvent
 import kotlinx.coroutines.Dispatchers
@@ -126,9 +125,14 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.holder
+import wavora.composeapp.generated.resources.close_miniplayer
+import wavora.composeapp.generated.resources.mute
+import wavora.composeapp.generated.resources.toggle_desktop_miniplayer
+import wavora.composeapp.generated.resources.unmute
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 import kotlin.time.Duration.Companion.seconds
@@ -219,7 +223,11 @@ fun MiniPlayer(
     val paletteState = rememberPaletteState()
     val background =
         remember {
-            Animatable(Color.DarkGray)
+            // Wavora surface tone instead of generic Material DarkGray: this is what's
+            // briefly visible on every track change before the palette extraction from
+            // the new artwork finishes, so it should already read as "Wavora", not as a
+            // default placeholder color.
+            androidx.compose.animation.Animatable(wavoraSurface)
         }
 
     val offsetX = remember { Animatable(initialValue = 0f) }
@@ -516,7 +524,7 @@ fun MiniPlayer(
                             Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(18.dp),
-                                    color = Color.LightGray,
+                                    color = wavoraPrimary,
                                     strokeWidth = 3.dp,
                                 )
                             }
@@ -552,16 +560,14 @@ fun MiniPlayer(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(3.dp)
-                            .background(Color(0xFF1F1F2E), RoundedCornerShape(4.dp)),
+                            .background(wavoraBorder, RoundedCornerShape(4.dp)),
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth(animatedProgress)
                                 .fillMaxHeight()
                                 .background(
-                                    brush = Brush.horizontalGradient(
-                                        colors = listOf(Color(0xFFA259FF), Color(0xFF6A5CFF), Color(0xFF00D4FF)),
-                                    ),
+                                    brush = wavoraIconGradientBrush,
                                     shape = RoundedCornerShape(4.dp),
                                 ),
                         )
@@ -729,8 +735,8 @@ fun MiniPlayer(
                                                             ).clip(
                                                                 RoundedCornerShape(8.dp),
                                                             ),
-                                                    color = Color.Gray,
-                                                    trackColor = Color.DarkGray,
+                                                    color = wavoraPrimary,
+                                                    trackColor = wavoraBorder,
                                                     strokeCap = StrokeCap.Round,
                                                 )
                                             }
@@ -747,11 +753,8 @@ fun MiniPlayer(
                                                             ).clip(
                                                                 RoundedCornerShape(8.dp),
                                                             ),
-                                                    color = Color.Gray,
-                                                    trackColor =
-                                                        Color.Gray.copy(
-                                                            alpha = 0.6f,
-                                                        ),
+                                                    color = wavoraSecondary,
+                                                    trackColor = wavoraBorder,
                                                     strokeCap = StrokeCap.Round,
                                                     drawStopIndicator = {},
                                                 )
@@ -823,8 +826,8 @@ fun MiniPlayer(
                                                     remember { MutableInteractionSource() },
                                                 colors =
                                                     SliderDefaults.colors().copy(
-                                                        thumbColor = Color(0xFFA259FF),
-                                                        activeTrackColor = Color(0xFFA259FF),
+                                                        thumbColor = wavoraPrimary,
+                                                        activeTrackColor = wavoraPrimary,
                                                         inactiveTrackColor = Color.Transparent,
                                                     ),
                                                 enabled = true,
@@ -855,7 +858,7 @@ fun MiniPlayer(
                             IconButton(onClick = { toggleMiniPlayer() }) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
-                                    contentDescription = "Mini Player",
+                                    contentDescription = stringResource(Res.string.toggle_desktop_miniplayer),
                                 )
                             }
                         }
@@ -873,7 +876,14 @@ fun MiniPlayer(
                                     } else {
                                         Icons.AutoMirrored.Filled.VolumeOff
                                     },
-                                contentDescription = if (controllerState.volume > 0f) "Mute" else "Unmute",
+                                // Label describes the action the tap performs, not the current
+                                // state — same convention as a mute button anywhere else.
+                                contentDescription =
+                                    if (controllerState.volume > 0f) {
+                                        stringResource(Res.string.mute)
+                                    } else {
+                                        stringResource(Res.string.unmute)
+                                    },
                             )
                         }
                         Spacer(Modifier.width(2.dp))
@@ -920,7 +930,7 @@ fun MiniPlayer(
                                             Modifier
                                                 .fillMaxWidth()
                                                 .height(5.dp)
-                                                .background(Color.Gray, RoundedCornerShape(4.dp)),
+                                                .background(wavoraBorder, RoundedCornerShape(4.dp)),
                                     ) {
                                         Box(
                                             modifier =
@@ -928,10 +938,7 @@ fun MiniPlayer(
                                                     .fillMaxWidth(fraction)
                                                     .fillMaxHeight()
                                                     .background(
-                                                        brush =
-                                                            Brush.horizontalGradient(
-                                                                colors = listOf(Color(0xFFA259FF), Color(0xFF6A5CFF), Color(0xFF00D4FF)),
-                                                            ),
+                                                        brush = wavoraIconGradientBrush,
                                                         shape = RoundedCornerShape(4.dp),
                                                     ),
                                         )
@@ -949,11 +956,15 @@ fun MiniPlayer(
                                         thumbSize = DpSize(8.dp, 8.dp),
                                         interactionSource =
                                             remember { MutableInteractionSource() },
+                                        // Same thumb/track colors as the seek bar above -- these two
+                                        // sliders sit side by side in the same control row, so they
+                                        // need to read as one consistent system rather than two
+                                        // different color languages (this one used to be white/gray).
                                         colors =
                                             SliderDefaults.colors().copy(
-                                                thumbColor = Color(0xFFA259FF),
-                                                activeTrackColor = Color.White,
-                                                inactiveTrackColor = Color.DarkGray,
+                                                thumbColor = wavoraPrimary,
+                                                activeTrackColor = wavoraPrimary,
+                                                inactiveTrackColor = Color.Transparent,
                                             ),
                                         enabled = true,
                                     )
@@ -962,7 +973,7 @@ fun MiniPlayer(
                         }
                         Spacer(Modifier.width(4.dp))
                         IconButton(onClick = { onClose() }) {
-                            Icon(Icons.Rounded.Close, "")
+                            Icon(Icons.Rounded.Close, stringResource(Res.string.close_miniplayer))
                         }
                     }
                 }

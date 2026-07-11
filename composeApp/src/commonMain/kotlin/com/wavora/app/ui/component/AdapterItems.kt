@@ -156,7 +156,7 @@ fun HomeItem(
                             .diskCacheKey(data.thumbnail?.lastOrNull()?.url)
                             .crossfade(550)
                             .build(),
-                    contentDescription = "",
+                    contentDescription = null,
                     placeholder = painterResource(Res.drawable.holder),
                     error = painterResource(Res.drawable.holder),
                     modifier =

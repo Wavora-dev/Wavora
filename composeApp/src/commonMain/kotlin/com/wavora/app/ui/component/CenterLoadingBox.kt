@@ -16,8 +16,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.wavora.app.ui.theme.wavoraBorder
+import com.wavora.app.ui.theme.wavoraPrimary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -48,8 +49,8 @@ fun CenterLoadingBox(modifier: Modifier) {
                     Modifier
                         .size(56.dp),
                 polygons = LoadingIndicatorDefaults.IndeterminateIndicatorPolygons,
-                containerColor = Color.DarkGray,
-                indicatorColor = Color.LightGray,
+                containerColor = wavoraBorder,
+                indicatorColor = wavoraPrimary,
                 containerShape = shape.toShape(),
             )
         }

@@ -58,6 +58,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -67,7 +68,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import com.wavora.app.extension.wavoraIconGradient
 import androidx.compose.ui.graphics.SolidColor
+import com.wavora.app.ui.theme.wavoraBorder
 import com.wavora.app.ui.theme.wavoraIconGradientBrush
+import com.wavora.app.ui.theme.wavoraPrimary
+import com.wavora.app.ui.theme.wavoraSecondary
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -94,7 +98,16 @@ import org.koin.compose.koinInject
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.baseline_arrow_back_ios_new_24
 import wavora.composeapp.generated.resources.baseline_more_vert_24
+import wavora.composeapp.generated.resources.exit_fullscreen_player
 import wavora.composeapp.generated.resources.five_seconds
+import wavora.composeapp.generated.resources.forward_5_seconds
+import wavora.composeapp.generated.resources.hide_subtitles
+import wavora.composeapp.generated.resources.next_track
+import wavora.composeapp.generated.resources.pause
+import wavora.composeapp.generated.resources.play
+import wavora.composeapp.generated.resources.previous_track
+import wavora.composeapp.generated.resources.replay_5_seconds
+import wavora.composeapp.generated.resources.show_subtitles
 import kotlin.math.roundToLong
 import com.wavora.app.ui.theme.LocalAppTypography
 
@@ -125,6 +138,11 @@ fun FullscreenPlayer(
     val nowPlayingState by sharedViewModel.nowPlayingScreenData.collectAsStateWithLifecycle()
     val controllerState by sharedViewModel.controllerState.collectAsStateWithLifecycle()
     val timelineState by sharedViewModel.timeline.collectAsStateWithLifecycle()
+    // PROMPT_04 Compose perf audit — same fix as NowPlayingScreen.kt: `timelineState.loading`
+    // changes only a couple of times per song, but reading it directly subscribes the read site
+    // to the whole `TimeLine` object, which changes 10x/sec via `current`. derivedStateOf makes
+    // this only report "changed" when `loading` itself actually flips.
+    val isLoadingState by remember { derivedStateOf { timelineState.loading } }
 
     var showBottom by rememberSaveable { mutableStateOf(false) }
     var isSliding by rememberSaveable {
@@ -403,7 +421,7 @@ fun FullscreenPlayer(
                                 Icon(
                                     imageVector = Icons.Filled.SkipPrevious,
                                     tint = Color.White,
-                                    contentDescription = "",
+                                    contentDescription = stringResource(Res.string.previous_track),
                                     modifier =
                                         Modifier
                                             .size(36.dp)
@@ -441,7 +459,7 @@ fun FullscreenPlayer(
                                 Icon(
                                     imageVector = Icons.Filled.Replay5,
                                     tint = Color.White,
-                                    contentDescription = "",
+                                    contentDescription = stringResource(Res.string.replay_5_seconds),
                                     modifier =
                                         Modifier
                                             .size(36.dp)
@@ -467,7 +485,7 @@ fun FullscreenPlayer(
                                         Icon(
                                             imageVector = Icons.Filled.Pause,
                                             tint = Color.White,
-                                            contentDescription = "",
+                                            contentDescription = stringResource(Res.string.pause),
                                             modifier =
                                                 Modifier
                                                     .size(48.dp)
@@ -477,7 +495,7 @@ fun FullscreenPlayer(
                                         Icon(
                                             imageVector = Icons.Filled.PlayArrow,
                                             tint = Color.White,
-                                            contentDescription = "",
+                                            contentDescription = stringResource(Res.string.play),
                                             modifier =
                                                 Modifier
                                                     .size(48.dp)
@@ -505,7 +523,7 @@ fun FullscreenPlayer(
                                 Icon(
                                     imageVector = Icons.Filled.Forward5,
                                     tint = Color.White,
-                                    contentDescription = "",
+                                    contentDescription = stringResource(Res.string.forward_5_seconds),
                                     modifier =
                                         Modifier
                                             .size(36.dp)
@@ -532,7 +550,7 @@ fun FullscreenPlayer(
                                 Icon(
                                     imageVector = Icons.Filled.SkipNext,
                                     tint = Color.White,
-                                    contentDescription = "",
+                                    contentDescription = stringResource(Res.string.next_track),
                                     modifier =
                                         Modifier
                                             .size(36.dp)
@@ -569,7 +587,7 @@ fun FullscreenPlayer(
                                             .height(24.dp),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    Crossfade(timelineState.loading) {
+                                    Crossfade(isLoadingState) {
                                         if (it) {
                                             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                                                 LinearProgressIndicator(
@@ -582,8 +600,8 @@ fun FullscreenPlayer(
                                                             ).clip(
                                                                 RoundedCornerShape(8.dp),
                                                             ),
-                                                    color = Color.Gray,
-                                                    trackColor = Color.DarkGray,
+                                                    color = wavoraPrimary,
+                                                    trackColor = wavoraBorder,
                                                     strokeCap = StrokeCap.Round,
                                                 )
                                             }
@@ -600,8 +618,8 @@ fun FullscreenPlayer(
                                                             ).clip(
                                                                 RoundedCornerShape(8.dp),
                                                             ),
-                                                    color = Color.Gray,
-                                                    trackColor = Color.DarkGray,
+                                                    color = wavoraSecondary,
+                                                    trackColor = wavoraBorder,
                                                     strokeCap = StrokeCap.Round,
                                                     drawStopIndicator = {},
                                                 )
@@ -645,7 +663,7 @@ fun FullscreenPlayer(
                                                     Modifier
                                                         .fillMaxWidth()
                                                         .height(5.dp)
-                                                        .background(Color(0xFF1F1F2E), RoundedCornerShape(4.dp)),
+                                                        .background(wavoraBorder, RoundedCornerShape(4.dp)),
                                             ) {
                                                 Box(
                                                     modifier =
@@ -653,10 +671,7 @@ fun FullscreenPlayer(
                                                             .fillMaxWidth(fraction)
                                                             .fillMaxHeight()
                                                             .background(
-                                                                brush =
-                                                                    Brush.horizontalGradient(
-                                                                        colors = listOf(Color(0xFFA259FF), Color(0xFF6A5CFF), Color(0xFF00D4FF)),
-                                                                    ),
+                                                                brush = wavoraIconGradientBrush,
                                                                 shape = RoundedCornerShape(4.dp),
                                                             ),
                                                 )
@@ -676,9 +691,9 @@ fun FullscreenPlayer(
                                                     remember { MutableInteractionSource() },
                                                 colors =
                                                     SliderDefaults.colors().copy(
-                                                        thumbColor = Color(0xFFA259FF),
-                                                        activeTrackColor = Color(0xFFA259FF),
-                                                        inactiveTrackColor = Color(0xFF1F1F2E),
+                                                        thumbColor = wavoraPrimary,
+                                                        activeTrackColor = wavoraPrimary,
+                                                        inactiveTrackColor = wavoraBorder,
                                                     ),
                                                 enabled = true,
                                             )
@@ -738,7 +753,7 @@ fun FullscreenPlayer(
                                                 Icon(
                                                     imageVector = Icons.Filled.SubtitlesOff,
                                                     tint = Color.White,
-                                                    contentDescription = "",
+                                                    contentDescription = stringResource(Res.string.hide_subtitles),
                                                     modifier =
                                                         Modifier
                                                             .size(24.dp),
@@ -747,7 +762,7 @@ fun FullscreenPlayer(
                                                 Icon(
                                                     imageVector = Icons.Filled.Subtitles,
                                                     tint = Color.White,
-                                                    contentDescription = "",
+                                                    contentDescription = stringResource(Res.string.show_subtitles),
                                                     modifier =
                                                         Modifier
                                                             .size(24.dp),
@@ -775,7 +790,7 @@ fun FullscreenPlayer(
                                         Icon(
                                             imageVector = Icons.Filled.FullscreenExit,
                                             tint = Color.White,
-                                            contentDescription = "",
+                                            contentDescription = stringResource(Res.string.exit_fullscreen_player),
                                             modifier =
                                                 Modifier
                                                     .size(24.dp),

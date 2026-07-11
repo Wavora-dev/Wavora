@@ -77,6 +77,7 @@ import com.wavora.domain.repository.SongRepository
 import com.wavora.domain.utils.connectArtists
 import com.wavora.domain.utils.toListName
 import com.wavora.app.ui.theme.typo
+import com.wavora.app.ui.theme.wavoraSecondary
 import io.github.alexzhirkevich.compottie.Compottie
 import io.github.alexzhirkevich.compottie.LottieCompositionSpec
 import io.github.alexzhirkevich.compottie.rememberLottieComposition
@@ -87,6 +88,7 @@ import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import wavora.composeapp.generated.resources.Res
+import wavora.composeapp.generated.resources.downloaded
 import wavora.composeapp.generated.resources.add_to_queue
 import wavora.composeapp.generated.resources.album
 import wavora.composeapp.generated.resources.artists
@@ -281,7 +283,7 @@ fun SongFullWidthItems(
                                 Icon(
                                     painter = painterResource(Res.drawable.download_for_offline_white),
                                     tint = Color.White,
-                                    contentDescription = "",
+                                    contentDescription = stringResource(Res.string.downloaded),
                                     modifier = Modifier.size(16.dp).padding(2.dp),
                                 )
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -582,7 +584,7 @@ fun PlaylistFullWidthItems(
                         Image(
                             imageVector = Icons.Default.PushPin,
                             contentDescription = null,
-                            colorFilter = ColorFilter.tint(Color.Cyan),
+                            colorFilter = ColorFilter.tint(wavoraSecondary),
                             modifier =
                                 Modifier
                                     .rotate(30f)

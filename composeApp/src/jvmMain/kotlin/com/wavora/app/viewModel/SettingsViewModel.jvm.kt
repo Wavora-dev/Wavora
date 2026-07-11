@@ -10,7 +10,6 @@ import com.wavora.logger.Logger
 import com.wavora.app.extension.zipOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import multiplatform.network.cmptoast.ToastGravity
 import multiplatform.network.cmptoast.showToast
@@ -54,10 +53,8 @@ actual suspend fun restoreNative(
                 }
 
                 entry.name == DB_NAME -> {
-                    runBlocking(Dispatchers.IO) {
-                        commonRepository.databaseDaoCheckpoint()
-                        commonRepository.closeDatabase()
-                    }
+                    commonRepository.databaseDaoCheckpoint()
+                    commonRepository.closeDatabase()
                     FileOutputStream(commonRepository.getDatabasePath()).use { outputStream ->
                         inputStream.copyTo(outputStream)
                     }
@@ -90,9 +87,7 @@ actual suspend fun backupNative(
                     outputStream.putNextEntry(ZipEntry("$SETTINGS_FILENAME.preferences_pb"))
                     inputStream.copyTo(outputStream)
                 }
-            runBlocking(Dispatchers.IO) {
-                commonRepository.databaseDaoCheckpoint()
-            }
+            commonRepository.databaseDaoCheckpoint()
             FileInputStream(commonRepository.getDatabasePath()).use { inputStream ->
                 outputStream.putNextEntry(ZipEntry(DB_NAME))
                 inputStream.copyTo(outputStream)

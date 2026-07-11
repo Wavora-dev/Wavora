@@ -340,7 +340,7 @@ class JvmMediaPlayerHandlerImpl(
             val controlStateJob =
                 launch {
                     controlState.collectLatest {
-                        updateNotification()
+                        updateNotification(knownLiked = it.isLiked)
                     }
                 }
             val skipSegmentsJob =
@@ -718,21 +718,29 @@ class JvmMediaPlayerHandlerImpl(
     private fun sendCloseEqualizerIntent() {
     }
 
-    private fun updateNotification() {
+    private fun updateNotification(knownLiked: Boolean? = null) {
         updateNotificationJob?.cancel()
         updateNotificationJob =
             coroutineScope.launch {
-                var id = (player.currentMediaItem?.mediaId ?: "")
-                if (id.contains("Video")) {
-                    id = id.removePrefix("Video")
-                }
+                // PROMPT_05 hot-path finding (same as MediaServiceHandlerImpl on Android): this
+                // fires from `controlState.collectLatest { updateNotification() }` on EVERY
+                // controlState change, not just song transitions. `knownLiked` lets that call
+                // site reuse the isLiked it already has instead of re-querying Room every time.
                 val liked =
-                    songRepository
-                        .getSongById(id)
-                        .singleOrNull()
-                        ?.liked ?: false
+                    knownLiked ?: run {
+                        var id = (player.currentMediaItem?.mediaId ?: "")
+                        if (id.contains("Video")) {
+                            id = id.removePrefix("Video")
+                        }
+                        songRepository
+                            .getSongById(id)
+                            .singleOrNull()
+                            ?.liked ?: false
+                    }
                 Logger.w("Check liked", liked.toString())
-                _controlState.value = _controlState.value.copy(isLiked = liked)
+                if (knownLiked == null) {
+                    _controlState.value = _controlState.value.copy(isLiked = liked)
+                }
                 onUpdateNotification.invoke(
                     listOf(
                         GenericCommandButton.Like(liked),
@@ -2257,11 +2265,15 @@ class JvmMediaPlayerHandlerImpl(
                     0
                 }
             }
+        Logger.d(
+            "PB_TRACE",
+            "t=${java.time.Instant.now()} thread=${Thread.currentThread().name} " +
+                "JvmMediaPlayerHandlerImpl.onPlaybackStateChanged($playbackState) | " +
+                "playWhenReady=${player.playWhenReady} isPlaying=${player.isPlaying} " +
+                "index=${player.currentMediaItemIndex} song=${player.currentMediaItem?.mediaId} " +
+                "pos=$current buffered=$loaded",
+        )
         when (playbackState) {
-            PlayerConstants.STATE_IDLE -> {
-                _simpleMediaState.value = SimpleMediaState.Initial
-                Logger.d(TAG, "onPlaybackStateChanged: Idle")
-            }
 
             PlayerConstants.STATE_ENDED -> {
                 _simpleMediaState.value = SimpleMediaState.Ended
@@ -2283,6 +2295,14 @@ class JvmMediaPlayerHandlerImpl(
     }
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
+        Logger.d(
+            "PB_TRACE",
+            "t=${java.time.Instant.now()} thread=${Thread.currentThread().name} " +
+                "JvmMediaPlayerHandlerImpl.onIsPlayingChanged($isPlaying) | " +
+                "playWhenReady=${player.playWhenReady} playbackState=${player.playbackState} " +
+                "index=${player.currentMediaItemIndex} song=${player.currentMediaItem?.mediaId} " +
+                "pos=${player.currentPosition} buffered=${player.bufferedPosition}",
+        )
         _controlState.value = _controlState.value.copy(isPlaying = isPlaying)
         if (isPlaying) {
             startProgressUpdate()
@@ -2303,6 +2323,14 @@ class JvmMediaPlayerHandlerImpl(
         mediaItem: GenericMediaItem?,
         reason: Int,
     ) {
+        Logger.d(
+            "PB_TRACE",
+            "t=${java.time.Instant.now()} thread=${Thread.currentThread().name} " +
+                "JvmMediaPlayerHandlerImpl.onMediaItemTransition(reason=$reason) | " +
+                "playWhenReady=${player.playWhenReady} isPlaying=${player.isPlaying} " +
+                "index=${player.currentMediaItemIndex} song=${mediaItem?.mediaId} " +
+                "pos=${player.currentPosition} buffered=${player.bufferedPosition}",
+        )
         Logger.w(TAG, "Checking current state before transition ${simpleMediaState.value}")
         val lastPlayed = nowPlayingState.value.songEntity
         val currentState = simpleMediaState.value

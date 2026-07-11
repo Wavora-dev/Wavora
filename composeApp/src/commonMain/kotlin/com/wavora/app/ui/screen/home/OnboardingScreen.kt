@@ -42,6 +42,11 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -53,39 +58,70 @@ import com.wavora.app.ui.theme.wavoraPrimary
 import com.wavora.app.ui.theme.wavoraSecondary
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.resources.stringResource
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.mono
+import wavora.composeapp.generated.resources.onboarding_back
+import wavora.composeapp.generated.resources.onboarding_get_started
+import wavora.composeapp.generated.resources.onboarding_next
+import wavora.composeapp.generated.resources.onboarding_page1_subtitle
+import wavora.composeapp.generated.resources.onboarding_page1_title
+import wavora.composeapp.generated.resources.onboarding_page2_subtitle
+import wavora.composeapp.generated.resources.onboarding_page2_title
+import wavora.composeapp.generated.resources.onboarding_page3_subtitle
+import wavora.composeapp.generated.resources.onboarding_page3_title
+import wavora.composeapp.generated.resources.onboarding_page4_subtitle
+import wavora.composeapp.generated.resources.onboarding_page4_title
+import wavora.composeapp.generated.resources.onboarding_page_indicator
+import wavora.composeapp.generated.resources.onboarding_skip
 
-data class OnboardingPage(
+/**
+ * Content for a single onboarding page.
+ *
+ * UX rationale for the 4-page structure (see delivery report for detail): each page introduces
+ * exactly ONE idea. Wavora's real differentiators — its own lyrics backend, automatic
+ * downloads, community translations/contributions — are real information the user needs, but
+ * cramming them onto one page (as the previous 3-page version did, folding "Lyrics, Canvas &
+ * More" into a single dense subtitle) reads as a wall of text nobody finishes reading.
+ * Splitting "lyrics" and "translations/contributions" into their own pages keeps each screen
+ * to a single sentence-and-a-half, which is what people actually read during onboarding.
+ */
+private data class OnboardingPage(
     val emoji: String,
-    val title: String,
-    val subtitle: String,
+    val title: @Composable () -> String,
+    val subtitle: @Composable () -> String,
     val accentColor: Color,
-)
-
-private val onboardingPages = listOf(
-    OnboardingPage(
-        emoji = "🎵",
-        title = "Welcome to Wavora",
-        subtitle = "Your music, your way. Stream millions of songs from YouTube Music — offline, online, and everything in between.",
-        accentColor = wavoraPrimary,
-    ),
-    OnboardingPage(
-        emoji = "📥",
-        title = "Download & Listen Offline",
-        subtitle = "Save your favorite songs, albums, and playlists directly to your device. No internet? No problem.",
-        accentColor = wavoraSecondary,
-    ),
-    OnboardingPage(
-        emoji = "🎨",
-        title = "Lyrics, Canvas & More",
-        subtitle = "Synchronized lyrics, animated canvas backgrounds, Discord rich presence, and a sleep timer to drift off to music.",
-        accentColor = wavoraGradientStart,
-    ),
 )
 
 @Composable
 fun OnboardingScreen(onFinish: () -> Unit) {
+    val onboardingPages = listOf(
+        OnboardingPage(
+            emoji = "🎵",
+            title = { stringResource(Res.string.onboarding_page1_title) },
+            subtitle = { stringResource(Res.string.onboarding_page1_subtitle) },
+            accentColor = wavoraPrimary,
+        ),
+        OnboardingPage(
+            emoji = "📝",
+            title = { stringResource(Res.string.onboarding_page2_title) },
+            subtitle = { stringResource(Res.string.onboarding_page2_subtitle) },
+            accentColor = wavoraSecondary,
+        ),
+        OnboardingPage(
+            emoji = "🌐",
+            title = { stringResource(Res.string.onboarding_page3_title) },
+            subtitle = { stringResource(Res.string.onboarding_page3_subtitle) },
+            accentColor = wavoraGradientStart,
+        ),
+        OnboardingPage(
+            emoji = "📥",
+            title = { stringResource(Res.string.onboarding_page4_title) },
+            subtitle = { stringResource(Res.string.onboarding_page4_subtitle) },
+            accentColor = wavoraGradientEnd,
+        ),
+    )
+
     val pagerState = rememberPagerState { onboardingPages.size }
     val scope = rememberCoroutineScope()
 
@@ -122,10 +158,22 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                 modifier = Modifier.size(40.dp),
             )
 
-            // Pager
+            // Pager. Announced to screen readers as "Page X of Y" via a live region on the
+            // container, since the individual page content already fades in/out and a raw
+            // swipe gesture alone gives no non-visual signal of progress.
+            val pageAnnouncement = stringResource(
+                Res.string.onboarding_page_indicator,
+                pagerState.currentPage + 1,
+                onboardingPages.size,
+            )
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics {
+                        liveRegion = LiveRegionMode.Polite
+                        contentDescription = pageAnnouncement
+                    },
             ) { page ->
                 val isCurrentPage = pagerState.currentPage == page
                 val alpha by animateFloatAsState(
@@ -138,7 +186,10 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 40.dp)
-                        .alpha(alpha),
+                        .alpha(alpha)
+                        // Content is already announced via the pager's own live region above;
+                        // clearing here avoids screen readers reading every off-screen page too.
+                        .clearAndSetSemantics { },
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
@@ -172,7 +223,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = onboardingPages[page].title,
+                                text = onboardingPages[page].title(),
                                 style = LocalAppTypography.current.headlineMedium,
                                 textAlign = TextAlign.Center,
                                 fontWeight = FontWeight.Bold,
@@ -180,7 +231,7 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                             )
                             Spacer(Modifier.height(16.dp))
                             Text(
-                                text = onboardingPages[page].subtitle,
+                                text = onboardingPages[page].subtitle(),
                                 style = LocalAppTypography.current.bodyMedium,
                                 textAlign = TextAlign.Center,
                                 color = Color.White.copy(alpha = 0.65f),
@@ -194,7 +245,10 @@ fun OnboardingScreen(onFinish: () -> Unit) {
             // Page indicators
             Row(
                 horizontalArrangement = Arrangement.Center,
-                modifier = Modifier.padding(bottom = 24.dp),
+                modifier = Modifier
+                    .padding(bottom = 24.dp)
+                    // Decorative — the real progress announcement lives on the pager above.
+                    .clearAndSetSemantics { },
             ) {
                 repeat(onboardingPages.size) { i ->
                     val isSelected = pagerState.currentPage == i
@@ -242,7 +296,11 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                     modifier = Modifier.weight(1f),
                 ) {
                     Text(
-                        text = if (pagerState.currentPage > 0) "Back" else "Skip",
+                        text = if (pagerState.currentPage > 0) {
+                            stringResource(Res.string.onboarding_back)
+                        } else {
+                            stringResource(Res.string.onboarding_skip)
+                        },
                         color = Color.White.copy(alpha = 0.5f),
                         style = LocalAppTypography.current.labelLarge,
                     )
@@ -274,7 +332,11 @@ fun OnboardingScreen(onFinish: () -> Unit) {
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = if (isLastPage) "Get Started" else "Next",
+                            text = if (isLastPage) {
+                                stringResource(Res.string.onboarding_get_started)
+                            } else {
+                                stringResource(Res.string.onboarding_next)
+                            },
                             color = Color.White,
                             fontWeight = FontWeight.SemiBold,
                             style = LocalAppTypography.current.labelLarge,

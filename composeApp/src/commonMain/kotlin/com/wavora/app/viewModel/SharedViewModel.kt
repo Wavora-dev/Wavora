@@ -4,7 +4,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.lifecycle.viewModelScope
 import com.wavora.domain.manager.DataStoreManager
 import com.wavora.domain.manager.DataStoreManager.Values.TRUE
-import com.wavora.domain.mediaservice.handler.DownloadHandler
 import com.wavora.domain.mediaservice.handler.NowPlayingTrackState
 import com.wavora.domain.model.entities.AlbumEntity
 import com.wavora.domain.model.entities.DownloadState
@@ -16,7 +15,6 @@ import com.wavora.domain.model.entities.NewFormatEntity
 import com.wavora.domain.model.model.canvas.CanvasResult
 import com.wavora.domain.model.model.download.DownloadProgress
 import com.wavora.domain.model.model.intent.GenericIntent
-import com.wavora.domain.model.model.metadata.Lyrics
 import com.wavora.domain.model.model.streams.TimeLine
 import com.wavora.domain.model.model.update.UpdateData
 import com.wavora.domain.repository.AlbumRepository
@@ -24,15 +22,10 @@ import com.wavora.domain.repository.LocalPlaylistRepository
 import com.wavora.domain.repository.PlaylistRepository
 import com.wavora.domain.repository.SongRepository
 import com.wavora.app.viewModel.base.BaseViewModel
-import com.wavora.logger.LogLevel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.first
@@ -43,7 +36,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import org.koin.core.component.inject
 import kotlin.reflect.KClass
 import wavora.composeapp.generated.resources.Res
@@ -89,14 +81,12 @@ class SharedViewModel(
     fun stopPlayer() { nowPlaying.clearNowPlayingScreen(); player.stopPlayer() }
     fun setSleepTimer(minutes: Int) = player.setSleepTimer(minutes)
     fun stopSleepTimer() = player.stopSleepTimer()
-    fun getLocation() = player.getLocation()
     fun loadSharedMediaItem(videoId: String) = player.loadSharedMediaItem(videoId)
     fun loadMediaItemFromTrack(track: com.wavora.domain.model.model.browse.album.Track, type: String, index: Int? = null) = player.loadMediaItemFromTrack(track, type, index)
     fun getTranslucentBottomBar() = player.getTranslucentBottomBar()
     fun getEnableLiquidGlass() = player.getEnableLiquidGlass()
-    fun shouldStopMusicService() = player.shouldStopMusicService()
     fun isUserLoggedIn() = player.isUserLoggedIn()
-    fun isCombineFavoriteAndYTLiked() = player.isCombineFavoriteAndYTLiked()
+    fun shouldStopMusicService() = player.shouldStopMusicService()
 
     // blurBg: DataStore preference for blurring the NowPlaying background.
     // Exposed directly on SharedViewModel (not delegated to a sub-VM) because
@@ -149,6 +139,8 @@ class SharedViewModel(
     val reloadDestination: StateFlow<KClass<*>?> get() = app.reloadDestination
     val recreateActivity: StateFlow<Boolean> get() = app.recreateActivity
     val openAppTime: StateFlow<Int> get() = app.openAppTime
+    val location: StateFlow<String> get() = app.location
+    fun getLocation() = app.getLocation()
     fun setIntent(intent: GenericIntent?) = app.setIntent(intent)
     fun showNotificationPermissionDialog() = app.showNotificationPermissionDialog()
     fun dismissNotificationPermissionDialog(doNotShowAgain: Boolean) = app.dismissNotificationPermissionDialog(doNotShowAgain)
@@ -156,9 +148,9 @@ class SharedViewModel(
     fun reloadDestinationDone() = app.reloadDestinationDone()
     fun activityRecreate() = app.activityRecreate()
     fun activityRecreateDone() = app.activityRecreateDone()
-    fun getString(key: String): String? = app.getString(key)
-    fun putString(key: String, value: String) = app.putString(key, value)
-    fun shouldCheckForUpdate() = app.shouldCheckForUpdate()
+    suspend fun getString(key: String): String? = app.getString(key)
+    suspend fun putString(key: String, value: String) = app.putString(key, value)
+    fun checkForUpdateIfEnabled() = app.checkForUpdateIfEnabled()
     fun checkForUpdate() = app.checkForUpdate()
 
     // ── Init: wire song-change events from player → nowPlaying ────────────

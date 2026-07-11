@@ -27,6 +27,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.wavora.logger.Logger
 import com.wavora.app.ui.theme.typo
+import com.wavora.app.ui.theme.wavoraSecondary
+import com.wavora.app.ui.theme.wavoraTextSecondary
 import org.jetbrains.compose.resources.stringResource
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.less
@@ -65,7 +67,7 @@ fun DescriptionView(
     var currentIndex = 0
     val style =
         SpanStyle(
-            color = Color(0xFF00B0FF),
+            color = wavoraSecondary,
             fontWeight = FontWeight.Normal,
         )
     val combinedRegex = Regex("${timeRegex.pattern}|${urlRegex.pattern}")
@@ -143,7 +145,7 @@ fun DescriptionView(
         androidx.compose.animation.AnimatedVisibility(!shouldHideExpandButton) {
             Text(
                 text = if (expanded) stringResource(Res.string.less) else stringResource(Res.string.more),
-                color = Color.LightGray,
+                color = wavoraTextSecondary,
                 modifier =
                     Modifier.clickable {
                         expanded = !expanded

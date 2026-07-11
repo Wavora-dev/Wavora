@@ -29,6 +29,7 @@ import com.wavora.appdata.di.loader.loadAllModules
 import com.wavora.domain.manager.DataStoreManager
 import com.wavora.domain.mediaservice.handler.MediaPlayerHandler
 import com.wavora.domain.mediaservice.handler.ToastType
+import com.wavora.domain.mediaservice.session.PlayerSessionAdapter
 import com.wavora.app.di.viewModelModule
 import com.wavora.app.ui.component.CustomTitleBar
 import com.wavora.app.ui.mini_player.MiniPlayerManager
@@ -167,15 +168,14 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
         Sentry.withScope { scope ->
             Sentry.captureMessage("Player Error: ${error.message}, code: ${error.errorCode}, code name: ${error.errorCodeName}")
         }
+        getKoin().get<PlayerSessionAdapter>().reportError(error)
     }
 
     // Register wavora:// protocol handler on Windows (HKCU, no admin needed)
     WindowsProtocolRegistrar.register()
 
     val sharedViewModel = getKoin().get<SharedViewModel>()
-    if (sharedViewModel.shouldCheckForUpdate()) {
-        sharedViewModel.checkForUpdate()
-    }
+    sharedViewModel.checkForUpdateIfEnabled()
 
     // Connect deep link handler to SharedViewModel
     DesktopDeepLinkHandler.listener = { intent ->

@@ -76,6 +76,8 @@ import com.wavora.app.ui.component.LibraryTilingBox
 import com.wavora.app.ui.navigation.destination.home.AnalyticsDestination
 import com.wavora.app.ui.theme.transparent
 import com.wavora.app.ui.theme.typo
+import com.wavora.app.ui.theme.wavoraBorder
+import com.wavora.app.ui.theme.wavoraSurface
 import com.wavora.app.viewModel.LibraryViewModel
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
@@ -374,7 +376,7 @@ fun LibraryScreen(
                         .fillMaxWidth()
                         .wrapContentHeight(),
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-                colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+                colors = CardDefaults.cardColors().copy(containerColor = wavoraSurface),
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -387,7 +389,7 @@ fun LibraryScreen(
                                 .height(4.dp),
                         colors =
                             CardDefaults.cardColors().copy(
-                                containerColor = Color(0xFF474545),
+                                containerColor = wavoraBorder,
                             ),
                         shape = RoundedCornerShape(50),
                     ) {}

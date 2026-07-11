@@ -1,7 +1,6 @@
 package com.wavora.app.viewModel
 
 import androidx.lifecycle.viewModelScope
-import com.wavora.common.SELECTED_LANGUAGE
 import com.wavora.domain.model.entities.SearchHistory
 import com.wavora.domain.model.model.searchResult.albums.AlbumsResult
 import com.wavora.domain.model.model.searchResult.artists.ArtistsResult
@@ -21,10 +20,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import org.jetbrains.compose.resources.StringResource
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.albums
@@ -99,12 +96,7 @@ class SearchViewModel(
     private val _searchHistory: MutableStateFlow<List<String>> = MutableStateFlow(emptyList())
     val searchHistory: StateFlow<List<String>> get() = _searchHistory.asStateFlow()
 
-    var regionCode: String? = null
-    var language: String? = null
-
     init {
-        regionCode = runBlocking { dataStoreManager.location.first() }
-        language = runBlocking { dataStoreManager.getString(SELECTED_LANGUAGE).first() }
         getSearchHistory()
     }
 

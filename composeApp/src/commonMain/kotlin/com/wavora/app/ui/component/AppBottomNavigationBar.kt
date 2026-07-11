@@ -25,6 +25,7 @@ import com.wavora.app.ui.navigation.destination.home.HomeDestination
 import com.wavora.app.ui.navigation.destination.library.LibraryDestination
 import com.wavora.app.ui.navigation.destination.search.SearchDestination
 import com.wavora.app.ui.theme.typo
+import com.wavora.app.ui.theme.wavoraBorder
 import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import wavora.composeapp.generated.resources.*
@@ -163,7 +164,7 @@ fun AppNavigationRail(
                 Modifier
                     .size(48.dp)
                     .clip(CircleShape)
-                    .background(Color.DarkGray),
+                    .background(wavoraBorder),
                 contentAlignment = Alignment.Center,
             ) {
                 Image(

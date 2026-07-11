@@ -18,7 +18,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.wavora.app.ui.theme.wavoraBorder
+import com.wavora.app.ui.theme.wavoraSurface
+import com.wavora.app.ui.theme.wavoraTextSecondary
+import org.jetbrains.compose.resources.stringResource
+import wavora.composeapp.generated.resources.Res
+import wavora.composeapp.generated.resources.coming_soon
+import wavora.composeapp.generated.resources.introducing_wavora_chart
 
+// Renamed from SimpMusicChart.kt — leftover filename from the SimpMusic fork, the
+// composable inside was already called WavoraChartButton. The colors were also
+// off-brand (a reddish/maroon pair that doesn't exist anywhere in Color.kt), which
+// made this promo pill look like it belonged to a different app. Now uses the same
+// surface/border tokens as every other card in Wavora, and the copy is localized
+// and honestly labeled as a preview feature instead of looking like a dead tap target.
 @Composable
 fun WavoraChartButton(
     modifier: Modifier = Modifier,
@@ -28,27 +41,32 @@ fun WavoraChartButton(
         modifier = modifier,
         onClick = onClick,
         shape = RoundedCornerShape(24.dp),
-        color = Color(0xFF1A0F0F),
-        border = BorderStroke(1.dp, Color(0xFF3D2828))
+        color = wavoraSurface,
+        border = BorderStroke(1.dp, wavoraBorder),
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+            horizontalArrangement = Arrangement.Center,
         ) {
             // Sparkles icon
             Text(
                 text = "✨",
                 fontSize = 13.sp,
-                modifier = Modifier.padding(end = 8.dp)
+                modifier = Modifier.padding(end = 8.dp),
             )
 
-            // Text
             Text(
-                text = "Introducing Wavora Chart",
+                text = stringResource(Res.string.introducing_wavora_chart),
                 fontSize = 13.sp,
-                color = Color(0xFFB8B8B8),
-                fontWeight = FontWeight.Normal
+                color = wavoraTextSecondary,
+                fontWeight = FontWeight.Normal,
+            )
+            Text(
+                text = " · ${stringResource(Res.string.coming_soon)}",
+                fontSize = 13.sp,
+                color = wavoraTextSecondary,
+                fontWeight = FontWeight.Normal,
             )
         }
     }
@@ -61,7 +79,7 @@ fun PreviewWavoraChartButton() {
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         WavoraChartButton(onClick = {})
     }

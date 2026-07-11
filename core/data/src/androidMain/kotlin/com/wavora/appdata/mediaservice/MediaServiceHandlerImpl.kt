@@ -184,8 +184,6 @@ internal class MediaServiceHandlerImpl(
     private var loudnessEnhancer: LoudnessEnhancer? = null
     private var secondLoudnessEnhancer: LoudnessEnhancer? = null
 
-    private var skipSilent = false
-
     private var normalizeVolume = false
 
     private var watchTimeList: ArrayList<Float> = arrayListOf()
@@ -245,9 +243,6 @@ internal class MediaServiceHandlerImpl(
         getSkipSegmentsJob = Job()
         getFormatJob = Job()
         jobWatchtime = Job()
-        skipSilent = runBlocking { dataStoreManager.skipSilent.first() == TRUE }
-        normalizeVolume =
-            runBlocking { dataStoreManager.normalizeVolume.first() == TRUE }
         _nowPlaying.value = player.currentMediaItem
         if (runBlocking { dataStoreManager.saveStateOfPlayback.first() } == TRUE) {
             Logger.d(TAG, "SaveStateOfPlayback TRUE")
@@ -281,7 +276,7 @@ internal class MediaServiceHandlerImpl(
             val controlStateJob =
                 launch {
                     controlState.collectLatest {
-                        updateNotification()
+                        updateNotification(knownLiked = it.isLiked)
                     }
                 }
             val skipSegmentsJob =
@@ -667,21 +662,38 @@ internal class MediaServiceHandlerImpl(
     }
 
     @SuppressLint("PrivateResource")
-    private fun updateNotification() {
+    private fun updateNotification(knownLiked: Boolean? = null) {
         updateNotificationJob?.cancel()
         updateNotificationJob =
             coroutineScope.launch {
-                var id = (player.currentMediaItem?.mediaId ?: "")
-                if (id.contains("Video")) {
-                    id = id.removePrefix("Video")
-                }
+                // PROMPT_05 hot-path finding: this is called from
+                // `controlState.collectLatest { updateNotification() }` — i.e. on EVERY
+                // controlState change (play/pause, shuffle, repeat, volume...), not just on song
+                // transitions. It used to re-query Room for `liked` every single time, even
+                // though the ControlState that triggered this call already carries `isLiked`.
+                // `knownLiked` lets that call site skip the DB round-trip entirely. The other
+                // call site (after a track transition, where the new song's liked status isn't
+                // confirmed in controlState yet) keeps querying Room as before by leaving this
+                // null.
                 val liked =
-                    songRepository
-                        .getSongById(id)
-                        .singleOrNull()
-                        ?.liked ?: false
+                    knownLiked ?: run {
+                        var id = (player.currentMediaItem?.mediaId ?: "")
+                        if (id.contains("Video")) {
+                            id = id.removePrefix("Video")
+                        }
+                        songRepository
+                            .getSongById(id)
+                            .singleOrNull()
+                            ?.liked ?: false
+                    }
                 Logger.w("Check liked", liked.toString())
-                _controlState.value = _controlState.value.copy(isLiked = liked)
+                // Only write back when we actually looked something up — when `knownLiked` was
+                // passed, we just read this same value FROM controlState, so writing it back
+                // would be a no-op at best and, in a narrow window (isLiked changing again while
+                // this coroutine is in flight), could overwrite a newer value with this stale one.
+                if (knownLiked == null) {
+                    _controlState.value = _controlState.value.copy(isLiked = liked)
+                }
                 onUpdateNotification.invoke(
                     listOf(
                         GenericCommandButton.Like(liked),
@@ -2212,6 +2224,18 @@ internal class MediaServiceHandlerImpl(
                     0
                 }
             }
+        // Fase 1 instrumentation (see PROMPT_02 Playback Transition Report). Shared "PB_TRACE"
+        // tag across MediaServiceHandlerImpl / CrossfadeExoPlayerAdapter / VlcPlayerAdapter /
+        // PlayerSession / PlayerController, so a single log filter shows the whole chain in
+        // order across a track transition.
+        Logger.d(
+            "PB_TRACE",
+            "t=${java.time.Instant.now()} thread=${Thread.currentThread().name} " +
+                "MediaServiceHandlerImpl.onPlaybackStateChanged($playbackState) | " +
+                "playWhenReady=${player.playWhenReady} isPlaying=${player.isPlaying} " +
+                "index=${player.currentMediaItemIndex} song=${player.currentMediaItem?.mediaId} " +
+                "pos=$current buffered=$loaded",
+        )
         when (playbackState) {
             PlayerConstants.STATE_IDLE -> {
                 _simpleMediaState.value = SimpleMediaState.Initial
@@ -2238,6 +2262,14 @@ internal class MediaServiceHandlerImpl(
     }
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
+        Logger.d(
+            "PB_TRACE",
+            "t=${java.time.Instant.now()} thread=${Thread.currentThread().name} " +
+                "MediaServiceHandlerImpl.onIsPlayingChanged($isPlaying) | " +
+                "playWhenReady=${player.playWhenReady} playbackState=${player.playbackState} " +
+                "index=${player.currentMediaItemIndex} song=${player.currentMediaItem?.mediaId} " +
+                "pos=${player.currentPosition} buffered=${player.bufferedPosition}",
+        )
         _controlState.value = _controlState.value.copy(isPlaying = isPlaying)
         if (isPlaying) {
             startProgressUpdate()
@@ -2257,6 +2289,14 @@ internal class MediaServiceHandlerImpl(
         mediaItem: GenericMediaItem?,
         reason: Int,
     ) {
+        Logger.d(
+            "PB_TRACE",
+            "t=${java.time.Instant.now()} thread=${Thread.currentThread().name} " +
+                "MediaServiceHandlerImpl.onMediaItemTransition(reason=$reason) | " +
+                "playWhenReady=${player.playWhenReady} isPlaying=${player.isPlaying} " +
+                "index=${player.currentMediaItemIndex} song=${mediaItem?.mediaId} " +
+                "pos=${player.currentPosition} buffered=${player.bufferedPosition}",
+        )
         Logger.w(TAG, "Checking current state before transition ${simpleMediaState.value}")
         val lastPlayed = nowPlayingState.value.songEntity
         val currentState = simpleMediaState.value

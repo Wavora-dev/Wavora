@@ -120,6 +120,16 @@ interface DataStoreManager {
 
     suspend fun setWatchVideoInsteadOfPlayingAudio(watch: Boolean)
 
+    /**
+     * Whether the video track of a video song is downloaded alongside its audio when the user
+     * downloads it. Defaults to TRUE (existing behavior: download both, same as before this
+     * setting existed). When set to false, only the audio part is downloaded for video songs —
+     * plain audio-only songs are unaffected either way, since they never had a video part.
+     */
+    val downloadVideoEnabled: Flow<String>
+
+    suspend fun setDownloadVideoEnabled(enabled: Boolean)
+
     val playerVolume: Flow<Float>
 
     suspend fun setPlayerVolume(volume: Float)

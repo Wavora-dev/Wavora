@@ -4,7 +4,6 @@ import android.app.usage.StorageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.storage.StorageManager
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
@@ -25,7 +24,6 @@ import com.wavora.app.extension.getSizeOfFile
 import com.wavora.app.extension.zipInputStream
 import com.wavora.app.extension.zipOutputStream
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import multiplatform.network.cmptoast.ToastGravity
 import multiplatform.network.cmptoast.showToast
@@ -36,7 +34,6 @@ import wavora.composeapp.generated.resources.restore_success
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.util.Locale
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
@@ -122,10 +119,8 @@ actual suspend fun restoreNative(
                     }
 
                     entry.name == DB_NAME -> {
-                        runBlocking(Dispatchers.IO) {
-                            commonRepository.databaseDaoCheckpoint()
-                            commonRepository.closeDatabase()
-                        }
+                        commonRepository.databaseDaoCheckpoint()
+                        commonRepository.closeDatabase()
                         FileOutputStream(commonRepository.getDatabasePath()).use { outputStream ->
                             inputStream.copyTo(outputStream)
                         }
@@ -293,9 +288,7 @@ actual suspend fun backupNative(
                     outputStream.putNextEntry(ZipEntry("$SETTINGS_FILENAME.preferences_pb"))
                     inputStream.copyTo(outputStream)
                 }
-            runBlocking(Dispatchers.IO) {
-                commonRepository.databaseDaoCheckpoint()
-            }
+            commonRepository.databaseDaoCheckpoint()
             FileInputStream(commonRepository.getDatabasePath()).use { inputStream ->
                 outputStream.putNextEntry(ZipEntry(DB_NAME))
                 inputStream.copyTo(outputStream)

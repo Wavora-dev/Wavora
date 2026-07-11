@@ -198,7 +198,7 @@ internal class DownloadUtils(
             downloadRequest,
             false,
         )
-        if (isVideo) {
+        if (isVideo && dataStoreManager.downloadVideoEnabled.firstOrNull() != DataStoreManager.Values.FALSE) {
             val id = MERGING_DATA_TYPE.VIDEO + videoId
             val downloadRequestVideo =
                 DownloadRequest

@@ -37,11 +37,8 @@ fun parseRichSyncWords(
 ): ParsedRichSyncLine? {
     // Handle edge cases
     if (words.isBlank()) {
-        println("[parseRichSyncWords] Input is blank")
         return null
     }
-
-    println("[parseRichSyncWords] Input preview: ${words.take(100)}")
 
     // Strategy: Find all timestamps first, then extract text between them
     // Regex to match timestamp only: <MM:SS.mm> or <MM:SS.mmm>
@@ -84,11 +81,8 @@ fun parseRichSyncWords(
 
     // If no valid words were parsed, return null (fallback to LINE_SYNCED)
     if (wordTimings.isEmpty()) {
-        println("[parseRichSyncWords] No words matched the regex")
         return null
     }
-
-    println("[parseRichSyncWords] Successfully parsed ${wordTimings.size} words")
 
     // Parse line timing
     val lineStart = lineStartTimeMs.toLongOrNull() ?: 0L

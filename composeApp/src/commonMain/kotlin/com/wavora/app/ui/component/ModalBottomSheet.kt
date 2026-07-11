@@ -146,6 +146,9 @@ import com.wavora.app.ui.navigation.destination.list.AlbumDestination
 import com.wavora.app.ui.navigation.destination.list.ArtistDestination
 import com.wavora.app.ui.theme.seed
 import com.wavora.app.ui.theme.typo
+import com.wavora.app.ui.theme.wavoraBorder
+import com.wavora.app.ui.theme.wavoraSurface
+import com.wavora.app.ui.theme.wavoraTextSecondary
 import com.wavora.app.ui.theme.white
 import com.wavora.app.viewModel.NowPlayingBottomSheetUIEvent
 import com.wavora.app.viewModel.NowPlayingBottomSheetViewModel
@@ -165,6 +168,7 @@ import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import wavora.composeapp.generated.resources.Res
+import wavora.composeapp.generated.resources.close
 import wavora.composeapp.generated.resources.add_to_a_playlist
 import wavora.composeapp.generated.resources.add_to_queue
 import wavora.composeapp.generated.resources.album
@@ -315,7 +319,7 @@ fun InfoPlayerBottomSheet(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.large,
-                    color = Color(0xFF242424),
+                    color = wavoraSurface,
                     tonalElevation = AlertDialogDefaults.TonalElevation,
                     shadowElevation = 1.dp,
                 ) {
@@ -502,7 +506,7 @@ fun InfoPlayerBottomSheet(
                         }) {
                             Icon(
                                 painter = painterResource(Res.drawable.baseline_keyboard_arrow_down_24),
-                                contentDescription = "",
+                                contentDescription = stringResource(Res.string.close),
                                 tint = Color.White,
                             )
                         }
@@ -1057,7 +1061,7 @@ fun QueueBottomSheet(
                         }) {
                             Icon(
                                 painter = painterResource(Res.drawable.baseline_keyboard_arrow_down_24),
-                                contentDescription = "",
+                                contentDescription = stringResource(Res.string.close),
                                 tint = Color.White,
                             )
                         }
@@ -1256,7 +1260,7 @@ fun QueueItemBottomSheet(
                     .fillMaxWidth()
                     .wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+            colors = CardDefaults.cardColors().copy(containerColor = wavoraSurface),
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -1269,7 +1273,7 @@ fun QueueItemBottomSheet(
                             .height(4.dp),
                     colors =
                         CardDefaults.cardColors().copy(
-                            containerColor = Color(0xFF474545),
+                            containerColor = wavoraBorder,
                         ),
                     shape = RoundedCornerShape(50),
                 ) {}
@@ -1491,7 +1495,7 @@ fun NowPlayingBottomSheet(
 
     if (sleepTimerWarning) {
         AlertDialog(
-            containerColor = Color(0xFF242424),
+            containerColor = wavoraSurface,
             onDismissRequest = { sleepTimerWarning = false },
             confirmButton = {
                 TextButton(onClick = {
@@ -1534,7 +1538,7 @@ fun NowPlayingBottomSheet(
 
         AlertDialog(
             onDismissRequest = { mainLyricsProvider = false },
-            containerColor = Color(0xFF242424),
+            containerColor = wavoraSurface,
             title = {
                 Text(
                     text = stringResource(Res.string.main_lyrics_provider),
@@ -1637,7 +1641,7 @@ fun NowPlayingBottomSheet(
                         .fillMaxWidth()
                         .wrapContentHeight(),
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-                colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+                colors = CardDefaults.cardColors().copy(containerColor = wavoraSurface),
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -1651,7 +1655,7 @@ fun NowPlayingBottomSheet(
                                 .height(4.dp),
                         colors =
                             CardDefaults.cardColors().copy(
-                                containerColor = Color(0xFF474545),
+                                containerColor = wavoraBorder,
                             ),
                         shape = RoundedCornerShape(50),
                     ) {}
@@ -1921,13 +1925,13 @@ fun ActionButton(
                     if (enable) {
                         ColorFilter.tint(iconColor)
                     } else {
-                        ColorFilter.tint(Color.Gray)
+                        ColorFilter.tint(wavoraTextSecondary)
                     },
             )
             Text(
                 text = if (text != null) stringResource(text) else textString ?: "",
                 style = LocalAppTypography.current.labelSmall,
-                color = if (enable) textColor ?: Color.Unspecified else Color.Gray,
+                color = if (enable) textColor ?: Color.Unspecified else wavoraTextSecondary,
                 modifier =
                     Modifier
                         .padding(start = 10.dp)
@@ -2048,7 +2052,7 @@ fun PlaybackSpeedPitchBottomSheet(
         Card(
             modifier = Modifier.fillMaxWidth().wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+            colors = CardDefaults.cardColors().copy(containerColor = wavoraSurface),
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -2056,7 +2060,7 @@ fun PlaybackSpeedPitchBottomSheet(
             ) {
                 Card(
                     modifier = Modifier.width(40.dp).height(4.dp),
-                    colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF474545)),
+                    colors = CardDefaults.cardColors().copy(containerColor = wavoraBorder),
                     shape = RoundedCornerShape(50),
                 ) {}
                 Spacer(modifier = Modifier.height(16.dp))
@@ -2069,7 +2073,7 @@ fun PlaybackSpeedPitchBottomSheet(
                         painter = painterResource(Res.drawable.round_speed_24),
                         contentDescription = stringResource(Res.string.playback_speed),
                         modifier = Modifier.size(24.dp),
-                        colorFilter = ColorFilter.tint(Color(0xFFB0B0A0)),
+                        colorFilter = ColorFilter.tint(wavoraTextSecondary),
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     IconButton(
@@ -2084,13 +2088,13 @@ fun PlaybackSpeedPitchBottomSheet(
                         Icon(
                             Icons.Rounded.Remove,
                             contentDescription = "Decrease speed",
-                            tint = Color(0xFFB0B0A0),
+                            tint = wavoraTextSecondary,
                         )
                     }
                     Text(
                         text = "x${String.format("%.1f", playbackSpeed)}",
                         style = LocalAppTypography.current.titleMedium,
-                        color = Color(0xFFD0D0C0),
+                        color = wavoraTextSecondary,
                         modifier = Modifier.widthIn(min = 60.dp),
                         textAlign = TextAlign.Center,
                     )
@@ -2106,7 +2110,7 @@ fun PlaybackSpeedPitchBottomSheet(
                         Icon(
                             Icons.Rounded.Add,
                             contentDescription = "Increase speed",
-                            tint = Color(0xFFB0B0A0),
+                            tint = wavoraTextSecondary,
                         )
                     }
                 }
@@ -2121,7 +2125,7 @@ fun PlaybackSpeedPitchBottomSheet(
                             Icons.Rounded.Tune,
                             contentDescription = stringResource(Res.string.pitch),
                             modifier = Modifier.size(24.dp),
-                            tint = Color(0xFFB0B0A0),
+                            tint = wavoraTextSecondary,
                         )
                         Spacer(modifier = Modifier.weight(1f))
                         IconButton(
@@ -2133,13 +2137,13 @@ fun PlaybackSpeedPitchBottomSheet(
                             Icon(
                                 Icons.Rounded.Remove,
                                 contentDescription = "Decrease pitch",
-                                tint = Color(0xFFB0B0A0),
+                                tint = wavoraTextSecondary,
                             )
                         }
                         Text(
                             text = "$pitch",
                             style = LocalAppTypography.current.titleMedium,
-                            color = Color(0xFFD0D0C0),
+                            color = wavoraTextSecondary,
                             modifier = Modifier.widthIn(min = 60.dp),
                             textAlign = TextAlign.Center,
                         )
@@ -2152,7 +2156,7 @@ fun PlaybackSpeedPitchBottomSheet(
                             Icon(
                                 Icons.Rounded.Add,
                                 contentDescription = "Increase pitch",
-                                tint = Color(0xFFB0B0A0),
+                                tint = wavoraTextSecondary,
                             )
                         }
                     }
@@ -2220,7 +2224,7 @@ fun SleepTimerBottomSheet(
         Card(
             modifier = Modifier.fillMaxWidth().wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF1C1C1C)),
+            colors = CardDefaults.cardColors().copy(containerColor = wavoraSurface),
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -2231,7 +2235,7 @@ fun SleepTimerBottomSheet(
                 // Drag handle
                 Card(
                     modifier = Modifier.width(40.dp).height(4.dp),
-                    colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF555555)),
+                    colors = CardDefaults.cardColors().copy(containerColor = wavoraBorder),
                     shape = RoundedCornerShape(50),
                 ) {}
 
@@ -2282,14 +2286,14 @@ fun SleepTimerBottomSheet(
                                 border =
                                     BorderStroke(
                                         width = if (isSelected) 1.5.dp else 1.dp,
-                                        color = if (isSelected) seed else Color(0xFF3D3D3D),
+                                        color = if (isSelected) seed else wavoraBorder,
                                     ),
                                 contentPadding = PaddingValues(vertical = 10.dp, horizontal = 4.dp),
                             ) {
                                 Text(
                                     text = preset.label,
                                     style = LocalAppTypography.current.bodySmall,
-                                    color = if (isSelected) seed else Color(0xFFCCCCCC),
+                                    color = if (isSelected) seed else wavoraTextSecondary,
                                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                                 )
                             }
@@ -2320,14 +2324,14 @@ fun SleepTimerBottomSheet(
                         border =
                             BorderStroke(
                                 width = if (isEndSelected) 1.5.dp else 1.dp,
-                                color = if (isEndSelected) seed else Color(0xFF3D3D3D),
+                                color = if (isEndSelected) seed else wavoraBorder,
                             ),
                         contentPadding = PaddingValues(vertical = 10.dp, horizontal = 4.dp),
                     ) {
                         Text(
                             text = "End of song",
                             style = LocalAppTypography.current.bodySmall,
-                            color = if (isEndSelected) seed else Color(0xFFCCCCCC),
+                            color = if (isEndSelected) seed else wavoraTextSecondary,
                             fontWeight = if (isEndSelected) FontWeight.SemiBold else FontWeight.Normal,
                         )
                     }
@@ -2348,14 +2352,14 @@ fun SleepTimerBottomSheet(
                         border =
                             BorderStroke(
                                 width = if (isCustomSelected) 1.5.dp else 1.dp,
-                                color = if (isCustomSelected) seed else Color(0xFF3D3D3D),
+                                color = if (isCustomSelected) seed else wavoraBorder,
                             ),
                         contentPadding = PaddingValues(vertical = 10.dp, horizontal = 4.dp),
                     ) {
                         Text(
                             text = "Custom",
                             style = LocalAppTypography.current.bodySmall,
-                            color = if (isCustomSelected) seed else Color(0xFFCCCCCC),
+                            color = if (isCustomSelected) seed else wavoraTextSecondary,
                             fontWeight = if (isCustomSelected) FontWeight.SemiBold else FontWeight.Normal,
                         )
                     }
@@ -2382,7 +2386,7 @@ fun SleepTimerBottomSheet(
                                 Text(
                                     text = "min",
                                     style = LocalAppTypography.current.bodySmall,
-                                    color = Color.Gray,
+                                    color = wavoraTextSecondary,
                                 )
                             },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -2498,7 +2502,7 @@ fun AddToPlaylistModalBottomSheet(
                         .fillMaxWidth()
                         .wrapContentHeight(),
                 shape = BottomSheetDefaults.ExpandedShape,
-                colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+                colors = CardDefaults.cardColors().copy(containerColor = wavoraSurface),
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -2507,7 +2511,7 @@ fun AddToPlaylistModalBottomSheet(
                     Spacer(modifier = Modifier.height(5.dp))
                     Card(
                         modifier = Modifier.width(60.dp).height(4.dp),
-                        colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF474545)),
+                        colors = CardDefaults.cardColors().copy(containerColor = wavoraBorder),
                         shape = RoundedCornerShape(50),
                     ) {}
                     Spacer(modifier = Modifier.height(5.dp))
@@ -2546,7 +2550,7 @@ fun AddToPlaylistModalBottomSheet(
                             text = stringResource(Res.string.no_playlist_found),
                             style = LocalAppTypography.current.labelSmall,
                             modifier = Modifier.padding(20.dp),
-                            color = Color.Gray,
+                            color = wavoraTextSecondary,
                         )
                     } else {
                         Crossfade(isYouTubePlaylistClicked) { clicked ->
@@ -2569,7 +2573,7 @@ fun AddToPlaylistModalBottomSheet(
                                             ) {
                                                 Image(
                                                     painter = painterResource(Res.drawable.baseline_playlist_add_24),
-                                                    contentDescription = "",
+                                                    contentDescription = null,
                                                 )
                                                 Spacer(modifier = Modifier.width(10.dp))
                                                 Text(
@@ -2603,11 +2607,11 @@ fun AddToPlaylistModalBottomSheet(
                                             ) {
                                                 Crossfade(targetState = playlist.tracks?.contains(videoId) == true) {
                                                     if (it) {
-                                                        Image(painter = painterResource(Res.drawable.done), contentDescription = "")
+                                                        Image(painter = painterResource(Res.drawable.done), contentDescription = null)
                                                     } else {
                                                         Image(
                                                             painter = painterResource(Res.drawable.baseline_playlist_add_24),
-                                                            contentDescription = "",
+                                                            contentDescription = null,
                                                         )
                                                     }
                                                 }
@@ -2615,7 +2619,7 @@ fun AddToPlaylistModalBottomSheet(
                                                 Text(
                                                     text = playlist.title,
                                                     style = LocalAppTypography.current.labelSmall,
-                                                    color = if (playlist.tracks?.contains(videoId) == true) Color.Gray else Color.White,
+                                                    color = if (playlist.tracks?.contains(videoId) == true) wavoraTextSecondary else Color.White,
                                                 )
                                             }
                                         }
@@ -2663,13 +2667,13 @@ fun ArtistModalBottomSheet(
             Card(
                 modifier = Modifier.fillMaxWidth().wrapContentHeight(),
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-                colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+                colors = CardDefaults.cardColors().copy(containerColor = wavoraSurface),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(modifier = Modifier.height(5.dp))
                     Card(
                         modifier = Modifier.width(60.dp).height(4.dp),
-                        colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF474545)),
+                        colors = CardDefaults.cardColors().copy(containerColor = wavoraBorder),
                         shape = RoundedCornerShape(50),
                     ) {}
                     Spacer(modifier = Modifier.height(5.dp))
@@ -2693,7 +2697,7 @@ fun ArtistModalBottomSheet(
                                 ) {
                                     Image(
                                         painter = painterResource(Res.drawable.baseline_people_alt_24),
-                                        contentDescription = "",
+                                        contentDescription = null,
                                     )
                                     Spacer(modifier = Modifier.width(10.dp))
                                     Text(text = artist.name, style = LocalAppTypography.current.labelSmall)
@@ -2755,13 +2759,13 @@ fun PlaylistBottomSheet(
             Card(
                 modifier = Modifier.fillMaxWidth().wrapContentHeight(),
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-                colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+                colors = CardDefaults.cardColors().copy(containerColor = wavoraSurface),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(modifier = Modifier.height(5.dp))
                     Card(
                         modifier = Modifier.width(60.dp).height(4.dp),
-                        colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF474545)),
+                        colors = CardDefaults.cardColors().copy(containerColor = wavoraBorder),
                         shape = RoundedCornerShape(50),
                     ) {}
                     Spacer(modifier = Modifier.height(5.dp))
@@ -2811,13 +2815,13 @@ fun PlaylistBottomSheet(
         Card(
             modifier = Modifier.fillMaxWidth().wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+            colors = CardDefaults.cardColors().copy(containerColor = wavoraSurface),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Spacer(modifier = Modifier.height(5.dp))
                 Card(
                     modifier = Modifier.width(60.dp).height(4.dp),
-                    colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF474545)),
+                    colors = CardDefaults.cardColors().copy(containerColor = wavoraBorder),
                     shape = RoundedCornerShape(50),
                 ) {}
                 Spacer(modifier = Modifier.height(5.dp))
@@ -2916,13 +2920,13 @@ fun LocalPlaylistBottomSheet(
             Card(
                 modifier = Modifier.fillMaxWidth().wrapContentHeight(),
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-                colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+                colors = CardDefaults.cardColors().copy(containerColor = wavoraSurface),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(modifier = Modifier.height(5.dp))
                     Card(
                         modifier = Modifier.width(60.dp).height(4.dp),
-                        colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF474545)),
+                        colors = CardDefaults.cardColors().copy(containerColor = wavoraBorder),
                         shape = RoundedCornerShape(50),
                     ) {}
                     Spacer(modifier = Modifier.height(5.dp))
@@ -2966,13 +2970,13 @@ fun LocalPlaylistBottomSheet(
             Card(
                 modifier = Modifier.fillMaxWidth().wrapContentHeight(),
                 shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-                colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+                colors = CardDefaults.cardColors().copy(containerColor = wavoraSurface),
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(modifier = Modifier.height(5.dp))
                     Card(
                         modifier = Modifier.width(60.dp).height(4.dp),
-                        colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF474545)),
+                        colors = CardDefaults.cardColors().copy(containerColor = wavoraBorder),
                         shape = RoundedCornerShape(50),
                     ) {}
                     Spacer(modifier = Modifier.height(5.dp))
@@ -3059,13 +3063,13 @@ fun SortPlaylistBottomSheet(
         Card(
             modifier = Modifier.fillMaxWidth().wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+            colors = CardDefaults.cardColors().copy(containerColor = wavoraSurface),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Spacer(modifier = Modifier.height(5.dp))
                 Card(
                     modifier = Modifier.width(60.dp).height(4.dp),
-                    colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF474545)),
+                    colors = CardDefaults.cardColors().copy(containerColor = wavoraBorder),
                     shape = RoundedCornerShape(50),
                 ) {}
                 Text(
@@ -3142,13 +3146,13 @@ fun DevLogInBottomSheet(
         Card(
             modifier = Modifier.fillMaxWidth().wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+            colors = CardDefaults.cardColors().copy(containerColor = wavoraSurface),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Spacer(modifier = Modifier.height(5.dp))
                 Card(
                     modifier = Modifier.width(60.dp).height(4.dp),
-                    colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF474545)),
+                    colors = CardDefaults.cardColors().copy(containerColor = wavoraBorder),
                     shape = RoundedCornerShape(50),
                 ) {}
                 Spacer(modifier = Modifier.height(10.dp))
@@ -3213,13 +3217,13 @@ fun DevCookieLogInBottomSheet(
         Card(
             modifier = Modifier.fillMaxWidth().wrapContentHeight(),
             shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
-            colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF242424)),
+            colors = CardDefaults.cardColors().copy(containerColor = wavoraSurface),
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Spacer(modifier = Modifier.height(5.dp))
                 Card(
                     modifier = Modifier.width(60.dp).height(4.dp),
-                    colors = CardDefaults.cardColors().copy(containerColor = Color(0xFF474545)),
+                    colors = CardDefaults.cardColors().copy(containerColor = wavoraBorder),
                     shape = RoundedCornerShape(50),
                 ) {}
                 Spacer(modifier = Modifier.height(10.dp))

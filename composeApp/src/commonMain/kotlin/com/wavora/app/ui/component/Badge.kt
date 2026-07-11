@@ -21,9 +21,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.wavora.app.ui.theme.typo
+import com.wavora.app.ui.theme.wavoraPrimary
+import com.wavora.app.ui.theme.wavoraTextSecondary
 import org.jetbrains.compose.resources.stringResource
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.ai
+import wavora.composeapp.generated.resources.explicit_content
 import com.wavora.app.ui.theme.LocalAppTypography
 
 @Composable
@@ -34,8 +37,11 @@ fun ExplicitBadge(modifier: Modifier = Modifier) {
     ) {
         Icon(
             imageVector = Icons.Filled.Explicit,
-            "Explicit",
-            tint = Color.LightGray,
+            // Left as a neutral tone on purpose -- this is a content-advisory marker
+            // (same convention as Spotify/Apple Music), not a brand accent, so it
+            // shouldn't compete visually with real Wavora UI.
+            contentDescription = stringResource(Res.string.explicit_content),
+            tint = wavoraTextSecondary,
         )
     }
 }
@@ -47,12 +53,12 @@ fun AIBadge() {
             .padding(3.dp)
             .wrapContentWidth()
             .clip(RoundedCornerShape(2.dp))
-            .background(Color.LightGray),
+            .background(wavoraPrimary),
         contentAlignment = Alignment.Center,
     ) {
         BasicText(
             text = stringResource(Res.string.ai),
-            color = { Color.Black },
+            color = { Color.White },
             maxLines = 1,
             autoSize = TextAutoSize.StepBased(minFontSize = 6.sp),
             style = LocalAppTypography.current.labelSmall,

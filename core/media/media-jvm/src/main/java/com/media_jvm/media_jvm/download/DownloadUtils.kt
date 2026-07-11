@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.launch
 import java.io.File
@@ -50,12 +51,27 @@ internal class DownloadUtils(
             if (!File(getDownloadPath()).exists()) {
                 File(getDownloadPath()).mkdirs()
             }
+            // Same thumbnail heuristic as the Android DownloadUtils (see comment there): a
+            // song's thumbnail is rewritten to the square w544/h544 format, real videos keep
+            // their original 16:9-style URL. Previously this was hardcoded to `isVideo = false`,
+            // so bulk playlist downloads on Desktop never actually fetched the video part even
+            // for video tracks — only the single-track download from NowPlayingScreen did.
+            val isSongThumbnail = thumbnail.contains("w544") && thumbnail.contains("h544")
+            val looksLikeVideoThumbnail =
+                thumbnail.contains("maxresdefault") ||
+                    thumbnail.contains("sddefault") ||
+                    thumbnail.contains("hqdefault") ||
+                    thumbnail.contains("hq720")
+            val isVideo =
+                !isSongThumbnail &&
+                    looksLikeVideoThumbnail &&
+                    dataStoreManager.downloadVideoEnabled.firstOrNull() != DataStoreManager.Values.FALSE
             songRepository
                 .downloadToFile(
                     song.toTrack(),
                     path = getDownloadPath() + File.separator + videoId,
                     videoId = videoId,
-                    isVideo = false,
+                    isVideo = isVideo,
                 ).collect { state ->
                     if (state.isError) {
                         songRepository.updateDownloadState(
