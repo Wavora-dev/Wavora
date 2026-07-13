@@ -14,7 +14,7 @@ kotlin {
     // See: https://kotlinlang.org/docs/multiplatform-discover-project.html#targets
     android {
         namespace = "com.wavora.aiservice"
-        compileSdk = 37
+        compileSdk = 36
         minSdk = 26
     }
 

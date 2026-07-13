@@ -115,15 +115,17 @@ jobs:
         with:
           packages: "platform-tools"
 
-      - name: Instalar platform/build-tools API 37
-        # Si esto vuelve a fallar con "Failed to find package
-        # 'platforms;android-37'", es porque Google TODAVÍA no lo publicó en
-        # el índice del repositorio que usa sdkmanager (pasó antes, aunque
-        # Android 17/API 37 salió estable el 16/06/2026). No es algo que se
-        # arregle desde acá - hay que esperar a que Google lo suba, o bajar
-        # temporalmente las dependencias que exigen compileSdk 37 (ver
-        # androidApp:checkReleaseAarMetadata en el log de error para la
-        # lista exacta) a versiones que solo pidan 36.
+      - name: Instalar platform/build-tools de Android
+        # compileSdk del proyecto es 36 (ver androidApp/build.gradle.kts) — API 37
+        # todavía NO está publicada en el índice público de sdkmanager que usa
+        # GitHub Actions, confirmado por el log real de CI:
+        #   "Warning: Failed to find package 'platforms;android-37'"
+        # (una búsqueda web sobre disponibilidad de API 37 puede dar falsos
+        # positivos — noticias de que salió, changelogs de AOSP, etc. — pero eso
+        # es distinto de que sdkmanager ya la tenga indexada). Instalamos 37 en
+        # modo best-effort por si en algún momento aparece, pero SIN romper el
+        # build si todavía no está: lo único que de verdad hace falta para
+        # compilar hoy es 36.
         shell: bash
         run: |
           set -euo pipefail
@@ -134,10 +136,19 @@ jobs:
             exit 1
           fi
 
+          echo "Instalando platforms;android-36 build-tools;36.0.0 (lo que el proyecto realmente compila)..."
           if ! yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --channel=3 \
-            "platforms;android-37" "build-tools;37.0.0"; then
-            echo "::error::Google todavía no publicó 'platforms;android-37' en el índice de sdkmanager. No se puede continuar el build hasta que lo publiquen, o hasta bajar las dependencias que lo exigen (ver el error de checkReleaseAarMetadata de la última corrida que sí compiló)."
+            "platforms;android-36" "build-tools;36.0.0"; then
+            echo "::error::No se pudo instalar platforms;android-36 / build-tools;36.0.0 — esto sí es fatal, es lo que compileSdk=36 necesita."
             exit 1
+          fi
+
+          echo "Probando platforms;android-37 (best-effort, no bloquea el build si todavía no está publicada)..."
+          if yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --channel=3 \
+            "platforms;android-37" "build-tools;37.0.0"; then
+            echo "API 37 disponible — se puede subir compileSdk cuando se decida hacerlo a propósito (no automático)."
+          else
+            echo "API 37 todavía no está en el índice de sdkmanager. Sin impacto: el proyecto compila contra 36."
           fi
 
       - name: Setup Gradle
@@ -274,78 +285,118 @@ jobs:
         env:
           CONVEYOR_SIGNING_KEY: ${{ secrets.CONVEYOR_SIGNING_KEY }}
 
-      - name: VLC natives para todas las plataformas
-        run: ./gradlew :composeApp:vlcSetupAll --no-configuration-cache
+      # WINDOWS-ONLY POR AHORA (pedido explícito): solo interesa poder iterar sobre
+      # la distribución de Windows sin que un problema de Mac/Linux (como el
+      # StartupWMClass de más abajo) bloquee el release. Para volver a compilar las
+      # 3 plataformas: cambiar esto a `vlcSetupAll` de nuevo.
+      - name: VLC natives (Windows x64 solamente)
+        run: ./gradlew :composeApp:vlcSetupWindowsX64Ci --no-configuration-cache
 
       - name: Generar desktopApp/generated.conveyor.conf (ProGuard + Conveyor)
         run: ./gradlew :desktopApp:writeConveyorConfig --no-configuration-cache
 
-      - name: conveyor make site (Windows + Mac)
-        run: conveyor --agree-to-license=1 make site
+      # WINDOWS-ONLY POR AHORA: mismo comando que se usa en local
+      # (`conveyor -Kapp.machines=windows.amd64 make site`). `-K` sobreescribe
+      # `app.machines` de conveyor.conf solo para esta invocación — no hace falta
+      # tocar conveyor.conf para volver a las 3 plataformas más adelante, alcanza
+      # con sacar el `-Kapp.machines=windows.amd64` de esta línea.
+      - name: conveyor make site (Windows solamente)
+        run: conveyor --agree-to-license=1 -Kapp.machines=windows.amd64 make site
 
-      - name: AppImage Linux (conveyor make linux-app + appimagetool wrap)
-        run: ./gradlew :desktopApp:buildLinuxAppImage --no-configuration-cache
+      # DESHABILITADO mientras el release es Windows-only (ver arriba). Este paso
+      # invoca su propio `conveyor ... -Kapp.machines=linux.amd64.glibc make
+      # linux-app` por dentro, independiente del `-K` de arriba, así que si algún
+      # día vuelve a fallar algo de Linux/Mac, es acá donde hay que mirar primero.
+      # Para reactivar: descomentar este step Y el `find ... -iname "*.AppImage"`
+      # del step "Juntar todo en output/" de abajo.
+      # - name: AppImage Linux (conveyor make linux-app + appimagetool wrap)
+      #   run: ./gradlew :desktopApp:buildLinuxAppImage --no-configuration-cache
 
       - name: Juntar todo en output/
         shell: bash
         run: |
           set -euo pipefail
-          find desktopApp/build/appimage/conveyor -maxdepth 1 -iname "*.AppImage" \
-            -exec cp {} output/ \;
+          # find ... -iname "*.AppImage" -exec cp {} output/ \;  # ver nota arriba (Windows-only)
           echo "--- Contenido final de output/ ---"
           ls -la output/
 
-      # Los archivos sueltos en output/ (.msix, .appinstaller, install.ps1,
-      # wavora.crt, etc.) tienen que quedar SUELTOS para que el auto-updater
-      # los encuentre por nombre exacto (releases/latest/download/<archivo>).
-      # Pero para que una persona instalando por primera vez no tenga que
-      # entender ni bajar 5 archivos sueltos de la página de Releases, acá
-      # armamos ADEMÁS un .zip de conveniencia con todo lo que hace falta
-      # para la primera instalación en un solo click. No lo usa el
-      # auto-updater para nada - es puramente para el primer download manual.
-      - name: Armar instalador de conveniencia para Windows (primera instalación)
+      # Sanity-check: the .appinstaller Conveyor generated must be valid XML
+      # before we ever publish it. This does NOT catch broken URLs (the
+      # release doesn't exist yet at this point, so releases/latest/download
+      # can't resolve — see the separate post-publish verification job
+      # below), but it does catch a malformed/truncated manifest early.
+      - name: Validar que el .appinstaller sea XML válido
         shell: bash
         run: |
           set -euo pipefail
-          cat > output/install-wavora.bat << 'BATEOF'
-          @echo off
-          REM Instalador de Wavora para Windows - un solo doble clic.
-          REM Tiene que estar en la MISMA carpeta que install.ps1, wavora.crt
-          REM y el .msix (los trae este mismo zip).
+          APPINSTALLER=$(find output -maxdepth 1 -iname "*.appinstaller" | head -n1)
+          if [ -z "$APPINSTALLER" ]; then
+            echo "::error::conveyor make site no generó ningún .appinstaller en output/."
+            exit 1
+          fi
+          echo "Validando $APPINSTALLER ..."
+          python3 -c "import xml.dom.minidom as m, sys; m.parse(sys.argv[1])" "$APPINSTALLER"
+          echo "OK: XML válido."
 
-          REM Pide permisos de administrador si todavia no los tiene
-          REM (hacen falta para instalar el certificado como raiz confiable).
-          net session >nul 2>&1
-          if %errorLevel% neq 0 (
-              echo Se necesitan permisos de administrador, abriendo ventana nueva...
-              powershell -Command "Start-Process '%~f0' -Verb RunAs"
-              exit /b
-          )
+      # Los archivos sueltos en output/ (.msix, .appinstaller, install.ps1
+      # generado por Conveyor, wavora.crt, wavora.exe, etc.) tienen que
+      # quedar SUELTOS en la raíz del Release para que el auto-updater de
+      # Windows (vía .appinstaller) los encuentre por nombre exacto en
+      # releases/latest/download/<archivo>.
+      #
+      # Para la PRIMERA instalación armamos ADEMÁS un .zip de conveniencia,
+      # AppwavoraWindows.zip, con SOLO estos 5 archivos:
+      #   - install-wavora.bat  (repo: scripts/windows/install-wavora.bat)
+      #   - install.ps1         (repo: scripts/windows/install.ps1 — NO el
+      #                           install.ps1 que genera Conveyor. El nuestro
+      #                           instala todo 100% local/offline, sin pasar
+      #                           por el mecanismo de red del .appinstaller,
+      #                           que es la pieza que venía fallando con
+      #                           0x80190194 / 0x80073CF0 / 0x800B0109.)
+      #   - wavora.crt          (generado por Conveyor en output/)
+      #   - wavora.exe          (generado por Conveyor en output/)
+      #   - el .msix            (generado por Conveyor en output/)
+      # El auto-updater NO usa este zip para nada — es puramente para el
+      # primer download manual desde la página de Releases.
+      - name: Armar AppwavoraWindows.zip (primera instalación)
+        shell: bash
+        run: |
+          set -euo pipefail
 
-          cd /d "%~dp0"
+          MSIX=$(find output -maxdepth 1 -iname "*.msix" | head -n1)
+          if [ -z "$MSIX" ]; then
+            echo "::error::No se encontró ningún .msix en output/."
+            exit 1
+          fi
+          for f in output/wavora.crt output/wavora.exe; do
+            if [ ! -f "$f" ]; then
+              echo "::error::Falta $f en output/ — revisar la config de Conveyor (¿cambió algún nombre de archivo generado?)."
+              exit 1
+            fi
+          done
 
-          echo.
-          echo Instalando Wavora...
-          echo.
-
-          powershell -NoProfile -ExecutionPolicy Bypass -File "install.ps1"
-
-          echo.
-          echo Listo. Si la app no abrio sola, busca "Wavora" en el menu de inicio.
-          pause
-          BATEOF
-          sed -i 's/^[[:space:]]\{1,10\}//' output/install-wavora.bat
-
-          BUNDLE_DIR="$(mktemp -d)/Wavora-Windows-Installer"
+          BUNDLE_DIR="$(mktemp -d)/AppwavoraWindows"
           mkdir -p "$BUNDLE_DIR"
-          cp output/install-wavora.bat "$BUNDLE_DIR/"
-          cp output/install.ps1 "$BUNDLE_DIR/"
+          cp scripts/windows/install-wavora.bat "$BUNDLE_DIR/"
+          cp scripts/windows/install.ps1 "$BUNDLE_DIR/"
           cp output/wavora.crt "$BUNDLE_DIR/"
           cp output/wavora.exe "$BUNDLE_DIR/"
-          cp output/*.x64.msix "$BUNDLE_DIR/"
-          (cd "$(dirname "$BUNDLE_DIR")" && zip -r -q "$OLDPWD/output/Wavora-Windows-Installer.zip" "Wavora-Windows-Installer")
-          echo "--- Bundle armado ---"
-          unzip -l output/Wavora-Windows-Installer.zip
+          cp "$MSIX" "$BUNDLE_DIR/"
+
+          echo "--- Contenido de AppwavoraWindows.zip ---"
+          ls -la "$BUNDLE_DIR"
+
+          (cd "$(dirname "$BUNDLE_DIR")" && zip -r -q "$OLDPWD/output/AppwavoraWindows.zip" "AppwavoraWindows")
+          echo "--- Zip armado ---"
+          unzip -l output/AppwavoraWindows.zip
+
+          # No publicamos el install.ps1 que genera Conveyor junto a los
+          # assets sueltos del Release: dejarlo ahí, con el mismo nombre que
+          # el nuestro pero comportamiento distinto (uno local, otro basado
+          # en red), es una trampa para cualquiera que lo baje suelto en vez
+          # de bajar el zip. Solo dejamos suelto lo que el auto-updater
+          # realmente necesita (.msix, .appinstaller, wavora.exe).
+          rm -f output/install.ps1
 
       - uses: actions/upload-artifact@v4
         with:
@@ -385,7 +436,7 @@ jobs:
           body: |
             ## Cómo instalar
 
-            **Windows:** 📥 [Descargar Wavora-Windows-Installer.zip](https://github.com/Wavora-dev/Wavora/releases/latest/download/Wavora-Windows-Installer.zip) — descomprimilo en cualquier carpeta, y ejecutá `install-wavora.bat`. Te va a pedir permiso de administrador una sola vez (para confiar en el certificado) — de ahí en más la app se actualiza sola, no hace falta repetir esto nunca más.
+            **Windows:** 📥 [Descargar AppwavoraWindows.zip](https://github.com/wavora-dev/Wavora/releases/latest/download/AppwavoraWindows.zip) — descomprimilo en cualquier carpeta, y ejecutá `install-wavora.bat`. Te va a pedir permiso de administrador una sola vez (para confiar en el certificado) — de ahí en más la app se actualiza sola, no hace falta repetir esto nunca más.
 
             **Android:** descargá el `.apk` que corresponda a tu dispositivo. Si no estás seguro cuál, usá `Wavora-universal.apk`.
 
@@ -394,3 +445,100 @@ jobs:
             release-assets/android/Wavora-arm64.apk
             release-assets/android/*.apk
             release-assets/desktop/**
+
+  # ---------------------------------------------------------------------------
+  # Verify — corre DESPUÉS de publicar, porque releases/latest/download/...
+  # recién existe una vez que el Release está publicado (chicken-and-egg: no
+  # se puede validar esa URL antes). Descarga el .appinstaller REAL desde la
+  # URL REAL que va a usar cualquier usuario, lo parsea, y hace HEAD a cada
+  # URI que contiene. Si algo devuelve != 200 (el 0x80190194 / 404 que
+  # rompía la instalación), este job falla el workflow en vez de dejar el
+  # Release publicado con un instalador roto.
+  # ---------------------------------------------------------------------------
+  verify:
+    runs-on: ubuntu-latest
+    needs: [publish]
+    steps:
+      - name: Descargar y validar el .appinstaller publicado
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/wavora-dev/Wavora/releases/latest/download"
+          APPINSTALLER_URL="$BASE/wavora.appinstaller"
+
+          echo "Descargando $APPINSTALLER_URL ..."
+          HTTP_CODE=$(curl -sL -o appinstaller.xml -w "%{http_code}" "$APPINSTALLER_URL")
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::GET $APPINSTALLER_URL devolvió HTTP $HTTP_CODE — este es exactamente el 0x80190194 que ve el usuario. Revisar app.site.base-url en conveyor.conf y el nombre real que Conveyor le dio al .appinstaller en output/."
+            exit 1
+          fi
+
+          echo "--- Contenido ---"
+          cat appinstaller.xml
+          echo ""
+          python3 -c "import xml.dom.minidom as m; m.parse('appinstaller.xml')"
+          echo "XML válido."
+
+          # Extraer todos los atributos Uri="..." del manifest (MainBundle/
+          # MainPackage/Dependencies/UpdateUris) y verificar que cada uno
+          # resuelve con HTTP 200, EXACTAMENTE con el nombre de archivo que
+          # el .appinstaller pide (sensible a mayúsculas/minúsculas y a
+          # guiones vs puntos: wavora vs Wavora, x64 vs .x64 vs -x64).
+          python3 - << 'PYEOF'
+          import re, sys, subprocess
+
+          with open("appinstaller.xml", encoding="utf-8") as f:
+              content = f.read()
+
+          uris = sorted(set(re.findall(r'Uri="([^"]+)"', content)))
+          if not uris:
+              print("::error::No se encontró ningún atributo Uri= dentro del .appinstaller — ¿formato inesperado?")
+              sys.exit(1)
+
+          failed = False
+          for uri in uris:
+              if not uri.startswith("http"):
+                  continue
+              code = subprocess.run(
+                  ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}", "-L", "-I", uri],
+                  capture_output=True, text=True,
+              ).stdout.strip()
+              status = "OK" if code == "200" else "FAIL"
+              print(f"[{status}] {code}  {uri}")
+              if code != "200":
+                  failed = True
+
+          if failed:
+              print("::error::Al menos una URL referenciada por el .appinstaller no resuelve con 200. La instalación/actualización vía App Installer va a fallar para los usuarios.")
+              sys.exit(1)
+          PYEOF
+
+          echo ""
+          echo "Todas las URLs del .appinstaller resuelven correctamente."
+
+      - name: Validar que AppwavoraWindows.zip tiene exactamente los 5 archivos esperados
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://github.com/wavora-dev/Wavora/releases/latest/download/AppwavoraWindows.zip"
+          curl -sL -o bundle.zip -w "%{http_code}\n" "$URL" | { read code; if [ "$code" != "200" ]; then echo "::error::GET $URL devolvió HTTP $code"; exit 1; fi; }
+
+          ACTUAL=$(unzip -Z1 bundle.zip | sort)
+          EXPECTED=$(printf "AppwavoraWindows/install-wavora.bat\nAppwavoraWindows/install.ps1\nAppwavoraWindows/wavora.crt\nAppwavoraWindows/wavora.exe\n" | sort)
+
+          echo "--- Contenido real ---"
+          echo "$ACTUAL"
+
+          MSIX_COUNT=$(echo "$ACTUAL" | grep -c '\.msix$' || true)
+          if [ "$MSIX_COUNT" != "1" ]; then
+            echo "::error::Se esperaba exactamente 1 .msix dentro del zip, se encontraron $MSIX_COUNT."
+            exit 1
+          fi
+
+          NON_MSIX=$(echo "$ACTUAL" | grep -v '\.msix$' | grep -v '/$' | sort)
+          if [ "$NON_MSIX" != "$EXPECTED" ]; then
+            echo "::error::El contenido de AppwavoraWindows.zip no coincide con lo esperado (install-wavora.bat, install.ps1, wavora.crt, wavora.exe, *.msix)."
+            diff <(echo "$EXPECTED") <(echo "$NON_MSIX") || true
+            exit 1
+          fi
+          echo "OK: AppwavoraWindows.zip contiene exactamente los 5 archivos esperados."

@@ -195,6 +195,33 @@ class VlcPlayerAdapter(
     private val maxPrecacheCount = 2
     private var precacheJob: Job? = null
 
+    // ROOT CAUSE FIX (Windows crossfade double-freeze): triggerPrecachingInternal()
+    // used to fire the instant a track transition (esp. finalizeCrossfade()) landed,
+    // spinning up up to `maxPrecacheCount` (2) brand-new native VLC players — each
+    // doing network resolution + media().prepare(), which opens a connection and
+    // starts demuxing — on the SAME shared MediaPlayerFactory/libVLC instance the
+    // just-promoted `currentPlayer` is using to decode in real time. That is exactly
+    // the "arranca, se congela ~1-2s, sigue, se vuelve a congelar, después fluye
+    // normal" pattern: freeze #1 = first precache player's create+prepare stealing
+    // native decode/network bandwidth right as the new track's own
+    // `:network-caching` buffer is still filling; freeze #2 = the second one
+    // (maxPrecacheCount=2, staggered only 100ms apart — not nearly enough). This
+    // isn't a timing/fade-duration issue at all — it's decoder contention.
+    //
+    // Fix: give the just-started track a real head start before we let precaching
+    // touch the native player factory at all. `buildVlcOptions()` sets
+    // `:network-caching=3000` for audio (the largest value currently used), so this
+    // grace period needs to comfortably clear that fill window with margin — after
+    // this, the current track's pipeline is stable and precaching for tracks that
+    // are, at minimum, a full song away is in no hurry to start.
+    private val precacheStartupGraceMs = 4000L
+
+    // Minimum gap between successive precache players within one precache pass.
+    // 100ms was not a real stagger — creating a second native player+prepare() that
+    // soon after the first still lands inside the same contention window. This is
+    // the second half of the double-freeze fix.
+    private val precacheStaggerMs = 1500L
+
     // Crossfade system
     @Volatile
     private var crossfadeEnabled = false
@@ -1948,12 +1975,24 @@ class VlcPlayerAdapter(
         if (!precacheEnabled || playlist.isEmpty()) return
 
         cancelPrecaching()
-        Logger.d(TAG, "Trigger precache")
+        Logger.d(TAG, "Trigger precache (grace period: ${precacheStartupGraceMs}ms)")
         precacheJob =
             coroutineScope.launch {
                 try {
+                    // Let the just-started current track's own buffer fill window pass
+                    // before we let precaching touch the native player factory — see
+                    // precacheStartupGraceMs doc comment for why. Precache targets are
+                    // whole tracks away by definition, so this delay costs us nothing
+                    // functionally; it's the fix for the post-transition double-freeze.
+                    delay(precacheStartupGraceMs)
+                    if (!isActive) return@launch
+
                     val indicesToPrecache = mutableListOf<Int>()
 
+                    // Re-read the index AFTER the grace period, not before: the user may
+                    // have skipped/seeked while we were waiting, and precaching stale
+                    // targets would both waste work and reintroduce the same contention
+                    // this delay exists to avoid.
                     val index = localCurrentMediaItemIndex
                     for (i in 1..maxPrecacheCount) {
                         val nextIndex =
@@ -1996,7 +2035,9 @@ class VlcPlayerAdapter(
                             }
                         }
 
-                        delay(100)
+                        // Real stagger between precache attempts — see precacheStaggerMs
+                        // doc comment. Only matters when maxPrecacheCount > 1.
+                        delay(precacheStaggerMs)
                     }
                 } catch (e: Exception) {
                     if (e !is CancellationException) {

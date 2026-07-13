@@ -13,7 +13,7 @@ kotlin {
     // See: https://kotlinlang.org/docs/multiplatform-discover-project.html#targets
     android {
         namespace = "com.wavora.common"
-        compileSdk = 37
+        compileSdk = 36
         minSdk = 26
     }
 

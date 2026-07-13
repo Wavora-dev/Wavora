@@ -70,7 +70,7 @@ kotlin {
     }
     android {
         namespace = "com.wavora.app.composeapp"
-        compileSdk = 37
+        compileSdk = 36
         minSdk = 26
         withJava()
         androidResources {

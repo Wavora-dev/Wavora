@@ -15,7 +15,7 @@ kotlin {
     // See: https://kotlinlang.org/docs/multiplatform-discover-project.html#targets
     android {
         namespace = "com.wavora.ktorext"
-        compileSdk = 37
+        compileSdk = 36
         minSdk = 26
     }
 

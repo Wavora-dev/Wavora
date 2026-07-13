@@ -391,6 +391,12 @@ fun App(
     LaunchedEffect(openAppTime) {
         if (openAppTime == 1) {
             showOnboarding = true
+            // OnboardingScreen renders inside the Scaffold's content slot, which
+            // paints BEHIND the bottomBar slot — without this, the app's own
+            // bottom navigation bar (Inicio/Biblioteca/Buscador) stays visible
+            // on top of it and covers the bottom of the tutorial. Restored in
+            // OnboardingScreen's onFinish below.
+            isNavBarVisible = false
         } else if (openAppTime > 1 && shouldOfferNotificationPermission) {
             // Not the very first session (onboarding already ran, or this device skipped it) —
             // safe to offer the notification-permission primer right away.
@@ -609,6 +615,7 @@ fun App(
                     OnboardingScreen(
                         onFinish = {
                             showOnboarding = false
+                            isNavBarVisible = true
                             // Only once the user has actually finished meeting the app do we
                             // consider asking for the notification permission.
                             if (shouldOfferNotificationPermission) {

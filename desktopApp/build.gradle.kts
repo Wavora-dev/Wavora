@@ -266,7 +266,18 @@ compose.desktop {
                         .get()
                         .removeSuffix("-hf")
                 iconFile.set(rootDir.resolve("composeApp/icon/circle_app_icon.ico"))
-                // Create shortcuts on install - only desktop shortcut, named "Wavora"
+                // NOTE (audit): this `compose.desktop.application.nativeDistributions`
+                // block is JetBrains' own jpackage-based packaging path, which the
+                // release pipeline no longer invokes — release.yml only runs
+                // `conveyor make site` (see conveyor.conf). This `shortcut = true`
+                // therefore has ZERO effect on the .msix Windows actually ships;
+                // Conveyor's MSIX packaging has no equivalent "create a desktop
+                // shortcut" key, which is why installs never got one. The desktop
+                // shortcut is now created explicitly in scripts/windows/install.ps1
+                // (resolved dynamically via Get-StartApps, not hardcoded). Left here
+                // (rather than deleted) only in case this module is ever revived as
+                // a non-Conveyor packaging fallback — do not rely on it for Wavora's
+                // actual Windows distribution.
                 shortcut = true
                 menu = false
                 upgradeUuid = "A1B2C3D4-E5F6-7890-ABCD-EF1234567890"

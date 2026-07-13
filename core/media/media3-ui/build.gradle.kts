@@ -12,7 +12,7 @@ kotlin {
 
 android {
     namespace = "com.wavora.media3.ui"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 26
