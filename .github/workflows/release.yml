@@ -113,35 +113,7 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: "platform-tools"
-
-      - name: Actualizar cmdline-tools e instalar platform/build-tools (API 37)
-        # El sdkmanager de cmdline-tools 16.0 (el que usa por defecto la action
-        # de arriba) todavía no conoce 'platforms;android-37' (Android 17 /
-        # API 37 salió estable el 16 de junio de 2026). El runner YA trae
-        # además un 'cmdline-tools/latest' de fábrica que sí lo conoce -no
-        # hace falta reinstalarlo, sdkmanager ni siquiera lo permite si ya
-        # existe (lo intentaría meter en 'latest-2' y rompe todo)-, así que
-        # lo usamos directo si está, y solo lo instalamos si por algún motivo
-        # no estuviera.
-        shell: bash
-        run: |
-          set -euo pipefail
-          SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
-          LATEST_SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-
-          if [ ! -x "$LATEST_SDKMANAGER" ]; then
-            OLD_SDKMANAGER=$(find "$SDK_ROOT/cmdline-tools" -maxdepth 3 -name sdkmanager -path "*/bin/*" | head -n1)
-            if [ -z "$OLD_SDKMANAGER" ]; then
-              echo "::error::No se encontró ningún sdkmanager bajo $SDK_ROOT/cmdline-tools"
-              find "$SDK_ROOT/cmdline-tools" -maxdepth 4
-              exit 1
-            fi
-            yes | "$OLD_SDKMANAGER" --sdk_root="$SDK_ROOT" "cmdline-tools;latest" > /dev/null
-          fi
-
-          yes | "$LATEST_SDKMANAGER" --sdk_root="$SDK_ROOT" --channel=3 \
-            "platforms;android-37" "build-tools;37.0.0"
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -183,7 +155,7 @@ jobs:
           SRC="androidApp/build/outputs/apk/release"
           OUT="release-apks"
           mkdir -p "$OUT"
-          BUILD_TOOLS="$ANDROID_HOME/build-tools/37.0.0"
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
 
           declare -A NAME_MAP=(
             ["arm64-v8a"]="Wavora-arm64.apk"
