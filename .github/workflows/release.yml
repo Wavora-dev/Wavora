@@ -385,7 +385,7 @@ jobs:
           body: |
             ## Cómo instalar
 
-            **Windows:** descargá `Wavora-Windows-Installer.zip`, descomprimilo en cualquier carpeta, y ejecutá `install-wavora.bat`. Te va a pedir permiso de administrador una sola vez (para confiar en el certificado) — de ahí en más la app se actualiza sola, no hace falta repetir esto nunca más.
+            **Windows:** 📥 [Descargar Wavora-Windows-Installer.zip](https://github.com/Wavora-dev/Wavora/releases/latest/download/Wavora-Windows-Installer.zip) — descomprimilo en cualquier carpeta, y ejecutá `install-wavora.bat`. Te va a pedir permiso de administrador una sola vez (para confiar en el certificado) — de ahí en más la app se actualiza sola, no hace falta repetir esto nunca más.
 
             **Android:** descargá el `.apk` que corresponda a tu dispositivo. Si no estás seguro cuál, usá `Wavora-universal.apk`.
 
