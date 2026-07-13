@@ -116,24 +116,31 @@ jobs:
           packages: "platform-tools"
 
       - name: Actualizar cmdline-tools e instalar platform/build-tools (API 37)
-        # El sdkmanager que trae preinstalado el runner (cmdline-tools 16.0)
-        # todavía no conoce 'platforms;android-37' (Android 17 / API 37 salió
-        # estable el 16 de junio de 2026, después de que se generó esa imagen
-        # de cmdline-tools). Instalamos primero 'cmdline-tools;latest' -que sí
-        # lo conoce- y usamos ESE binario para el resto, en vez de pelear con
-        # el viejo.
+        # El sdkmanager de cmdline-tools 16.0 (el que usa por defecto la action
+        # de arriba) todavía no conoce 'platforms;android-37' (Android 17 /
+        # API 37 salió estable el 16 de junio de 2026). El runner YA trae
+        # además un 'cmdline-tools/latest' de fábrica que sí lo conoce -no
+        # hace falta reinstalarlo, sdkmanager ni siquiera lo permite si ya
+        # existe (lo intentaría meter en 'latest-2' y rompe todo)-, así que
+        # lo usamos directo si está, y solo lo instalamos si por algún motivo
+        # no estuviera.
         shell: bash
         run: |
           set -euo pipefail
           SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
-          OLD_SDKMANAGER=$(find "$SDK_ROOT/cmdline-tools" -maxdepth 3 -name sdkmanager -path "*/bin/*" | head -n1)
-          if [ -z "$OLD_SDKMANAGER" ]; then
-            echo "::error::No se encontró sdkmanager bajo $SDK_ROOT/cmdline-tools"
-            find "$SDK_ROOT/cmdline-tools" -maxdepth 4
-            exit 1
+          LATEST_SDKMANAGER="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+
+          if [ ! -x "$LATEST_SDKMANAGER" ]; then
+            OLD_SDKMANAGER=$(find "$SDK_ROOT/cmdline-tools" -maxdepth 3 -name sdkmanager -path "*/bin/*" | head -n1)
+            if [ -z "$OLD_SDKMANAGER" ]; then
+              echo "::error::No se encontró ningún sdkmanager bajo $SDK_ROOT/cmdline-tools"
+              find "$SDK_ROOT/cmdline-tools" -maxdepth 4
+              exit 1
+            fi
+            yes | "$OLD_SDKMANAGER" --sdk_root="$SDK_ROOT" "cmdline-tools;latest" > /dev/null
           fi
-          yes | "$OLD_SDKMANAGER" --sdk_root="$SDK_ROOT" "cmdline-tools;latest" > /dev/null
-          yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK_ROOT" \
+
+          yes | "$LATEST_SDKMANAGER" --sdk_root="$SDK_ROOT" \
             "platforms;android-37" "build-tools;37.0.0"
 
       - name: Setup Gradle
