@@ -140,7 +140,7 @@ jobs:
             yes | "$OLD_SDKMANAGER" --sdk_root="$SDK_ROOT" "cmdline-tools;latest" > /dev/null
           fi
 
-          yes | "$LATEST_SDKMANAGER" --sdk_root="$SDK_ROOT" \
+          yes | "$LATEST_SDKMANAGER" --sdk_root="$SDK_ROOT" --channel=3 \
             "platforms;android-37" "build-tools;37.0.0"
 
       - name: Setup Gradle
