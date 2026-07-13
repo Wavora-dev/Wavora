@@ -126,7 +126,12 @@ jobs:
         run: |
           set -euo pipefail
           SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
-          OLD_SDKMANAGER=$(find "$SDK_ROOT/cmdline-tools" -maxdepth 2 -name sdkmanager -path "*/bin/*" | head -n1)
+          OLD_SDKMANAGER=$(find "$SDK_ROOT/cmdline-tools" -maxdepth 3 -name sdkmanager -path "*/bin/*" | head -n1)
+          if [ -z "$OLD_SDKMANAGER" ]; then
+            echo "::error::No se encontró sdkmanager bajo $SDK_ROOT/cmdline-tools"
+            find "$SDK_ROOT/cmdline-tools" -maxdepth 4
+            exit 1
+          fi
           yes | "$OLD_SDKMANAGER" --sdk_root="$SDK_ROOT" "cmdline-tools;latest" > /dev/null
           yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK_ROOT" \
             "platforms;android-37" "build-tools;37.0.0"
