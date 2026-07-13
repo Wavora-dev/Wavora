@@ -140,22 +140,30 @@ jobs:
           # NO usar `if ! yes | sdkmanager ...; then` acá: con `pipefail` activo (ver
           # set -euo pipefail arriba), el SIGPIPE que recibe `yes` cuando sdkmanager
           # cierra su stdin al terminar de leer hace que el pipeline entero reporte
-          # el exit code de `yes` (141, "Broken pipe") en vez del de sdkmanager —
-          # confirmado en un run real: sdkmanager llegó a "Computing updates... 100%"
-          # sin ningún error propio, y el step falló igual por esto. Con PIPESTATUS
-          # chequeamos específicamente el exit code de sdkmanager (el de la derecha),
-          # ignorando el de `yes`.
+          # el exit code de `yes` (141, "Broken pipe") en vez del de sdkmanager.
+          # Y ojo con "arreglarlo" agregando `|| true`: `true` es un comando en sí
+          # mismo, y al correr PISA `PIPESTATUS` (queda con un solo elemento, el de
+          # `true`) — confirmado en un run real: "PIPESTATUS[1]: unbound variable".
+          # Por eso acá se desactiva `-e` momentáneamente, se corre el pipe, y se
+          # captura PIPESTATUS[1] en una variable de una SOLA vez, sin que se
+          # ejecute nada más en el medio que lo pueda pisar.
+          set +e
           yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --channel=3 \
-            "platforms;android-36" "build-tools;36.0.0" || true
-          if [ "${PIPESTATUS[1]}" -ne 0 ]; then
+            "platforms;android-36" "build-tools;36.0.0"
+          SDKMANAGER_36_EXIT=${PIPESTATUS[1]}
+          set -e
+          if [ "$SDKMANAGER_36_EXIT" -ne 0 ]; then
             echo "::error::No se pudo instalar platforms;android-36 / build-tools;36.0.0 — esto sí es fatal, es lo que compileSdk=36 necesita."
             exit 1
           fi
 
           echo "Probando platforms;android-37 (best-effort, no bloquea el build si todavía no está publicada)..."
+          set +e
           yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --channel=3 \
-            "platforms;android-37" "build-tools;37.0.0" || true
-          if [ "${PIPESTATUS[1]}" -eq 0 ]; then
+            "platforms;android-37" "build-tools;37.0.0"
+          SDKMANAGER_37_EXIT=${PIPESTATUS[1]}
+          set -e
+          if [ "$SDKMANAGER_37_EXIT" -eq 0 ]; then
             echo "API 37 disponible — se puede subir compileSdk cuando se decida hacerlo a propósito (no automático)."
           else
             echo "API 37 todavía no está en el índice de sdkmanager. Sin impacto: el proyecto compila contra 36."
