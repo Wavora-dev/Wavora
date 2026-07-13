@@ -113,7 +113,32 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
+          packages: "platform-tools"
+
+      - name: Instalar platform/build-tools API 37
+        # Si esto vuelve a fallar con "Failed to find package
+        # 'platforms;android-37'", es porque Google TODAVÍA no lo publicó en
+        # el índice del repositorio que usa sdkmanager (pasó antes, aunque
+        # Android 17/API 37 salió estable el 16/06/2026). No es algo que se
+        # arregle desde acá - hay que esperar a que Google lo suba, o bajar
+        # temporalmente las dependencias que exigen compileSdk 37 (ver
+        # androidApp:checkReleaseAarMetadata en el log de error para la
+        # lista exacta) a versiones que solo pidan 36.
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          SDKMANAGER=$(find "$SDK_ROOT/cmdline-tools" -maxdepth 3 -name sdkmanager -path "*/bin/*" | sort -r | head -n1)
+          if [ -z "$SDKMANAGER" ]; then
+            echo "::error::No se encontró sdkmanager bajo $SDK_ROOT/cmdline-tools"
+            exit 1
+          fi
+
+          if ! yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --channel=3 \
+            "platforms;android-37" "build-tools;37.0.0"; then
+            echo "::error::Google todavía no publicó 'platforms;android-37' en el índice de sdkmanager. No se puede continuar el build hasta que lo publiquen, o hasta bajar las dependencias que lo exigen (ver el error de checkReleaseAarMetadata de la última corrida que sí compiló)."
+            exit 1
+          fi
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -155,7 +180,7 @@ jobs:
           SRC="androidApp/build/outputs/apk/release"
           OUT="release-apks"
           mkdir -p "$OUT"
-          BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/37.0.0"
 
           declare -A NAME_MAP=(
             ["arm64-v8a"]="Wavora-arm64.apk"
