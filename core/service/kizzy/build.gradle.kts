@@ -10,7 +10,7 @@ plugins {
 kotlin {
     android {
         namespace = "com.my.kizzy"
-        compileSdk = 37
+        compileSdk = 36
         minSdk = 26
     }
     val xcfName = "kizzyKit"

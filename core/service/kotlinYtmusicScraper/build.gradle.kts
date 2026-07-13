@@ -19,7 +19,7 @@ kotlin {
     // See: https://kotlinlang.org/docs/multiplatform-discover-project.html#targets
     android {
         namespace = "com.wavora.scraper"
-        compileSdk = 37
+        compileSdk = 36
         minSdk = 26
     }
 

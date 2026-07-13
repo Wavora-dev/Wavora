@@ -17,7 +17,7 @@ android {
     val abis = arrayOf("armeabi-v7a", "arm64-v8a", "x86_64")
 
     namespace = "com.wavora.app"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.wavora.app"

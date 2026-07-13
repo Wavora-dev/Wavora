@@ -13,7 +13,7 @@ kotlin {
     jvmToolchain(21)
     android {
         namespace = "com.wavora.domain"
-        compileSdk = 37
+        compileSdk = 36
         minSdk = 26
     }
     val xcfName = "domainKit"

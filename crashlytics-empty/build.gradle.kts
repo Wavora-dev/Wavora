@@ -12,7 +12,7 @@ kotlin {
 
 android {
     namespace = "com.wavora.crashlytics"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 26
