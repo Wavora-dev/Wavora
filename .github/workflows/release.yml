@@ -113,10 +113,29 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: "platform-tools platforms;android-37 build-tools;37.0.0"
+          packages: "platform-tools"
+
+      - name: Actualizar cmdline-tools e instalar platform/build-tools (API 37)
+        # El sdkmanager que trae preinstalado el runner (cmdline-tools 16.0)
+        # todavía no conoce 'platforms;android-37' (Android 17 / API 37 salió
+        # estable el 16 de junio de 2026, después de que se generó esa imagen
+        # de cmdline-tools). Instalamos primero 'cmdline-tools;latest' -que sí
+        # lo conoce- y usamos ESE binario para el resto, en vez de pelear con
+        # el viejo.
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          OLD_SDKMANAGER=$(find "$SDK_ROOT/cmdline-tools" -maxdepth 2 -name sdkmanager -path "*/bin/*" | head -n1)
+          yes | "$OLD_SDKMANAGER" --sdk_root="$SDK_ROOT" "cmdline-tools;latest" > /dev/null
+          yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$SDK_ROOT" \
+            "platforms;android-37" "build-tools;37.0.0"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Dar permisos de ejecución a gradlew
+        run: chmod +x gradlew
 
       - name: Decodificar keystore
         shell: bash
@@ -203,6 +222,9 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Dar permisos de ejecución a gradlew
+        run: chmod +x gradlew
 
       - name: Instalar Conveyor CLI
         shell: bash
