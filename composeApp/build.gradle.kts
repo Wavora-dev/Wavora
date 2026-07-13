@@ -565,19 +565,24 @@ buildkonfig {
         buildConfigField(INT, "versionCode", "$versionCode")
 
         if (isFullBuild) {
-            try {
+            // En CI, SENTRY_DSN llega como variable de entorno (Secret). En
+            // desarrollo local, se sigue leyendo de local.properties como antes.
+            val dsn =
+                System.getenv("SENTRY_DSN")
+                    ?: try {
+                        val properties = Properties()
+                        properties.load(rootProject.file("local.properties").inputStream())
+                        properties.getProperty("SENTRY_DSN")
+                    } catch (e: Exception) {
+                        println("Failed to load SENTRY_DSN from local.properties: ${e.message}")
+                        null
+                    }
+            if (dsn.isNullOrBlank()) {
+                println("isFullBuild=true pero no hay SENTRY_DSN (ni env var ni local.properties) — Sentry queda deshabilitado.")
+            } else {
                 println("Full build detected, enabling Sentry DSN")
-                val properties = Properties()
-                properties.load(rootProject.file("local.properties").inputStream())
-                buildConfigField(
-                    STRING,
-                    "sentryDsn",
-                    properties.getProperty("SENTRY_DSN") ?: "",
-                )
-            } catch (e: Exception) {
-                println("Failed to load SENTRY_DSN from local.properties: ${e.message}")
-                buildConfigField(STRING, "sentryDsn", "")
             }
+            buildConfigField(STRING, "sentryDsn", dsn ?: "")
         } else {
             buildConfigField(STRING, "sentryDsn", "")
         }

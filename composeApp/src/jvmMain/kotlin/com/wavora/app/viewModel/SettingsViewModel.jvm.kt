@@ -112,3 +112,5 @@ actual fun changeLanguageNative(code: String) {
         ),
     )
 }
+
+actual fun detectSystemLanguageTag(): String = Locale.getDefault().toLanguageTag()

@@ -165,6 +165,14 @@ tasks.named<hydraulic.conveyor.gradle.WriteConveyorConfigTask>("writeConveyorCon
     dependsOn(tasks.named("proguardReleaseJars"))
     val proguardJarsDir = layout.buildDirectory.dir("compose/tmp/main-release/proguard")
     doLast {
+        // On Windows, absolutePath uses backslashes (e.g. "C:\Users\...").
+        // HOCON strings use JSON-style escaping, so a lone "\U" (as in
+        // "\Users") is parsed as an invalid \u-unicode escape and blows up
+        // the parser. Forward slashes are valid path separators on Windows
+        // too (both the JVM and Conveyor accept them), so normalize instead
+        // of trying to escape - it's simpler and matches what Linux/Mac
+        // already produce.
+        val proguardJarsPath = proguardJarsDir.get().asFile.absolutePath.replace("\\", "/")
         destination.get().asFile.appendText(
             """
             |app.fsname = wavora
@@ -177,7 +185,7 @@ tasks.named<hydraulic.conveyor.gradle.WriteConveyorConfigTask>("writeConveyorCon
             |// the resulting AppImage by replacing 221 raw jars with the
             |// shrunk equivalents from compose.desktop's proguard task.
             |app.inputs = [
-            |    "${proguardJarsDir.get().asFile.absolutePath}"
+            |    "$proguardJarsPath"
             |]
             """.trimMargin() + "\n",
         )

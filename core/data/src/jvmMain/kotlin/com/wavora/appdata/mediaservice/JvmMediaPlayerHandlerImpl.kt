@@ -97,6 +97,20 @@ import kotlin.math.pow
 
 private val TAG = "JvmMediaPlayerHandler"
 
+/**
+ * Agrupa las lecturas de DataStore necesarias en el `init` de
+ * [JvmMediaPlayerHandlerImpl], para poder hacerlas todas dentro de un único
+ * `runBlocking` en vez de uno por propiedad (ver Objetivo 1 / startup fix).
+ */
+private data class InitialPlaybackPrefs(
+    val skipSilent: Boolean,
+    val normalizeVolume: Boolean,
+    val restoreState: Boolean,
+    val shuffleKey: String?,
+    val repeatKey: String?,
+    val playerVolume: Float,
+)
+
 class JvmMediaPlayerHandlerImpl(
     private val dataStoreManager: DataStoreManager,
     private val songRepository: SongRepository,
@@ -274,14 +288,33 @@ class JvmMediaPlayerHandlerImpl(
         getSkipSegmentsJob = Job()
         getFormatJob = Job()
         jobWatchtime = Job()
-        skipSilent = runBlocking { dataStoreManager.skipSilent.first() == TRUE }
-        normalizeVolume =
-            runBlocking { dataStoreManager.normalizeVolume.first() == TRUE }
+        // WAVORA STARTUP FIX (Objetivo 1): antes había 6 `runBlocking { ... .first() }`
+        // separados, cada uno con su propio dispatch de corrutina, ejecutados en
+        // secuencia durante la construcción de este singleton `createdAtStart` — es
+        // decir, en el hilo principal, antes del primer frame. Se combinan en un
+        // único `runBlocking` que hace todas las lecturas de DataStore necesarias
+        // en una sola sesión de corrutina. El comportamiento y los valores
+        // resultantes son idénticos a los anteriores; solo cambia el número de
+        // dispatches de corrutina (1 en vez de hasta 6).
+        val initialPrefs =
+            runBlocking {
+                val saveState = dataStoreManager.saveStateOfPlayback.first()
+                InitialPlaybackPrefs(
+                    skipSilent = dataStoreManager.skipSilent.first() == TRUE,
+                    normalizeVolume = dataStoreManager.normalizeVolume.first() == TRUE,
+                    restoreState = saveState == TRUE,
+                    shuffleKey = if (saveState == TRUE) dataStoreManager.shuffleKey.first() else null,
+                    repeatKey = if (saveState == TRUE) dataStoreManager.repeatKey.first() else null,
+                    playerVolume = dataStoreManager.playerVolume.first(),
+                )
+            }
+        skipSilent = initialPrefs.skipSilent
+        normalizeVolume = initialPrefs.normalizeVolume
         _nowPlaying.value = player.currentMediaItem
-        if (runBlocking { dataStoreManager.saveStateOfPlayback.first() } == TRUE) {
+        if (initialPrefs.restoreState) {
             Logger.d(TAG, "SaveStateOfPlayback TRUE")
-            val shuffleKey = runBlocking { dataStoreManager.shuffleKey.first() }
-            val repeatKey = runBlocking { dataStoreManager.repeatKey.first() }
+            val shuffleKey = initialPrefs.shuffleKey
+            val repeatKey = initialPrefs.repeatKey
             Logger.d(TAG, "Shuffle: $shuffleKey")
             Logger.d(TAG, "Repeat: $repeatKey")
             val restoredShuffle = shuffleKey == TRUE
@@ -305,7 +338,7 @@ class JvmMediaPlayerHandlerImpl(
                         },
                 )
         }
-        player.volume = runBlocking { dataStoreManager.playerVolume.first() }
+        player.volume = initialPrefs.playerVolume
         mayBeRestoreQueue()
         nypc?.setListener(
             object : NowPlayingListener {

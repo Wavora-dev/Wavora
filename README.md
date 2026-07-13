@@ -312,12 +312,19 @@ cd Wavora
 ./gradlew :desktopApp:run
 
 # Desktop — native installers (per-OS, run on the matching host)
+# These produce UNSIGNED, non-auto-updating installers — useful for a quick
+# local smoke test only.
 ./gradlew :desktopApp:packageMsi        # Windows
 ./gradlew :desktopApp:packageDmg        # macOS
 ./gradlew :desktopApp:packageAppImage   # Linux
 ```
 
 > On Windows, use `gradlew.bat` instead of `./gradlew`.
+
+> **Official releases** (signed, auto-updating) are built by
+> `.github/workflows/release.yml` via Hydraulic Conveyor (`conveyor make
+> site`), triggered by pushing a `vX.Y.Z` tag. See that workflow for the full
+> pipeline — the commands above are for local development only.
 
 ## Project Structure
 
@@ -586,12 +593,19 @@ cd Wavora
 ./gradlew :desktopApp:run
 
 # Escritorio — instaladores nativos (por SO, ejecutar en el host correspondiente)
+# Estos generan instaladores SIN FIRMAR y sin auto-update — sirven solo para
+# una prueba local rápida.
 ./gradlew :desktopApp:packageMsi        # Windows
 ./gradlew :desktopApp:packageDmg        # macOS
 ./gradlew :desktopApp:packageAppImage   # Linux
 ```
 
 > En Windows, usá `gradlew.bat` en vez de `./gradlew`.
+
+> **Los releases oficiales** (firmados, con auto-update) los genera
+> `.github/workflows/release.yml` usando Hydraulic Conveyor (`conveyor make
+> site`), disparado al pushear un tag `vX.Y.Z`. Ver ese workflow para el
+> pipeline completo — los comandos de arriba son solo para desarrollo local.
 
 ## Rendimiento
 

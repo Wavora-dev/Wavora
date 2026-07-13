@@ -380,7 +380,7 @@ class NowPlayingViewModel(
     }
 
     private suspend fun getWavoraLyrics(videoId: String, song: SongEntity, artist: String, duration: Int) {
-        lyricsCanvasRepository.getWavoraLyrics(videoId).collectLatest {
+        lyricsCanvasRepository.getWavoraLyrics(videoId, song.toTrack().copy(durationSeconds = duration), duration).collectLatest {
             val data = it.data
             if (it is Resource.Success && data != null) {
                 updateLyrics(videoId, duration, data, false, LyricsProvider.SIMPMUSIC)

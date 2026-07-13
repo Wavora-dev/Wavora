@@ -1,5 +1,6 @@
 package com.wavora.appdata.repository
 
+import com.wavora.domain.model.model.update.ApkAsset
 import com.wavora.domain.model.model.update.UpdateData
 import com.wavora.domain.repository.UpdateRepository
 import com.wavora.domain.utils.Resource
@@ -17,12 +18,31 @@ internal class UpdateRepositoryImpl(
             youTube
                 .checkForGithubReleaseUpdate()
                 .onSuccess { response ->
+                    val apkAssets =
+                        response.assets
+                            ?.filter { it?.name?.endsWith(".apk", ignoreCase = true) == true && it.browserDownloadUrl != null }
+                            ?.map {
+                                ApkAsset(
+                                    name = it!!.name!!,
+                                    downloadUrl = it.browserDownloadUrl!!,
+                                    sizeBytes = it.size?.toLong(),
+                                )
+                            }
+                            ?: emptyList()
                     emit(
                         Resource.Success(
                             UpdateData(
                                 tagName = response.tagName ?: "",
                                 releaseTime = response.publishedAt ?: "",
                                 body = response.body ?: "",
+                                // Naive fallback (first .apk found) - callers with
+                                // access to the device's actual ABI (see
+                                // AppUpdate.currentDeviceAbis()) should prefer
+                                // picking from [apkAssets] instead of trusting this
+                                // blindly, since asset order isn't guaranteed to
+                                // put the right architecture first.
+                                apkDownloadUrl = apkAssets.firstOrNull()?.downloadUrl,
+                                apkAssets = apkAssets,
                             ),
                         ),
                     )

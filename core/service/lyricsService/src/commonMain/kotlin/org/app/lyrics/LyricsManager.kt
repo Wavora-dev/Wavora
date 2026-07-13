@@ -73,10 +73,17 @@ class LyricsManager(
     /** `GET /v1/lyrics/:videoId`. Returns a single-element list on a hit
      * (kept as `List` for source compatibility with the old API, which
      * could in theory return several candidates) or an empty list when
-     * nothing is stored yet - never an error for the "not found" case. */
-    suspend fun getLyrics(videoId: String): Result<List<LyricsResponse>> =
+     * nothing is stored yet - never an error for the "not found" case.
+     *
+     * [trackMetadata] is optional and only matters on a miss - see
+     * [WavoraLyricsProvider.getLyrics] for why it's needed there to make
+     * the backend's opportunistic import queue actually work. */
+    suspend fun getLyrics(
+        videoId: String,
+        trackMetadata: TrackMetadata? = null,
+    ): Result<List<LyricsResponse>> =
         registry.wavora
-            .getLyrics(videoId)
+            .getLyrics(videoId, trackMetadata = trackMetadata)
             .map { row -> listOfNotNull(row?.toLegacyResponse()) }
             .onFailure { Logger.e(TAG, "getLyrics($videoId) failed: ${it.message}") }
 

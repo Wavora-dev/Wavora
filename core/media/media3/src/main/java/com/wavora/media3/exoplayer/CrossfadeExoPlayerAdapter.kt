@@ -38,6 +38,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlin.coroutines.resume
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.PI
 import kotlin.math.abs
@@ -290,7 +293,17 @@ internal class CrossfadeExoPlayerAdapter(
      *
      * @param handleAudioFocus true for the current playing player, false for precached/secondary
      */
-    private fun createExoPlayerInstance(handleAudioFocus: Boolean = false): PlayerWithFilter {
+    private fun createExoPlayerInstance(
+        handleAudioFocus: Boolean = false,
+        // WAVORA CROSSFADE FIX (Objetivo 2): 0 acá significaba "STATE_READY apenas
+        // hay CUALQUIER dato bufferizado", lo cual es deseable para la respuesta
+        // instantánea de una selección manual de track (comportamiento existente,
+        // no lo tocamos), pero es exactamente lo que permitía que el crossfade
+        // automático arrancara a reproducir con un buffer insuficiente y sufriera
+        // underrun audible los primeros segundos. Los call-sites de crossfade /
+        // precache pasan un valor > 0 acá; el resto sigue igual que antes (0).
+        bufferForPlaybackMs: Int = 0,
+    ): PlayerWithFilter {
         val crossfadeFilter = CrossfadeFilterAudioProcessor()
 
         val perPlayerRenderers =
@@ -334,8 +347,8 @@ internal class CrossfadeExoPlayerAdapter(
                             // sustained high network + CPU activity and battery drain.
                             DefaultLoadControl.DEFAULT_MIN_BUFFER_MS,
                             DefaultLoadControl.DEFAULT_MAX_BUFFER_MS * 2,
-                            0,
-                            0,
+                            bufferForPlaybackMs,
+                            bufferForPlaybackMs,
                         ).build(),
                 ).setWakeMode(C.WAKE_MODE_NETWORK)
                 .setHandleAudioBecomingNoisy(handleAudioFocus)
@@ -1622,6 +1635,56 @@ internal class CrossfadeExoPlayerAdapter(
      * from the current player to the next player. The old player's STATE_ENDED
      * event is then ignored (no listener to fire).
      */
+    /**
+     * Espera hasta que [player] llegue realmente a [Player.STATE_READY] (o a un
+     * estado terminal como ENDED/error, para no bloquear indefinidamente), con un
+     * timeout de seguridad de [timeoutMs]. Si ya está en READY, retorna al toque.
+     *
+     * Esto es lo que le faltaba al crossfade de Android: antes se asumía "listo"
+     * apenas se llamaba `prepare()`, sin confirmar el estado real del player.
+     */
+    private suspend fun awaitPlayerReady(
+        player: ExoPlayer,
+        timeoutMs: Long = READY_WAIT_TIMEOUT_MS,
+    ) {
+        if (player.playbackState == Player.STATE_READY) return
+
+        withTimeoutOrNull(timeoutMs) {
+            suspendCancellableCoroutine<Unit> { continuation ->
+                val readyListener =
+                    object : Player.Listener {
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            when (playbackState) {
+                                Player.STATE_READY, Player.STATE_ENDED, Player.STATE_IDLE -> {
+                                    player.removeListener(this)
+                                    if (continuation.isActive) continuation.resume(Unit)
+                                }
+                                else -> Unit
+                            }
+                        }
+
+                        override fun onPlayerError(error: PlaybackException) {
+                            player.removeListener(this)
+                            if (continuation.isActive) continuation.resume(Unit)
+                        }
+                    }
+                player.addListener(readyListener)
+                continuation.invokeOnCancellation { player.removeListener(readyListener) }
+                // El estado pudo cambiar a READY entre el chequeo de arriba y el
+                // addListener recién hecho — sin este re-chequeo quedaría esperando
+                // un callback que ya pasó.
+                if (player.playbackState == Player.STATE_READY) {
+                    player.removeListener(readyListener)
+                    if (continuation.isActive) continuation.resume(Unit)
+                }
+            }
+        }
+        // Si hay timeout, seguimos igual: preferimos un crossfade que arranque un
+        // poco antes de estar 100% listo (peor caso: el problema original, pero
+        // acotado a un escenario límite) a un crossfade que jamás dispare porque
+        // STATE_READY no llegó por algún motivo inesperado.
+    }
+
     private fun triggerCrossfadeTransition(nextIndex: Int) {
         if (nextIndex !in playlist.indices || isCrossfading) return
 
@@ -1641,12 +1704,37 @@ internal class CrossfadeExoPlayerAdapter(
                     nextPlayer = cachedPlayerEntry.player
                     nextFilter = cachedPlayerEntry.filter
                 } else {
-                    val pwf = createExoPlayerInstance(handleAudioFocus = false)
+                    val pwf =
+                        createExoPlayerInstance(
+                            handleAudioFocus = false,
+                            bufferForPlaybackMs = CROSSFADE_BUFFER_FOR_PLAYBACK_MS,
+                        )
                     nextPlayer = pwf.player
                     nextFilter = pwf.filter
                     nextPlayer.setMediaItem(nextMediaItem.toMedia3MediaItem())
                     nextPlayer.prepare()
                 }
+
+                // WAVORA CROSSFADE FIX (Objetivo 2 — causa raíz del "micro corte +
+                // traba de un par de segundos" al empezar cada track nuevo):
+                //
+                // Antes, `nextPlayer.play()` se llamaba inmediatamente después de
+                // conseguir el player (precacheado o nuevo), sin verificar en ningún
+                // punto que ExoPlayer hubiera llegado realmente a STATE_READY. La
+                // única señal de "¿está listo?" era que el player estuviera en el
+                // mapa `precachedPlayers` — pero esa entrada se agrega apenas se
+                // llama `prepare()` (fire-and-forget, asíncrono), no cuando el
+                // player terminó de bufferizar. Sumado a que el `DefaultLoadControl`
+                // de estos players usa `bufferForPlaybackMs = 0`, ExoPlayer podía
+                // arrancar a reproducir con prácticamente nada bufferizado,
+                // produciendo un underrun audible durante los primeros segundos.
+                //
+                // El adapter de Desktop (`VlcPlayerAdapter`) ya tenía este mismo
+                // problema resuelto (espera la señal real `playing()` de VLC antes
+                // de desmutear) — esto es el equivalente para Media3/ExoPlayer:
+                // esperamos la señal real STATE_READY, con un timeout de seguridad
+                // para no colgar el crossfade si por lo que sea nunca llega.
+                awaitPlayerReady(nextPlayer)
 
                 // Setup secondary player
                 secondaryPlayer = nextPlayer
@@ -2304,6 +2392,17 @@ internal class CrossfadeExoPlayerAdapter(
         }
 
     companion object {
+        // Max time to wait for the secondary player to reach STATE_READY before
+        // starting a crossfade anyway (safety valve — mirrors the 800ms timeout
+        // used by the Desktop/VLC adapter for its equivalent readiness wait).
+        private const val READY_WAIT_TIMEOUT_MS = 800L
+
+        // Minimum buffer (ms) required before a crossfade/precache player is
+        // allowed to report STATE_READY. Kept modest so precaching still starts
+        // fast and doesn't hold multiple players buffering for too long, but high
+        // enough that STATE_READY actually means "safe to play without underrun".
+        private const val CROSSFADE_BUFFER_FOR_PLAYBACK_MS = 1500
+
         // DJ crossfade sigmoid steepness (higher = sharper S-curve transition)
         private const val DJ_FILTER_SIGMOID_K = 6f
 
@@ -2444,9 +2543,19 @@ internal class CrossfadeExoPlayerAdapter(
                                     val speed = internalPlaybackSpeed.coerceAtLeast(0.1f)
                                     val timeRemaining = ((dur - pos) / speed).toLong()
                                     val nextVideoId = playlist.getOrNull(getNextMediaItemIndex())?.mediaId
-                                    val isPrecached = nextVideoId != null && precachedPlayers.containsKey(nextVideoId)
-                                    // If next track is precached, trigger at exactly crossfadeDurationMs.
-                                    // If NOT precached, trigger 3s earlier to allow preparation time.
+                                    // WAVORA CROSSFADE FIX (Objetivo 2): antes esto solo miraba si
+                                    // había una entrada en el mapa `precachedPlayers` — que se agrega
+                                    // apenas se llama `prepare()`, no cuando el player realmente
+                                    // terminó de bufferizar. Eso hacía que se saltara el buffer extra
+                                    // de preparación (`preparationBufferMs`) para tracks que en
+                                    // realidad todavía estaban bufferizando. Ahora se exige también
+                                    // `STATE_READY` real.
+                                    val isPrecached =
+                                        nextVideoId != null &&
+                                            precachedPlayers[nextVideoId]?.player?.playbackState == Player.STATE_READY
+                                    // If next track is precached AND actually ready, trigger at
+                                    // exactly crossfadeDurationMs. Otherwise, trigger 3s earlier to
+                                    // allow preparation/buffering time.
                                     val preparationBufferMs = if (isPrecached) 0L else 3000L
                                     // In Auto mode, calculate beat-quantized duration for trigger threshold.
                                     val resolvedDurationMs =
@@ -2524,7 +2633,11 @@ internal class CrossfadeExoPlayerAdapter(
                         val mediaItem = playlist.getOrNull(idx) ?: continue
 
                         try {
-                            val pwf = createExoPlayerInstance(handleAudioFocus = false)
+                            val pwf =
+                                createExoPlayerInstance(
+                                    handleAudioFocus = false,
+                                    bufferForPlaybackMs = CROSSFADE_BUFFER_FOR_PLAYBACK_MS,
+                                )
                             pwf.player.setMediaItem(mediaItem.toMedia3MediaItem())
                             pwf.player.prepare()
                             precachedPlayers[mediaItem.mediaId] = PrecachedPlayer(pwf.player, mediaItem, pwf.filter)

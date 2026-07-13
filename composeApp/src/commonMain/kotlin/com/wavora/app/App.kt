@@ -62,10 +62,14 @@ import com.wavora.domain.manager.DataStoreManager
 import com.wavora.domain.manager.DataStoreManager.Values.TRUE
 import com.wavora.logger.Logger
 import com.wavora.app.expect.Orientation
+import com.wavora.app.expect.currentDeviceAbis
 import com.wavora.app.expect.currentOrientation
+import com.wavora.app.expect.installUpdate
 import com.wavora.app.expect.openUrl
+import com.wavora.app.expect.supportsInAppUpdate
 import com.wavora.app.expect.ui.layerBackdrop
 import com.wavora.app.expect.ui.rememberBackdrop
+import com.wavora.domain.model.model.update.ApkAsset
 import com.wavora.app.extension.copy
 import com.wavora.app.ui.component.AppBottomNavigationBar
 import com.wavora.app.ui.component.AppNavigationRail
@@ -123,6 +127,30 @@ import wavora.composeapp.generated.resources.yes
 import kotlin.time.ExperimentalTime
 import com.wavora.app.ui.theme.LocalAppTypography
 
+/** Matches the device's real ABIs (most-preferred first) against the
+ * `.apk` assets attached to a release, using the naming convention from
+ * `.github/workflows/release.yml` (`Wavora-arm64.apk`,
+ * `Wavora-armeabi-v7a.apk`, `Wavora-x86_64.apk`, `Wavora-universal.apk`).
+ * Falls back to the universal build if present. Returns null when
+ * nothing matches confidently - callers should let the person pick
+ * manually instead of guessing (see [ApkAsset] usage below), since
+ * downloading the wrong architecture's APK will fail to install. */
+private fun pickBestApkAsset(assets: List<ApkAsset>, deviceAbis: List<String>): ApkAsset? {
+    if (assets.isEmpty()) return null
+    val abiToFilenameToken =
+        mapOf(
+            "arm64-v8a" to "arm64",
+            "armeabi-v7a" to "armeabi-v7a",
+            "x86_64" to "x86_64",
+            "x86" to "x86",
+        )
+    for (abi in deviceAbis) {
+        val token = abiToFilenameToken[abi] ?: abi
+        assets.firstOrNull { it.name.contains(token, ignoreCase = true) }?.let { return it }
+    }
+    return assets.firstOrNull { it.name.contains("universal", ignoreCase = true) }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalTime::class, ExperimentalFoundationApi::class, ExperimentalHazeMaterialsApi::class)
 @Composable
 fun App(
@@ -168,6 +196,13 @@ fun App(
 
     var shouldShowUpdateDialog by rememberSaveable {
         mutableStateOf(false)
+    }
+
+    // Non-null only when the update has more than one .apk asset and none
+    // of them could be confidently matched to this device's ABI - shows a
+    // manual picker instead of silently downloading a possibly-wrong one.
+    var apkPickerAssets by remember {
+        mutableStateOf<List<ApkAsset>?>(null)
     }
 
     val hazeState =
@@ -692,9 +727,37 @@ fun App(
                         confirmButton = {
                             TextButton(
                                 onClick = {
-                                    shouldShowUpdateDialog = false
-                                    viewModel.showedUpdateDialog = false
-                                    openUrl("https://github.com/Wavora-dev/Wavora/releases")
+                                    val bestMatch = pickBestApkAsset(response.apkAssets, currentDeviceAbis())
+                                    when {
+                                        supportsInAppUpdate() && bestMatch != null -> {
+                                            shouldShowUpdateDialog = false
+                                            viewModel.showedUpdateDialog = false
+                                            installUpdate(bestMatch.downloadUrl, response.tagName)
+                                        }
+                                        // More than one .apk and none matched this
+                                        // device's ABI confidently - ask instead of
+                                        // guessing (see pickBestApkAsset's doc).
+                                        supportsInAppUpdate() && response.apkAssets.size > 1 -> {
+                                            apkPickerAssets = response.apkAssets
+                                        }
+                                        else -> {
+                                            val apkUrl = response.apkDownloadUrl
+                                            if (supportsInAppUpdate() && apkUrl != null) {
+                                                shouldShowUpdateDialog = false
+                                                viewModel.showedUpdateDialog = false
+                                                installUpdate(apkUrl, response.tagName)
+                                            } else {
+                                                // Desktop (Conveyor's background updater already
+                                                // owns this - see installUpdate's doc) or no .apk
+                                                // asset found on this release (F-Droid channel, or
+                                                // a GitHub release that forgot to attach one) -
+                                                // same manual fallback as before this change.
+                                                shouldShowUpdateDialog = false
+                                                viewModel.showedUpdateDialog = false
+                                                openUrl("https://github.com/Wavora-dev/Wavora/releases")
+                                            }
+                                        }
+                                    }
                                 },
                             ) {
                                 Text(
@@ -793,6 +856,52 @@ fun App(
                                                 ),
                                         ),
                                 )
+                            }
+                        },
+                    )
+                }
+
+                if (apkPickerAssets != null) {
+                    val assets = apkPickerAssets!!
+                    AlertDialog(
+                        onDismissRequest = { apkPickerAssets = null },
+                        confirmButton = {},
+                        dismissButton = {
+                            TextButton(onClick = { apkPickerAssets = null }) {
+                                Text(
+                                    stringResource(Res.string.cancel),
+                                    style = LocalAppTypography.current.bodySmall,
+                                )
+                            }
+                        },
+                        title = {
+                            Text(
+                                stringResource(Res.string.update_available),
+                                style = LocalAppTypography.current.labelSmall,
+                            )
+                        },
+                        text = {
+                            Column {
+                                assets.forEach { asset ->
+                                    TextButton(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        onClick = {
+                                            val response = updateData
+                                            apkPickerAssets = null
+                                            shouldShowUpdateDialog = false
+                                            viewModel.showedUpdateDialog = false
+                                            if (response != null) {
+                                                installUpdate(asset.downloadUrl, response.tagName)
+                                            }
+                                        },
+                                    ) {
+                                        val sizeMb = asset.sizeBytes?.let { it / 1024.0 / 1024.0 }
+                                        Text(
+                                            if (sizeMb != null) "${asset.name} (%.1f MB)".format(sizeMb) else asset.name,
+                                            style = LocalAppTypography.current.bodySmall,
+                                        )
+                                    }
+                                }
                             }
                         },
                     )

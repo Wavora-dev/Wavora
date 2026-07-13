@@ -70,7 +70,11 @@ interface LyricsCanvasRepository {
         targetLanguage: String,
     ): Flow<Resource<Lyrics>>
 
-    fun getWavoraLyrics(videoId: String): Flow<Resource<Lyrics>>
+    fun getWavoraLyrics(
+        videoId: String,
+        track: Track,
+        duration: Int,
+    ): Flow<Resource<Lyrics>>
 
     fun getWavoraTranslatedLyrics(
         videoId: String,

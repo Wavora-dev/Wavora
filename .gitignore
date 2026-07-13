@@ -9,7 +9,7 @@
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
 .DS_Store
-/build
+build/
 /captures
 .externalNativeBuild
 .cxx
@@ -20,6 +20,8 @@ crowdin.yml
 .kotlin/
 .idea
 /simpmusic.jks
+/wavora.jks
+*.jks
 /ffmpeg-kit/build/
 
 #dev files

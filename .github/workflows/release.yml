@@ -1,0 +1,365 @@
+name: Release
+
+# =============================================================================
+# Wavora — Release oficial (Android + Windows/Mac/Linux Desktop vía Conveyor)
+# =============================================================================
+#
+# Disparadores:
+#   - push de un tag "v*.*.*"  → release real, publicado, dispara auto-update
+#   - workflow_dispatch        → para probar el pipeline sin necesidad de tag
+#
+# Qué hace:
+#   1) job "android"  → compila y firma los APK release (mismo signingConfig
+#      que ya existe en androidApp/build.gradle.kts, alimentado por Secrets).
+#   2) job "desktop"  → vlcSetupAll + writeConveyorConfig + `conveyor make
+#      site` (Windows .msix/.appinstaller/.exe + Mac .zip) + AppImage Linux.
+#   3) job "publish"  → junta ambos resultados y crea UN solo GitHub Release
+#      con todos los assets, para que `site.base-url` (que conveyor.conf
+#      resuelve a releases/latest/download/...) encuentre todo en un único
+#      lugar.
+#
+# Antes de correr esto en serio, cargar estos Secrets en
+# Settings → Secrets and variables → Actions:
+#   CONVEYOR_SIGNING_KEY            (root key de Conveyor, ver instrucciones)
+#   WAVORA_KEYSTORE_BASE64          (wavora.jks codificado en base64)
+#   WAVORA_RELEASE_KEYSTORE_PASSWORD
+#   WAVORA_RELEASE_KEY_ALIAS
+#   WAVORA_RELEASE_KEY_PASSWORD
+# =============================================================================
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag a releasear (ej: v1.1.2). Si se deja vacío, se usa la versión de gradle/libs.versions.toml con prefijo v."
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Versión fija del CLI de Conveyor. Antes de subir esto a producción,
+  # confirmar que sigue siendo la última estable en https://conveyor.hydraulic.dev/latest/
+  # (o la que corresponda a conveyor.compatibility-level = 21 en conveyor.conf).
+  CONVEYOR_VERSION: "22.0"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Resuelve el tag/versión una sola vez y lo comparte con los demás jobs.
+  # ---------------------------------------------------------------------------
+  resolve-version:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolver tag y versión
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION_NAME=$(grep -oP '(?<=version-name = ")[^"]+' gradle/libs.versions.toml | tr -d '\r')
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+            if [ -z "$TAG" ]; then
+              TAG="v${VERSION_NAME}"
+            fi
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+
+          TAG_VERSION="${TAG#v}"
+          if [ "$TAG_VERSION" != "$VERSION_NAME" ]; then
+            echo "::error::El tag ($TAG) no coincide con version-name en gradle/libs.versions.toml ($VERSION_NAME)."
+            echo "::error::Actualizá libs.versions.toml y volvé a taguear, o corré workflow_dispatch sin 'tag' para usar la versión del repo."
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "Release: $TAG (version-name=$VERSION_NAME)"
+
+  # ---------------------------------------------------------------------------
+  # Android — mismo signingConfig ya cableado en androidApp/build.gradle.kts,
+  # solo que ahora alimentado por Secrets en vez de variables de entorno
+  # locales. El resultado es BIT A BIT el mismo tipo de firma (apksigner v2/v3)
+  # que ya usás manualmente: AGP invoca la misma librería apksig por debajo.
+  # ---------------------------------------------------------------------------
+  android:
+    runs-on: ubuntu-latest
+    needs: resolve-version
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: gradle/actions/wrapper-validation@v4
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-37 build-tools;37.0.0"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Decodificar keystore
+        shell: bash
+        run: |
+          set -euo pipefail
+          KS_PATH="${RUNNER_TEMP}/wavora-release.jks"
+          echo "${{ secrets.WAVORA_KEYSTORE_BASE64 }}" | base64 -d > "$KS_PATH"
+          # Verificación temprana: si el secret está mal cargado, fallar acá
+          # con un mensaje claro en vez de un error críptico de Gradle/AGP.
+          keytool -list -keystore "$KS_PATH" \
+            -storepass "${{ secrets.WAVORA_RELEASE_KEYSTORE_PASSWORD }}" > /dev/null
+          echo "WAVORA_RELEASE_KEYSTORE_PATH=$KS_PATH" >> "$GITHUB_ENV"
+
+      - name: Build APKs release (firmados por Gradle/AGP con el mismo apksig que apksigner)
+        env:
+          WAVORA_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.WAVORA_RELEASE_KEYSTORE_PASSWORD }}
+          WAVORA_RELEASE_KEY_ALIAS: ${{ secrets.WAVORA_RELEASE_KEY_ALIAS }}
+          WAVORA_RELEASE_KEY_PASSWORD: ${{ secrets.WAVORA_RELEASE_KEY_PASSWORD }}
+          # Sentry es OPCIONAL. Si no cargás estos dos secrets, el build sale
+          # igual (isFullBuild=false → sin crash reporting, sin fallar nada).
+          # Para activarlo: cargá SENTRY_DSN y SENTRY_AUTH_TOKEN como Secrets
+          # y cambiá FULL_BUILD a "true" acá abajo.
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          FULL_BUILD=true
+          ./gradlew androidApp:assembleRelease --no-configuration-cache -PisFullBuild=$FULL_BUILD
+
+      - name: Verificar firmas y renombrar APKs para el release
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC="androidApp/build/outputs/apk/release"
+          OUT="release-apks"
+          mkdir -p "$OUT"
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/37.0.0"
+
+          declare -A NAME_MAP=(
+            ["arm64-v8a"]="Wavora-arm64.apk"
+            ["armeabi-v7a"]="Wavora-armeabi-v7a.apk"
+            ["x86_64"]="Wavora-x86_64.apk"
+            ["universal"]="Wavora-universal.apk"
+          )
+
+          for abi in arm64-v8a armeabi-v7a x86_64 universal; do
+            apk=$(find "$SRC" -iname "*${abi}*release.apk" ! -iname "*unsigned*" | head -n1)
+            if [ -z "$apk" ]; then
+              echo "::warning::No se encontró APK para $abi, se omite."
+              continue
+            fi
+            "$BUILD_TOOLS/apksigner" verify --verbose "$apk"
+            cp "$apk" "$OUT/${NAME_MAP[$abi]}"
+            echo "OK: ${NAME_MAP[$abi]}"
+          done
+
+          ls -la "$OUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apks
+          path: release-apks/*.apk
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Desktop — Conveyor `make site` (Windows msix/appinstaller/exe + Mac zip)
+  # corriendo TODO en un runner Linux (soportado oficialmente por Conveyor;
+  # el propio conveyor.conf ya trae vlcSetupAll pensado para esto). El
+  # AppImage de Linux se genera aparte (Conveyor 2.0 no lo genera nativamente)
+  # y se agrega a la misma carpeta de salida.
+  # ---------------------------------------------------------------------------
+  desktop:
+    runs-on: ubuntu-latest
+    needs: resolve-version
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: gradle/actions/wrapper-validation@v4
+
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Instalar Conveyor CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/conveyor.tar.gz \
+            "https://downloads.hydraulic.dev/conveyor/conveyor-${CONVEYOR_VERSION}-linux-amd64.tar.gz"
+          sudo mkdir -p /opt/conveyor
+          sudo tar -xzf /tmp/conveyor.tar.gz -C /opt/conveyor
+          # No asumimos la profundidad exacta del árbol dentro del tarball:
+          # buscamos el binario real y symlinkeamos ESE path.
+          CONVEYOR_BIN=$(find /opt/conveyor -maxdepth 4 -type f -name conveyor -perm -u+x | head -n1)
+          if [ -z "$CONVEYOR_BIN" ]; then
+            CONVEYOR_BIN=$(find /opt/conveyor -maxdepth 4 -type f -name conveyor | head -n1)
+            [ -n "$CONVEYOR_BIN" ] && sudo chmod +x "$CONVEYOR_BIN"
+          fi
+          if [ -z "$CONVEYOR_BIN" ]; then
+            echo "::error::No se encontró el binario 'conveyor' dentro del tarball descargado."
+            find /opt/conveyor -maxdepth 4
+            exit 1
+          fi
+          sudo ln -sf "$CONVEYOR_BIN" /usr/local/bin/conveyor
+          conveyor --version
+
+      - name: Configurar signing key de Conveyor (persistente entre releases)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.config/hydraulic/conveyor"
+          # defaults.conf se mergea automáticamente en TODOS los builds de
+          # Conveyor (tanto el `conveyor make site` de abajo como el que
+          # invoca internamente la tarea de Gradle para el AppImage), así
+          # que la key queda disponible sin tener que pasar -f/-K en cada
+          # invocación. Es la MISMA key en cada release — así el MSIX
+          # mantiene la misma identidad de Publisher y las actualizaciones
+          # in-place (ForceUpdateFromAnyVersion) siguen funcionando.
+          printf 'app.signing-key = "%s"\n' "${CONVEYOR_SIGNING_KEY}" > "$HOME/.config/hydraulic/conveyor/defaults.conf"
+        env:
+          CONVEYOR_SIGNING_KEY: ${{ secrets.CONVEYOR_SIGNING_KEY }}
+
+      - name: VLC natives para todas las plataformas
+        run: ./gradlew :composeApp:vlcSetupAll --no-configuration-cache
+
+      - name: Generar desktopApp/generated.conveyor.conf (ProGuard + Conveyor)
+        run: ./gradlew :desktopApp:writeConveyorConfig --no-configuration-cache
+
+      - name: conveyor make site (Windows + Mac)
+        run: conveyor --agree-to-license=1 make site
+
+      - name: AppImage Linux (conveyor make linux-app + appimagetool wrap)
+        run: ./gradlew :desktopApp:buildLinuxAppImage --no-configuration-cache
+
+      - name: Juntar todo en output/
+        shell: bash
+        run: |
+          set -euo pipefail
+          find desktopApp/build/appimage/conveyor -maxdepth 1 -iname "*.AppImage" \
+            -exec cp {} output/ \;
+          echo "--- Contenido final de output/ ---"
+          ls -la output/
+
+      # Los archivos sueltos en output/ (.msix, .appinstaller, install.ps1,
+      # wavora.crt, etc.) tienen que quedar SUELTOS para que el auto-updater
+      # los encuentre por nombre exacto (releases/latest/download/<archivo>).
+      # Pero para que una persona instalando por primera vez no tenga que
+      # entender ni bajar 5 archivos sueltos de la página de Releases, acá
+      # armamos ADEMÁS un .zip de conveniencia con todo lo que hace falta
+      # para la primera instalación en un solo click. No lo usa el
+      # auto-updater para nada - es puramente para el primer download manual.
+      - name: Armar instalador de conveniencia para Windows (primera instalación)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > output/install-wavora.bat << 'BATEOF'
+          @echo off
+          REM Instalador de Wavora para Windows - un solo doble clic.
+          REM Tiene que estar en la MISMA carpeta que install.ps1, wavora.crt
+          REM y el .msix (los trae este mismo zip).
+
+          REM Pide permisos de administrador si todavia no los tiene
+          REM (hacen falta para instalar el certificado como raiz confiable).
+          net session >nul 2>&1
+          if %errorLevel% neq 0 (
+              echo Se necesitan permisos de administrador, abriendo ventana nueva...
+              powershell -Command "Start-Process '%~f0' -Verb RunAs"
+              exit /b
+          )
+
+          cd /d "%~dp0"
+
+          echo.
+          echo Instalando Wavora...
+          echo.
+
+          powershell -NoProfile -ExecutionPolicy Bypass -File "install.ps1"
+
+          echo.
+          echo Listo. Si la app no abrio sola, busca "Wavora" en el menu de inicio.
+          pause
+          BATEOF
+          sed -i 's/^[[:space:]]\{1,10\}//' output/install-wavora.bat
+
+          BUNDLE_DIR="$(mktemp -d)/Wavora-Windows-Installer"
+          mkdir -p "$BUNDLE_DIR"
+          cp output/install-wavora.bat "$BUNDLE_DIR/"
+          cp output/install.ps1 "$BUNDLE_DIR/"
+          cp output/wavora.crt "$BUNDLE_DIR/"
+          cp output/wavora.exe "$BUNDLE_DIR/"
+          cp output/*.x64.msix "$BUNDLE_DIR/"
+          (cd "$(dirname "$BUNDLE_DIR")" && zip -r -q "$OLDPWD/output/Wavora-Windows-Installer.zip" "Wavora-Windows-Installer")
+          echo "--- Bundle armado ---"
+          unzip -l output/Wavora-Windows-Installer.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-site
+          path: output/**
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Publish — un solo GitHub Release con TODOS los assets (Android + Desktop).
+  # No-draft, no-prerelease: tiene que quedar como "latest" inmediatamente
+  # para que `site.base-url` (releases/latest/download/...) resuelva y el
+  # updater de Windows/Mac encuentre la nueva versión.
+  # ---------------------------------------------------------------------------
+  publish:
+    runs-on: ubuntu-latest
+    needs: [resolve-version, android, desktop]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-apks
+          path: release-assets/android
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: desktop-site
+          path: release-assets/desktop
+
+      - name: Publicar GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.resolve-version.outputs.tag }}
+          name: Wavora ${{ needs.resolve-version.outputs.version }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          body: |
+            ## Cómo instalar
+
+            **Windows:** descargá `Wavora-Windows-Installer.zip`, descomprimilo en cualquier carpeta, y ejecutá `install-wavora.bat`. Te va a pedir permiso de administrador una sola vez (para confiar en el certificado) — de ahí en más la app se actualiza sola, no hace falta repetir esto nunca más.
+
+            **Android:** descargá el `.apk` que corresponda a tu dispositivo. Si no estás seguro cuál, usá `Wavora-universal.apk`.
+
+            ---
+          files: |
+            release-assets/android/Wavora-arm64.apk
+            release-assets/android/*.apk
+            release-assets/desktop/**

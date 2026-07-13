@@ -44,8 +44,10 @@ val databaseModule =
         single(createdAtStart = true) {
             LocalDataSource(get<DatabaseDao>())
         }
-        // AnalyticsDatasource
-        single(createdAtStart = true) {
+        // AnalyticsDatasource — solo lo usa AnalyticsRepository (RepositoryModule.kt),
+        // que ya no es createdAtStart. Sin uso real hasta que se consulten
+        // analíticas, así que puede construirse lazy sin cambiar comportamiento.
+        single {
             AnalyticsDatasource(get<DatabaseDao>())
         }
         // Datastore

@@ -636,6 +636,9 @@
     <string name="home_offline_title">Can't connect</string>
     <string name="home_offline_subtitle">Check your internet connection and try again, or listen to your downloaded music.</string>
     <string name="listen_to_downloaded">Listen to downloaded music</string>
+    <string name="onboarding_language_title">Choose your language</string>
+    <string name="onboarding_language_subtitle">We detected your language automatically. You can change it now — the rest of this guide (and the app) will use it right away.</string>
+    <string name="onboarding_language_continue">Continue in %1$s</string>
     <string name="onboarding_skip">Skip</string>
     <string name="onboarding_back">Back</string>
     <string name="onboarding_next">Next</string>

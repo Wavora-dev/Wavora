@@ -1648,3 +1648,10 @@ expect fun getPackageName(): String
 expect fun getFileDir(): String
 
 expect fun changeLanguageNative(code: String)
+
+/**
+ * Returns the OS/system default language tag (e.g. "es-ES", "pt-BR"), used by
+ * the onboarding language-selection step to pre-select a sensible default
+ * instead of always defaulting to English — regardless of platform.
+ */
+expect fun detectSystemLanguageTag(): String

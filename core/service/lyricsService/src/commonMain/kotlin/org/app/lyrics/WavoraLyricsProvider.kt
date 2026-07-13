@@ -56,6 +56,18 @@ class WavoraBackendException(
  * another provider; the backend will have it ready shortly after. */
 fun WavoraBackendException.isPendingImport(): Boolean = code == "not_found"
 
+/** Minimal track metadata needed to register a track with the backend
+ * (`POST /v1/lyrics`, metadata-only) so its opportunistic import queue
+ * has something to look up. See [WavoraLyricsProvider.getLyrics] for
+ * where this gets used. */
+data class TrackMetadata(
+    val title: String,
+    val artistName: String,
+    val albumName: String?,
+    val durationSeconds: Int?,
+    val trackType: String,
+)
+
 /**
  * Talks to the new Cloudflare Workers lyrics backend
  * (`wavora-lyrics-backend`), which fully replaces the old, dead
@@ -212,10 +224,22 @@ class WavoraLyricsProvider(
      * an error) when nothing is stored yet - the backend has already
      * queued an opportunistic LRCLIB import in that case, so the caller
      * should fall back to another provider now and expect this to
-     * succeed on a later request. */
+     * succeed on a later request.
+     *
+     * [trackMetadata], when provided, is used ONLY on a miss: the backend's
+     * queued import can't run until the track's title/artist/etc. exist in
+     * its `tracks` table (see the backend's `LyricsImporter.run` - a miss
+     * without registered metadata is a dead end, not a transient failure).
+     * Registering here, right when we discover the miss, is what actually
+     * lets that queued import do something instead of failing forever.
+     * Best-effort and fire-and-forget in spirit: failures are logged, not
+     * thrown, since a failed registration should never turn a lyrics
+     * lookup into a hard error - worst case, this track just stays
+     * unavailable from Wavora, exactly like today. */
     suspend fun getLyrics(
         videoId: String,
         language: String = "und",
+        trackMetadata: TrackMetadata? = null,
     ): Result<BackendLyricsRow?> =
         runCatching {
             val cacheKey = "lyrics:$videoId:$language"
@@ -238,12 +262,40 @@ class WavoraLyricsProvider(
             } catch (e: WavoraBackendException) {
                 if (e.isPendingImport()) {
                     cachePut(cacheKey, null)
+                    if (trackMetadata != null) {
+                        registerTrackBestEffort(videoId, trackMetadata)
+                    }
                     null
                 } else {
                     throw e
                 }
             }
         }
+
+    /** Registers [videoId]'s metadata with the backend (metadata-only
+     * `POST /v1/lyrics`, no lyrics content) so its import queue has a row
+     * to read from `tracks`. Swallows failures - see [getLyrics]'s doc for
+     * why this must never surface as an error to the lyrics lookup. */
+    private suspend fun registerTrackBestEffort(
+        videoId: String,
+        meta: TrackMetadata,
+    ) {
+        submitLyrics(
+            videoId = videoId,
+            title = meta.title,
+            artistName = meta.artistName,
+            albumName = meta.albumName,
+            durationSeconds = meta.durationSeconds,
+            trackType = meta.trackType,
+            language = "und",
+            syncType = null,
+            plainLyrics = null,
+            syncedLyrics = null,
+            richSyncedLyrics = null,
+            contributorName = null,
+            contributorEmail = null,
+        ).onFailure { Logger.e(TAG, "registerTrack($videoId) failed: ${it.message}") }
+    }
 
     /** Resolves the translation for [videoId] in [language]. Translations
      * are keyed by `lyrics_id` server-side (not `video_id`), so this first

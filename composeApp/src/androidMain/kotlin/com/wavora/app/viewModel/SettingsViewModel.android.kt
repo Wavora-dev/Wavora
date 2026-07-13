@@ -331,3 +331,5 @@ actual fun changeLanguageNative(code: String) {
         e.printStackTrace()
     }
 }
+
+actual fun detectSystemLanguageTag(): String = java.util.Locale.getDefault().toLanguageTag()

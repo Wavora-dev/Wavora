@@ -33,9 +33,22 @@ import com.wavora.domain.repository.UpdateRepository
 import org.koin.core.qualifier.named
 import org.koin.dsl.module
 
+// WAVORA STARTUP FIX (Objetivo 1): estos 12 repositorios estaban todos marcados
+// `createdAtStart = true`, lo que fuerza a Koin a construirlos de forma SÍNCRONA
+// dentro de `startKoin { }`, antes de que exista ventana o composición alguna.
+// Solo `AlbumRepository`, `LocalPlaylistRepository`, `PlaylistRepository` y
+// `SongRepository` son realmente necesarios de entrada: los usa `SharedViewModel`,
+// resuelto explícitamente justo después de `startKoin` (DesktopApp.kt/MainActivity.kt).
+// El resto (Account, Artist, Common, Home, LyricsCanvas, Podcast, Search, Stream,
+// Update, Analytics) no se tocan hasta que el usuario navega a una pantalla que
+// los usa. Quitar `createdAtStart` NO cambia el comportamiento observable: Koin
+// sigue garantizando una única instancia durante toda la vida de la app y la
+// construye (con cualquier efecto secundario, como el `.init(...)` de
+// CommonRepository) en el primer `get()`/inyección real — solo se difiere el
+// MOMENTO de esa construcción, no el hecho de que ocurra.
 val repositoryModule =
     module {
-        single<AccountRepository>(createdAtStart = true) {
+        single<AccountRepository> {
             AccountRepositoryImpl(get(), get())
         }
 
@@ -43,17 +56,17 @@ val repositoryModule =
             AlbumRepositoryImpl(get(), get())
         }
 
-        single<ArtistRepository>(createdAtStart = true) {
+        single<ArtistRepository> {
             ArtistRepositoryImpl(get(), get())
         }
 
-        single<CommonRepository>(createdAtStart = true) {
+        single<CommonRepository> {
             CommonRepositoryImpl(get(named(SERVICE_SCOPE)), get(), get(), get(), get(), get()).apply {
                 this.init("${fileDir()}/ytdlp-cookie.txt", get())
             }
         }
 
-        single<HomeRepository>(createdAtStart = true) {
+        single<HomeRepository> {
             HomeRepositoryImpl(get(), get())
         }
 
@@ -61,7 +74,7 @@ val repositoryModule =
             LocalPlaylistRepositoryImpl(get(), get())
         }
 
-        single<LyricsCanvasRepository>(createdAtStart = true) {
+        single<LyricsCanvasRepository> {
             LyricsCanvasRepositoryImpl(get(), get(), get(), get(), get())
         }
 
@@ -69,11 +82,11 @@ val repositoryModule =
             PlaylistRepositoryImpl(get(), get(), get())
         }
 
-        single<PodcastRepository>(createdAtStart = true) {
+        single<PodcastRepository> {
             PodcastRepositoryImpl(get(), get())
         }
 
-        single<SearchRepository>(createdAtStart = true) {
+        single<SearchRepository> {
             SearchRepositoryImpl(get(), get())
         }
 
@@ -81,15 +94,15 @@ val repositoryModule =
             SongRepositoryImpl(get(), get(), get())
         }
 
-        single<StreamRepository>(createdAtStart = true) {
+        single<StreamRepository> {
             StreamRepositoryImpl(get(), get())
         }
 
-        single<UpdateRepository>(createdAtStart = true) {
+        single<UpdateRepository> {
             UpdateRepositoryImpl(get())
         }
 
-        single<AnalyticsRepository>(createdAtStart = true) {
+        single<AnalyticsRepository> {
             AnalyticsRepositoryImpl(get())
         }
     }

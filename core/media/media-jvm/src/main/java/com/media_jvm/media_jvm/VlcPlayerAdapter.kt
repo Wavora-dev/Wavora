@@ -13,6 +13,7 @@ import com.wavora.domain.repository.StreamRepository
 import com.wavora.logger.Logger
 import com.wavora.media_jvm.download.getDownloadPath
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,6 +30,7 @@ import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import uk.co.caprica.vlcj.factory.MediaPlayerFactory
 import uk.co.caprica.vlcj.factory.discovery.NativeDiscovery
 import uk.co.caprica.vlcj.player.base.MediaPlayer
@@ -1138,6 +1140,22 @@ class VlcPlayerAdapter(
             // Extra buffering for video streams to prevent stalls near end
             options.add(":network-caching=5000")
             options.add(":http-reconnect")
+        } else {
+            // WAVORA CROSSFADE FIX (Windows root cause): audio-only sources — which
+            // is effectively ALL playback in Wavora, since it's a music app — had NO
+            // explicit `:network-caching` here, so libVLC fell back to its own low
+            // internal default. That's fine for steady-state playback (it catches up
+            // after a moment), but it's exactly what breaks the crossfade: the
+            // secondary player's `playing()` event fires as soon as VLC's pipeline
+            // starts producing frames, which — with almost no cache — can happen
+            // before there's enough decoded audio queued to survive a network hiccup
+            // or scheduling jitter. That's the "arranca, se traba un par de segundos,
+            // después fluye" symptom. Giving audio the same kind of real cache that
+            // video already had (smaller, since audio is cheap to buffer and we still
+            // want manual track switches to feel fast) fixes it at the source instead
+            // of hiding it with a longer fade or a fixed delay.
+            options.add(":network-caching=3000")
+            options.add(":http-reconnect")
         }
         return options.toTypedArray()
     }
@@ -1466,10 +1484,29 @@ class VlcPlayerAdapter(
                         // DO NOT call setupPlayerEventsInternal() here - that would remove
                         // the event listener from the current player (which is still playing).
                         secondaryPlayer = nextPlayer
+                        // WAVORA CROSSFADE FIX (Objetivo 3): antes se hacía un `delay(50)` fijo
+                        // entre `play()` y desmutear, asumiendo que a los 50ms VLC ya estaba
+                        // produciendo audio real. En streams de red o máquinas más lentas esa
+                        // asunción podía fallar: se desmuteaba antes de que hubiera audio
+                        // decodificado, lo que se percibe como un click/corte al iniciar el
+                        // crossfade. En vez de un timer arbitrario, esperamos la señal real
+                        // `playing()` de VLC (el mismo callback que ya usa
+                        // setupPlayerEventsInternal más abajo para marcar InternalState.PLAYING),
+                        // con un timeout de seguridad para no colgar el crossfade si, por lo que
+                        // sea, VLC nunca dispara el evento (p.ej. error silencioso).
+                        val secondaryPlayingSignal = CompletableDeferred<Unit>()
                         nextPlayer.setEventListener(
                             object : MediaPlayerEventAdapter() {
+                                override fun playing(mediaPlayer: MediaPlayer) {
+                                    // No se llama a ninguna API de VLC acá, solo se resuelve
+                                    // una primitiva de coroutines — seguro de invocar
+                                    // directamente desde el hilo nativo de VLC.
+                                    secondaryPlayingSignal.complete(Unit)
+                                }
+
                                 override fun error(mediaPlayer: MediaPlayer) {
                                     Logger.e(TAG, "Secondary player error during crossfade")
+                                    secondaryPlayingSignal.complete(Unit)
                                     coroutineScope.launch {
                                         crossfadeJob?.cancel()
                                         secondaryPlayer?.release()
@@ -1483,9 +1520,10 @@ class VlcPlayerAdapter(
                         nextPlayer.mediaPlayer.audio().isMute = true
                         nextPlayer.setVolume(0)
                         nextPlayer.mediaPlayer.controls().play()
-                        delay(50)
+                        withTimeoutOrNull(800L) { secondaryPlayingSignal.await() }
                         nextPlayer.mediaPlayer.audio().isMute = false
                     }
+
 
                     if (nextPlayer == null) {
                         setCrossfading(false)

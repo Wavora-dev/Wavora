@@ -81,10 +81,34 @@ android {
         }
     }
 
+    // Opt-in release signing, sourced from env vars rather than a
+    // committed keystore/properties file. Absent locally (release builds
+    // stay unsigned, same as before this block existed) - present in CI
+    // via secrets (see .github/workflows/release.yml). This MUST be the
+    // same keystore/alias every release: Android refuses to install an
+    // update over an existing app unless it's signed with the exact same
+    // certificate, so a rotated or missing key here silently breaks the
+    // in-app auto-update flow (installUpdate() in AppUpdate.android.kt)
+    // for anyone who already has the app installed.
+    val releaseKeystorePath = System.getenv("WAVORA_RELEASE_KEYSTORE_PATH")
+    signingConfigs {
+        if (!releaseKeystorePath.isNullOrBlank()) {
+            create("release") {
+                storeFile = file(releaseKeystorePath)
+                storePassword = System.getenv("WAVORA_RELEASE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("WAVORA_RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("WAVORA_RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            if (!releaseKeystorePath.isNullOrBlank()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -180,22 +204,25 @@ dependencies {
 }
 
 sentry {
-    org.set("wavora")
-    projectName.set("android")
+    org.set("wavora-00")
+    projectName.set("wavora")
     ignoredFlavors.set(setOf("foss"))
     ignoredBuildTypes.set(setOf("debug"))
     autoInstallation.enabled = false
     if (isFullBuild) {
+        // En CI, SENTRY_AUTH_TOKEN llega como variable de entorno (Secret).
+        // En desarrollo local, se sigue leyendo de local.properties como antes.
         val token =
-            try {
-                println("Full build detected, enabling Sentry Auth Token")
-                val properties = Properties()
-                properties.load(rootProject.file("local.properties").inputStream())
-                properties.getProperty("SENTRY_AUTH_TOKEN")
-            } catch (e: Exception) {
-                println("Failed to load SENTRY_AUTH_TOKEN from local.properties: ${e.message}")
-                null
-            }
+            System.getenv("SENTRY_AUTH_TOKEN")
+                ?: try {
+                    println("Full build detected, enabling Sentry Auth Token")
+                    val properties = Properties()
+                    properties.load(rootProject.file("local.properties").inputStream())
+                    properties.getProperty("SENTRY_AUTH_TOKEN")
+                } catch (e: Exception) {
+                    println("Failed to load SENTRY_AUTH_TOKEN from local.properties: ${e.message}")
+                    null
+                }
         authToken.set(token ?: "")
         includeProguardMapping.set(true)
         autoUploadProguardMapping.set(true)

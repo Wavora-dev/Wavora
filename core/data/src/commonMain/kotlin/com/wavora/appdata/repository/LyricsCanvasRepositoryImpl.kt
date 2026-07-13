@@ -34,6 +34,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import com.wavora.aiservice.AiClient
 import com.wavora.lyrics.LyricsManager
+import com.wavora.lyrics.TrackMetadata
 import com.wavora.lyrics.models.request.LyricsBody
 import com.wavora.lyrics.models.request.TranslatedLyricsBody
 import com.wavora.lyrics.parser.parseTtmlLyrics
@@ -473,10 +474,33 @@ internal class LyricsCanvasRepositoryImpl(
     // Wavora Lyrics
     private val simpMusicLyricsTag = "WavoraLyricsRepository"
 
-    override fun getWavoraLyrics(videoId: String): Flow<Resource<Lyrics>> =
+    /** Derives the backend's flat artist/album/trackType fields from a
+     * [Track]. Shared by [getWavoraLyrics] (opportunistic registration on
+     * a miss) and [insertWavoraLyrics] (explicit user contribution) so
+     * the two paths can never disagree on what a given [Track] maps to. */
+    private fun Track.toWavoraArtistName(): String = artists?.toListName()?.connectArtists() ?: ""
+
+    private fun Track.toWavoraAlbumName(): String = album?.name ?: ""
+
+    private fun Track.toWavoraTrackType(): String =
+        if (thumbnails?.firstOrNull()?.let { it.width == it.height && it.width > 0 } == true) "SONG" else "VIDEO"
+
+    override fun getWavoraLyrics(
+        videoId: String,
+        track: Track,
+        duration: Int,
+    ): Flow<Resource<Lyrics>> =
         flow {
+            val trackMetadata =
+                TrackMetadata(
+                    title = track.title,
+                    artistName = track.toWavoraArtistName(),
+                    albumName = track.toWavoraAlbumName(),
+                    durationSeconds = duration,
+                    trackType = track.toWavoraTrackType(),
+                )
             simpMusicLyrics
-                .getLyrics(videoId)
+                .getLyrics(videoId, trackMetadata = trackMetadata)
                 .onSuccess { lyrics ->
                     Logger.d(simpMusicLyricsTag, "Lyrics found: $lyrics")
                     val result = lyrics.firstOrNull()
@@ -602,15 +626,15 @@ internal class LyricsCanvasRepositoryImpl(
                     LyricsBody(
                         videoId = track.videoId,
                         songTitle = track.title,
-                        artistName = track.artists?.toListName()?.connectArtists() ?: "",
-                        albumName = track.album?.name ?: "",
+                        artistName = track.toWavoraArtistName(),
+                        albumName = track.toWavoraAlbumName(),
                         durationSeconds = duration,
                         plainLyric = lyrics.toPlainLrcString() ?: "",
                         syncedLyrics = syncedLyric,
                         richSyncLyrics = richSyncedLyric,
                         contributor = contributorName,
                         contributorEmail = contributorEmail,
-                        trackType = if (track.thumbnails?.firstOrNull()?.let { it.width == it.height && it.width > 0 } == true) "SONG" else "VIDEO",
+                        trackType = track.toWavoraTrackType(),
                     ),
                 ).onSuccess {
                     Logger.d(simpMusicLyricsTag, "Inserted Lyrics: $it")
