@@ -266,8 +266,13 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
     }
 }
 
-/** Tamaño fijo de la ventana de splash (cuadrada, con margen para el halo). */
-private val SPLASH_WINDOW_SIZE = 440.dp
+/**
+ * Tamaño fijo de la ventana de splash (cuadrada, con margen para los halos).
+ * +20% sobre el tamaño anterior (440dp -> 528dp) a pedido, en línea con el
+ * logo (176dp -> 211dp) y el aura exterior del nuevo diseño de dos halos en
+ * [SplashScreen].
+ */
+private val SPLASH_WINDOW_SIZE = 528.dp
 
 /**
  * Calcula la posición para que una ventana de [windowSize] quede centrada en

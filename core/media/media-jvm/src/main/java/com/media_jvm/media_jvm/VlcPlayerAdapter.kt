@@ -336,6 +336,14 @@ class VlcPlayerAdapter(
                 cancelCrossfadeAndCleanup(revertIndex = true)
             }
 
+            // A precached player may be mid pre-roll (playing muted ahead of the
+            // real crossfade, see PRECACHE_AUDIO_PREROLL_LEAD_MS). If the user
+            // pauses during that window, stop it from continuing to play silently
+            // in the background and reset its position/primed flag so the real
+            // crossfade — whenever playback resumes — starts it fresh from 0
+            // instead of resuming from wherever the pre-roll had drifted to.
+            pauseAnyPrimedPrecachePlayer()
+
             when (internalState) {
                 InternalState.PLAYING, InternalState.READY -> {
                     currentPlayer?.let { player ->
@@ -1181,7 +1189,7 @@ class VlcPlayerAdapter(
             // video already had (smaller, since audio is cheap to buffer and we still
             // want manual track switches to feel fast) fixes it at the source instead
             // of hiding it with a longer fade or a fixed delay.
-            options.add(":network-caching=3000")
+            options.add(":network-caching=$AUDIO_NETWORK_CACHING_MS")
             options.add(":http-reconnect")
         }
         return options.toTypedArray()
@@ -1408,6 +1416,27 @@ class VlcPlayerAdapter(
     }
 
     /**
+     * Pause + reset any precached player currently mid pre-roll (playing muted
+     * ahead of the real crossfade — see PRECACHE_AUDIO_PREROLL_LEAD_MS). Called
+     * when playback pauses so a pre-rolled player doesn't keep decoding silently
+     * in the background, and so it starts fresh from 0 the next time it's needed
+     * instead of resuming from a drifted position.
+     */
+    private fun pauseAnyPrimedPrecachePlayer() {
+        precachedPlayers.values.forEach { cached ->
+            if (cached.player.isPrimed) {
+                try {
+                    cached.player.pause()
+                    cached.player.seekTo(0)
+                } catch (e: Exception) {
+                    Logger.w(TAG, "Error resetting pre-rolled precache player: ${e.message}")
+                }
+                cached.player.isPrimed = false
+            }
+        }
+    }
+
+    /**
      * Cleanup current player
      */
     private fun cleanupCurrentPlayerInternal() {
@@ -1521,34 +1550,62 @@ class VlcPlayerAdapter(
                         // setupPlayerEventsInternal más abajo para marcar InternalState.PLAYING),
                         // con un timeout de seguridad para no colgar el crossfade si, por lo que
                         // sea, VLC nunca dispara el evento (p.ej. error silencioso).
-                        val secondaryPlayingSignal = CompletableDeferred<Unit>()
-                        nextPlayer.setEventListener(
-                            object : MediaPlayerEventAdapter() {
-                                override fun playing(mediaPlayer: MediaPlayer) {
-                                    // No se llama a ninguna API de VLC acá, solo se resuelve
-                                    // una primitiva de coroutines — seguro de invocar
-                                    // directamente desde el hilo nativo de VLC.
-                                    secondaryPlayingSignal.complete(Unit)
-                                }
-
-                                override fun error(mediaPlayer: MediaPlayer) {
-                                    Logger.e(TAG, "Secondary player error during crossfade")
-                                    secondaryPlayingSignal.complete(Unit)
-                                    coroutineScope.launch {
-                                        crossfadeJob?.cancel()
-                                        secondaryPlayer?.release()
-                                        secondaryPlayer = null
-                                        setCrossfading(false)
-                                        seekTo(nextIndex, 0)
+                        // WAVORA CROSSFADE FIX (Windows stutter, remaining gap): if
+                        // startPositionUpdates() already pre-rolled this player (see
+                        // PRECACHE_AUDIO_PREROLL_LEAD_MS), it has been playing muted for
+                        // up to ~3.5s already and its buffer is stable — calling play()
+                        // again here would be a no-op at best, and re-running the
+                        // play()+wait(800ms) sequence would just delay the fade for no
+                        // reason. Only do the play()+wait dance for a player that's
+                        // starting fresh right now (non-precached fallback, or a
+                        // precached one whose crossfade fired before pre-roll had a
+                        // chance to run — e.g. a very short track).
+                        if (nextPlayer.isPrimed) {
+                            // The pre-rolled player has been playing muted for up to
+                            // PRECACHE_AUDIO_PREROLL_LEAD_MS (~3.5s) to give its buffer
+                            // real time to stabilize — so its position has drifted
+                            // forward from 0 by roughly that much. Seek back to the
+                            // true start before unmuting, or the listener would hear
+                            // the next track starting a few seconds in instead of from
+                            // its actual intro. This is a LOCAL seek backwards into
+                            // data VLC already has buffered/demuxed from having just
+                            // played through it — not a fresh network fetch — so it's
+                            // effectively instant and doesn't reintroduce the original
+                            // network-caching stutter.
+                            Logger.d(TAG, "Secondary player already pre-rolled, seeking back to 0 before unmute")
+                            nextPlayer.setEventListener(null)
+                            nextPlayer.seekTo(0)
+                            nextPlayer.mediaPlayer.audio().isMute = false
+                        } else {
+                            val secondaryPlayingSignal = CompletableDeferred<Unit>()
+                            nextPlayer.setEventListener(
+                                object : MediaPlayerEventAdapter() {
+                                    override fun playing(mediaPlayer: MediaPlayer) {
+                                        // No se llama a ninguna API de VLC acá, solo se resuelve
+                                        // una primitiva de coroutines — seguro de invocar
+                                        // directamente desde el hilo nativo de VLC.
+                                        secondaryPlayingSignal.complete(Unit)
                                     }
-                                }
-                            },
-                        )
-                        nextPlayer.mediaPlayer.audio().isMute = true
-                        nextPlayer.setVolume(0)
-                        nextPlayer.mediaPlayer.controls().play()
-                        withTimeoutOrNull(800L) { secondaryPlayingSignal.await() }
-                        nextPlayer.mediaPlayer.audio().isMute = false
+
+                                    override fun error(mediaPlayer: MediaPlayer) {
+                                        Logger.e(TAG, "Secondary player error during crossfade")
+                                        secondaryPlayingSignal.complete(Unit)
+                                        coroutineScope.launch {
+                                            crossfadeJob?.cancel()
+                                            secondaryPlayer?.release()
+                                            secondaryPlayer = null
+                                            setCrossfading(false)
+                                            seekTo(nextIndex, 0)
+                                        }
+                                    }
+                                },
+                            )
+                            nextPlayer.mediaPlayer.audio().isMute = true
+                            nextPlayer.setVolume(0)
+                            nextPlayer.mediaPlayer.controls().play()
+                            withTimeoutOrNull(800L) { secondaryPlayingSignal.await() }
+                            nextPlayer.mediaPlayer.audio().isMute = false
+                        }
                     }
 
 
@@ -1885,6 +1942,26 @@ class VlcPlayerAdapter(
         private const val BPM_RATIO_MAX = 1.25f
         private const val BPM_GAP_DURATION_SCALE = 2.0
         private const val UNKNOWN_GAP_DEFAULT_FACTOR = 1.25
+
+        // Must match the `:network-caching` value buildVlcOptions() sets for audio.
+        // Shared here (instead of duplicated as a magic number) so the pre-roll lead
+        // time below is always derived from the real buffer target, not guessed.
+        const val AUDIO_NETWORK_CACHING_MS = 3000L
+
+        // WAVORA CROSSFADE FIX (Windows stutter, remaining gap): a precached player
+        // only had `media().prepare()` called on it — URL resolved, demuxer opened,
+        // but NOT playing yet. The actual audio decode + output pipeline (the thing
+        // `:network-caching=3000` is buffering for) only started when `play()` was
+        // called, which happened at the SAME instant the crossfade needed the audio
+        // to already be stable: `preparationBufferMs` was `0L` for the precached case
+        // in startPositionUpdates() (below), meaning the trigger fired as if a
+        // precached player needed no extra lead time at all. That's backwards —
+        // "precached" only means the URL is resolved, not that the buffer is filled.
+        // Fix: give the precached player's `play()` a real head start — muted, at
+        // volume 0 — a few seconds before the visible crossfade actually begins, so
+        // its buffer has time to stabilize before the fade makes it audible. This
+        // margin mirrors AUDIO_NETWORK_CACHING_MS with a small safety cushion.
+        const val PRECACHE_AUDIO_PREROLL_LEAD_MS = AUDIO_NETWORK_CACHING_MS + 500L
     }
 
     // ========== Position Updates ==========
@@ -1934,8 +2011,15 @@ class VlcPlayerAdapter(
                                     if (dur > 0 && pos > 0) {
                                         val timeRemaining = dur - pos
                                         val nextVideoId = playlist.getOrNull(getNextMediaItemIndex())?.mediaId
-                                        val isPrecached = nextVideoId != null && precachedPlayers.containsKey(nextVideoId)
-                                        val preparationBufferMs = if (isPrecached) 0L else 3000L
+                                        val precachedNext = nextVideoId?.let { precachedPlayers[it] }
+                                        val isPrecached = precachedNext != null
+                                        // A precached player only has media().prepare() called on it —
+                                        // URL resolved, demuxer opened — NOT playing. It still needs
+                                        // preparationBufferMs of real buffer fill after play() starts,
+                                        // same as a non-precached one; the difference is WHEN that
+                                        // play() happens (see the pre-roll block below), not whether
+                                        // the buffer requirement exists at all.
+                                        val preparationBufferMs = 3000L
                                         val resolvedDurationMs =
                                             if (crossfadeDurationMs == DataStoreManager.CROSSFADE_DURATION_AUTO) {
                                                 val currentVideoId = playlist.getOrNull(localCurrentMediaItemIndex)?.mediaId ?: ""
@@ -1944,6 +2028,28 @@ class VlcPlayerAdapter(
                                                 crossfadeDurationMs
                                             }
                                         val triggerThreshold = resolvedDurationMs.toLong() + preparationBufferMs
+
+                                        // WAVORA CROSSFADE FIX (Windows stutter, remaining gap): pre-roll
+                                        // the precached player — muted, volume 0 — a few seconds before
+                                        // the visible crossfade actually starts, so play() (and the real
+                                        // buffer fill it kicks off) is no longer called at the exact
+                                        // instant the fade needs stable audio. Bounded window (a few
+                                        // seconds), so there's no meaningful position drift by the time
+                                        // the real crossfade picks this player up.
+                                        if (isPrecached &&
+                                            precachedNext != null &&
+                                            !precachedNext.player.isPrimed &&
+                                            timeRemaining > triggerThreshold &&
+                                            timeRemaining <= triggerThreshold + PRECACHE_AUDIO_PREROLL_LEAD_MS
+                                        ) {
+                                            val precachedPlayer = precachedNext.player
+                                            precachedPlayer.isPrimed = true
+                                            precachedPlayer.mediaPlayer.audio().isMute = true
+                                            precachedPlayer.setVolume(0)
+                                            precachedPlayer.play()
+                                            Logger.d(TAG, "Pre-rolling precached player for $nextVideoId (${PRECACHE_AUDIO_PREROLL_LEAD_MS}ms lead)")
+                                        }
+
                                         if (timeRemaining in 1..triggerThreshold) {
                                             if (hasNextMediaItem()) {
                                                 val nextIndex = getNextMediaItemIndex()
@@ -2281,6 +2387,13 @@ class VlcPlayer(
     @Volatile
     var isReleased = false
         private set
+
+    // Set once play() has been called ahead of time (muted) to give the buffer a
+    // real head start before a crossfade needs this player's audio. Lets the
+    // crossfade path skip a redundant play()+wait when the player is already
+    // stable instead of starting decode at the exact instant it's needed.
+    @Volatile
+    var isPrimed = false
 
     private var eventListener: MediaPlayerEventAdapter? = null
 

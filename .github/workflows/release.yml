@@ -115,17 +115,29 @@ jobs:
         with:
           packages: "platform-tools"
 
-      - name: Instalar platform/build-tools de Android
-        # compileSdk del proyecto es 36 (ver androidApp/build.gradle.kts) — API 37
-        # todavía NO está publicada en el índice público de sdkmanager que usa
-        # GitHub Actions, confirmado por el log real de CI:
-        #   "Warning: Failed to find package 'platforms;android-37'"
-        # (una búsqueda web sobre disponibilidad de API 37 puede dar falsos
-        # positivos — noticias de que salió, changelogs de AOSP, etc. — pero eso
-        # es distinto de que sdkmanager ya la tenga indexada). Instalamos 37 en
-        # modo best-effort por si en algún momento aparece, pero SIN romper el
-        # build si todavía no está: lo único que de verdad hace falta para
-        # compilar hoy es 36.
+      - name: Instalar platform/build-tools API 37
+        # compileSdk del proyecto es 37 (ver androidApp/build.gradle.kts).
+        #
+        # Historial (para no repetir el ciclo): en algún momento bajamos esto a 36
+        # porque el índice de sdkmanager no tenía 'platforms;android-37' publicado
+        # todavía. Pero un run real de `checkReleaseAarMetadata` con compileSdk=36
+        # mostró 14 dependencias — TODAS pineadas a mano en
+        # gradle/libs.versions.toml (material3-expressive 1.5.0-alpha21, core-ktx
+        # 1.19.0, y foundation/animation/ui 1.12.0-alpha03 que arrastra
+        # composeMultiplatform 1.11.1) — que ya EXIGEN compileSdk 37 para
+        # compilar. No es un capricho de tooling: sin 37, el proyecto directamente
+        # no compila con las versiones de Compose que se están usando a propósito.
+        # Por eso esto vuelve a ser mandatorio (no best-effort): si sdkmanager no
+        # tiene 'platforms;android-37' todavía, el build TIENE que fallar acá, con
+        # un mensaje claro, en vez de arrastrar el problema hasta
+        # checkReleaseAarMetadata con 14 issues confusos.
+        #
+        # Si esto vuelve a fallar con "Failed to find package
+        # 'platforms;android-37'": no hay nada para arreglar en este repo, hay que
+        # esperar a que Google lo publique en el índice — o, si no se puede
+        # esperar, bajar material3-expressive/core-ktx/composeMultiplatform en
+        # gradle/libs.versions.toml a versiones que todavía soporten compileSdk 36
+        # (implica perder Material3 Expressive y features nuevas de esas libs).
         shell: bash
         run: |
           set -euo pipefail
@@ -136,37 +148,20 @@ jobs:
             exit 1
           fi
 
-          echo "Instalando platforms;android-36 build-tools;36.0.0 (lo que el proyecto realmente compila)..."
-          # NO usar `if ! yes | sdkmanager ...; then` acá: con `pipefail` activo (ver
-          # set -euo pipefail arriba), el SIGPIPE que recibe `yes` cuando sdkmanager
-          # cierra su stdin al terminar de leer hace que el pipeline entero reporte
-          # el exit code de `yes` (141, "Broken pipe") en vez del de sdkmanager.
-          # Y ojo con "arreglarlo" agregando `|| true`: `true` es un comando en sí
-          # mismo, y al correr PISA `PIPESTATUS` (queda con un solo elemento, el de
-          # `true`) — confirmado en un run real: "PIPESTATUS[1]: unbound variable".
-          # Por eso acá se desactiva `-e` momentáneamente, se corre el pipe, y se
-          # captura PIPESTATUS[1] en una variable de una SOLA vez, sin que se
-          # ejecute nada más en el medio que lo pueda pisar.
-          set +e
-          yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --channel=3 \
-            "platforms;android-36" "build-tools;36.0.0"
-          SDKMANAGER_36_EXIT=${PIPESTATUS[1]}
-          set -e
-          if [ "$SDKMANAGER_36_EXIT" -ne 0 ]; then
-            echo "::error::No se pudo instalar platforms;android-36 / build-tools;36.0.0 — esto sí es fatal, es lo que compileSdk=36 necesita."
-            exit 1
-          fi
-
-          echo "Probando platforms;android-37 (best-effort, no bloquea el build si todavía no está publicada)..."
+          echo "Instalando platforms;android-37 build-tools;37.0.0..."
+          # Ver nota de PIPESTATUS más abajo en el repo / commits anteriores: NO usar
+          # `if ! yes | sdkmanager ...; then` (pipefail hace que el SIGPIPE de `yes`
+          # tape el resultado real de sdkmanager) y NO usar `|| true` (pisa
+          # PIPESTATUS). Se desactiva `-e`, se corre el pipe, se captura
+          # PIPESTATUS[1] al toque, y se reactiva `-e`.
           set +e
           yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --channel=3 \
             "platforms;android-37" "build-tools;37.0.0"
           SDKMANAGER_37_EXIT=${PIPESTATUS[1]}
           set -e
-          if [ "$SDKMANAGER_37_EXIT" -eq 0 ]; then
-            echo "API 37 disponible — se puede subir compileSdk cuando se decida hacerlo a propósito (no automático)."
-          else
-            echo "API 37 todavía no está en el índice de sdkmanager. Sin impacto: el proyecto compila contra 36."
+          if [ "$SDKMANAGER_37_EXIT" -ne 0 ]; then
+            echo "::error::Google todavía no publicó 'platforms;android-37' en el índice de sdkmanager. El proyecto NO compila contra 36 (ver checkReleaseAarMetadata: material3-expressive 1.5.0-alpha21 / core-ktx 1.19.0 / composeMultiplatform 1.11.1 lo exigen). Esperar a que lo publiquen, o bajar esas versiones en gradle/libs.versions.toml."
+            exit 1
           fi
 
       - name: Setup Gradle
@@ -363,7 +358,7 @@ jobs:
       # releases/latest/download/<archivo>.
       #
       # Para la PRIMERA instalación armamos ADEMÁS un .zip de conveniencia,
-      # AppwavoraWindows.zip, con SOLO estos 5 archivos:
+      # AppwavoraWindows.zip, con SOLO estos 6 archivos:
       #   - install-wavora.bat  (repo: scripts/windows/install-wavora.bat)
       #   - install.ps1         (repo: scripts/windows/install.ps1 — NO el
       #                           install.ps1 que genera Conveyor. El nuestro
@@ -373,6 +368,11 @@ jobs:
       #                           0x80190194 / 0x80073CF0 / 0x800B0109.)
       #   - wavora.crt          (generado por Conveyor en output/)
       #   - wavora.exe          (generado por Conveyor en output/)
+      #   - wavora.ico          (repo: composeApp/icon/circle_app_icon.ico —
+      #                           usado por install.ps1 SOLO para setear el
+      #                           IconLocation del acceso directo de escritorio;
+      #                           sin esto el .lnk hereda el icono generico de
+      #                           explorer.exe. Ver AUDIT NOTE en install.ps1.)
       #   - el .msix            (generado por Conveyor en output/)
       # El auto-updater NO usa este zip para nada — es puramente para el
       # primer download manual desde la página de Releases.
@@ -399,6 +399,7 @@ jobs:
           cp scripts/windows/install.ps1 "$BUNDLE_DIR/"
           cp output/wavora.crt "$BUNDLE_DIR/"
           cp output/wavora.exe "$BUNDLE_DIR/"
+          cp composeApp/icon/circle_app_icon.ico "$BUNDLE_DIR/wavora.ico"
           cp "$MSIX" "$BUNDLE_DIR/"
 
           echo "--- Contenido de AppwavoraWindows.zip ---"
@@ -534,7 +535,7 @@ jobs:
           echo ""
           echo "Todas las URLs del .appinstaller resuelven correctamente."
 
-      - name: Validar que AppwavoraWindows.zip tiene exactamente los 5 archivos esperados
+      - name: Validar que AppwavoraWindows.zip tiene exactamente los 6 archivos esperados
         shell: bash
         run: |
           set -euo pipefail
@@ -542,7 +543,7 @@ jobs:
           curl -sL -o bundle.zip -w "%{http_code}\n" "$URL" | { read code; if [ "$code" != "200" ]; then echo "::error::GET $URL devolvió HTTP $code"; exit 1; fi; }
 
           ACTUAL=$(unzip -Z1 bundle.zip | sort)
-          EXPECTED=$(printf "AppwavoraWindows/install-wavora.bat\nAppwavoraWindows/install.ps1\nAppwavoraWindows/wavora.crt\nAppwavoraWindows/wavora.exe\n" | sort)
+          EXPECTED=$(printf "AppwavoraWindows/install-wavora.bat\nAppwavoraWindows/install.ps1\nAppwavoraWindows/wavora.crt\nAppwavoraWindows/wavora.exe\nAppwavoraWindows/wavora.ico\n" | sort)
 
           echo "--- Contenido real ---"
           echo "$ACTUAL"
@@ -555,8 +556,8 @@ jobs:
 
           NON_MSIX=$(echo "$ACTUAL" | grep -v '\.msix$' | grep -v '/$' | sort)
           if [ "$NON_MSIX" != "$EXPECTED" ]; then
-            echo "::error::El contenido de AppwavoraWindows.zip no coincide con lo esperado (install-wavora.bat, install.ps1, wavora.crt, wavora.exe, *.msix)."
+            echo "::error::El contenido de AppwavoraWindows.zip no coincide con lo esperado (install-wavora.bat, install.ps1, wavora.crt, wavora.exe, wavora.ico, *.msix)."
             diff <(echo "$EXPECTED") <(echo "$NON_MSIX") || true
             exit 1
           fi
-          echo "OK: AppwavoraWindows.zip contiene exactamente los 5 archivos esperados."
+          echo "OK: AppwavoraWindows.zip contiene exactamente los 6 archivos esperados."

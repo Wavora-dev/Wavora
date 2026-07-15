@@ -39,13 +39,29 @@ import org.koin.dsl.module
 // Solo `AlbumRepository`, `LocalPlaylistRepository`, `PlaylistRepository` y
 // `SongRepository` son realmente necesarios de entrada: los usa `SharedViewModel`,
 // resuelto explícitamente justo después de `startKoin` (DesktopApp.kt/MainActivity.kt).
-// El resto (Account, Artist, Common, Home, LyricsCanvas, Podcast, Search, Stream,
+// El resto (Account, Artist, Home, LyricsCanvas, Podcast, Search, Stream,
 // Update, Analytics) no se tocan hasta que el usuario navega a una pantalla que
-// los usa. Quitar `createdAtStart` NO cambia el comportamiento observable: Koin
-// sigue garantizando una única instancia durante toda la vida de la app y la
-// construye (con cualquier efecto secundario, como el `.init(...)` de
-// CommonRepository) en el primer `get()`/inyección real — solo se difiere el
-// MOMENTO de esa construcción, no el hecho de que ocurra.
+// los usa. Quitar `createdAtStart` NO cambia el comportamiento observable para
+// esos 9 — Koin sigue garantizando una única instancia y la construye en el
+// primer `get()`/inyección real, solo se difiere el MOMENTO.
+//
+// AUDIT NOTE (bug real, encontrado y corregido): `CommonRepository` SÍ es un
+// caso distinto de esos otros 9, y quedó mal incluido en esa lista original.
+// Su `.init(...)` arranca la sincronización reactiva
+// `dataStoreManager.cookie.collectLatest { youTube.cookie = cookie }` — el
+// ÚNICO lugar que restaura, al arrancar la app, la cookie de YouTube Music
+// persistida hacia el cliente compartido `YouTube`/`Ytmusic`. Ni HomeViewModel
+// ni LibraryViewModel inyectan `CommonRepository` (usan Home/Library/Playlist
+// repository), así que con la construcción diferida esa sincronización nunca
+// se disparaba en un arranque en frío: Home/Library pedían datos personalizados
+// con `youTube.cookie == null` — se veían como "sesión cerrada", historial
+// vacío, aunque la cookie estuviera perfecta en disco — hasta que el usuario
+// visitaba Configuración > Cuenta, que sí inyecta `CommonRepository`
+// indirectamente (a través de `AccountRepositoryImpl.getAccountInfo`, que
+// reasigna `youTube.cookie` como efecto secundario de refrescar la info de
+// cuenta) y recién ahí "aparecía" todo. Fix: `CommonRepository` vuelve a
+// `createdAtStart = true` — es el único de los 12 cuya construcción diferida
+// tiene un efecto secundario del que dependen otras pantallas sin saberlo.
 val repositoryModule =
     module {
         single<AccountRepository> {
@@ -60,7 +76,7 @@ val repositoryModule =
             ArtistRepositoryImpl(get(), get())
         }
 
-        single<CommonRepository> {
+        single<CommonRepository>(createdAtStart = true) {
             CommonRepositoryImpl(get(named(SERVICE_SCOPE)), get(), get(), get(), get(), get()).apply {
                 this.init("${fileDir()}/ytdlp-cookie.txt", get())
             }

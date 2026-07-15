@@ -25,10 +25,18 @@
          create it ourselves here, resolved dynamically via Get-StartApps —
          never hardcode the PackageFamilyName, it changes if the signing key
          or app identity ever changes).
+         AUDIT NOTE (generic folder icon bug): a shortcut created with
+         TargetPath = explorer.exe has NO icon of its own — Windows resolves
+         its icon from the TargetPath executable unless IconLocation is set
+         explicitly. Without it, the .lnk showed explorer.exe's own icon
+         (a generic folder), even though launching it opened Wavora correctly
+         with its real icon in the taskbar/window. Fix: point IconLocation at
+         wavora.ico, bundled alongside this script.
       5. Launch the app.
 
     Bundle requirement (same folder as this script):
       - wavora.crt
+      - wavora.ico   (used only for the desktop shortcut's icon)
       - a single *.msix (any name containing "wavora", e.g. wavora-1.1.2.x64.msix)
 
 .NOTES
@@ -70,6 +78,12 @@ Write-Step "Buscando archivos del instalador..."
 $cert = Join-Path $scriptDir "wavora.crt"
 if (-not (Test-Path $cert)) {
     Fail "No se encontro wavora.crt en $scriptDir"
+}
+
+$icon = Join-Path $scriptDir "wavora.ico"
+if (-not (Test-Path $icon)) {
+    Write-Host "  [WARN] No se encontro wavora.ico en $scriptDir - el acceso directo de escritorio quedara sin icono propio." -ForegroundColor Yellow
+    $icon = $null
 }
 
 $msixCandidates = Get-ChildItem -Path $scriptDir -Filter "*.msix" -File |
@@ -136,6 +150,12 @@ if (-not $startApp) {
         $shortcut.Arguments = "shell:AppsFolder\$appId"
         $shortcut.Description = "Wavora"
         $shortcut.WorkingDirectory = "$env:WINDIR"
+        # Sin esto, Windows resuelve el icono del .lnk a partir de TargetPath
+        # (explorer.exe) y muestra su icono generico de carpeta en vez del de
+        # Wavora, aunque la app abra y se vea perfecta una vez corriendo.
+        if ($icon) {
+            $shortcut.IconLocation = "$icon,0"
+        }
         $shortcut.Save()
         Write-Host "  OK: $shortcutPath" -ForegroundColor Green
     } catch {
