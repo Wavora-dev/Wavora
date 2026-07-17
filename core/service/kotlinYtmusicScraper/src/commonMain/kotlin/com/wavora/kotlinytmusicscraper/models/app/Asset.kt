@@ -31,4 +31,10 @@ data class Asset(
     val uploader: Uploader?,
     @SerialName("url")
     val url: String?,
+    // GitHub publishes this as "sha256:<hex>" for release assets (GA since
+    // 2025) - used by WavoraUpdater to verify the downloaded zip before
+    // installing it. Null for older releases uploaded before GitHub added
+    // this field, or if GitHub simply hasn't computed it yet.
+    @SerialName("digest")
+    val digest: String? = null,
 )

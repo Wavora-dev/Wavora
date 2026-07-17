@@ -45,18 +45,40 @@
 #>
 
 [CmdletBinding()]
-param()
+param(
+    # Cuando esta presente, no escribe nada a consola y NO pide
+    # confirmacion con Read-Host en caso de error (que colgaria para
+    # siempre si no hay ninguna consola visible donde escribir esa
+    # respuesta). Pensado para invocacion automatizada, ver
+    # WavoraUpdater.exe (see wavoraUpdater/.../UpdaterLogic.kt's
+    # runInstallScript()). El uso manual (doble click via
+    # install-wavora.bat) no pasa este flag y se comporta exactamente
+    # igual que antes.
+    [switch]$Silent
+)
 
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptDir
 
 function Write-Step($msg) {
+    if ($Silent) { return }
     Write-Host ""
     Write-Host "==> $msg" -ForegroundColor Cyan
 }
 
+function Write-Info($msg) {
+    if ($Silent) { return }
+    Write-Host $msg
+}
+
 function Fail($msg) {
+    if ($Silent) {
+        # No hay consola visible para leer un Read-Host - solo salir con
+        # codigo de error, que es lo que el caller (WavoraUpdater)
+        # efectivamente chequea.
+        exit 1
+    }
     Write-Host ""
     Write-Host "[ERROR] $msg" -ForegroundColor Red
     Write-Host ""

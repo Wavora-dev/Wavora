@@ -151,7 +151,7 @@ class SharedViewModel(
     suspend fun getString(key: String): String? = app.getString(key)
     suspend fun putString(key: String, value: String) = app.putString(key, value)
     fun checkForUpdateIfEnabled() = app.checkForUpdateIfEnabled()
-    fun checkForUpdate() = app.checkForUpdate()
+    fun checkForUpdate(isManual: Boolean = false) = app.checkForUpdate(isManual)
 
     // ── Init: wire song-change events from player → nowPlaying ────────────
     init {

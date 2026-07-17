@@ -23,7 +23,10 @@ actual fun supportsInAppUpdate(): Boolean = true
 
 actual fun currentDeviceAbis(): List<String> = android.os.Build.SUPPORTED_ABIS?.toList() ?: emptyList()
 
-actual fun installUpdate(downloadUrl: String, versionName: String) {
+// sha256 is unused on Android - PackageInstaller already verifies the
+// APK's own signature, see the expect declaration's doc for why a
+// separate hash check isn't needed here.
+actual fun installUpdate(downloadUrl: String, versionName: String, sha256: String?, onError: (String) -> Unit) {
     val context: AppCompatActivity = getKoin().get()
 
     // Per-app "install unknown apps" permission (API 26+, matches this
@@ -85,7 +88,16 @@ private fun downloadAndInstall(context: AppCompatActivity, downloadUrl: String, 
                     return
                 }
 
-                val apkUri = FileProvider.getUriForFile(appContext, "${appContext.packageName}.FileProvider", apkFile)
+                val apkUri =
+                    try {
+                        FileProvider.getUriForFile(appContext, "${appContext.packageName}.FileProvider", apkFile)
+                    } catch (e: IllegalArgumentException) {
+                        // Was silently killing this whole receiver before this
+                        // catch existed - see provider_paths.xml's AUDIT NOTE for
+                        // the root cause (missing <external-files-path>).
+                        Logger.e(TAG, "FileProvider could not resolve $apkFile: ${e.message}")
+                        return
+                    }
                 val installIntent =
                     Intent(Intent.ACTION_VIEW)
                         .setDataAndType(apkUri, "application/vnd.android.package-archive")

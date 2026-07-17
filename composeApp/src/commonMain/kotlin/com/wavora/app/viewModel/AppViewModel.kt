@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
 import kotlin.reflect.KClass
+import wavora.composeapp.generated.resources.Res
+import wavora.composeapp.generated.resources.error
 
 class AppViewModel(
     private val dataStoreManager: DataStoreManager,
@@ -146,7 +148,13 @@ class AppViewModel(
         }
     }
 
-    fun checkForUpdate() {
+    // [isManual] distinguishes the automatic startup check (silent on
+    // failure, as before - no toast on every launch just because there's
+    // no internet) from the explicit "buscar actualizaciones" button in
+    // Settings, which should tell the user when the check itself failed
+    // (GitHub down, rate-limited, no connection) instead of leaving them
+    // guessing why nothing happened.
+    fun checkForUpdate(isManual: Boolean = false) {
         viewModelScope.launch {
             _isCheckingUpdate.value = true
             val updateChannel = dataStoreManager.updateChannel.first()
@@ -159,7 +167,12 @@ class AppViewModel(
                 val data = response.data
                 when (response) {
                     is Resource.Success if (data != null) -> { _updateResponse.value = data; showedUpdateDialog = true }
-                    else -> log("Check for update error: ${response.message}", LogLevel.WARN)
+                    else -> {
+                        log("Check for update error: ${response.message}", LogLevel.WARN)
+                        if (isManual) {
+                            makeToast(getString(Res.string.error) + ": ${response.message}")
+                        }
+                    }
                 }
                 _isCheckingUpdate.value = false
             }

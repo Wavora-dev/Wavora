@@ -29,6 +29,14 @@ internal class UpdateRepositoryImpl(
                                 )
                             }
                             ?: emptyList()
+                    val windowsZipAsset =
+                        response.assets
+                            ?.firstOrNull { it?.name?.equals("AppwavoraWindows.zip", ignoreCase = true) == true && it.browserDownloadUrl != null }
+                    val windowsZipDownloadUrl = windowsZipAsset?.browserDownloadUrl
+                    val windowsZipSha256 =
+                        windowsZipAsset?.digest
+                            ?.substringAfter("sha256:", missingDelimiterValue = "")
+                            ?.takeIf { it.isNotBlank() }
                     emit(
                         Resource.Success(
                             UpdateData(
@@ -43,6 +51,8 @@ internal class UpdateRepositoryImpl(
                                 // put the right architecture first.
                                 apkDownloadUrl = apkAssets.firstOrNull()?.downloadUrl,
                                 apkAssets = apkAssets,
+                                windowsZipDownloadUrl = windowsZipDownloadUrl,
+                                windowsZipSha256 = windowsZipSha256,
                             ),
                         ),
                     )

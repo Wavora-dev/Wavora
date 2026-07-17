@@ -58,6 +58,46 @@ import javax.swing.JPanel
 private const val TAG = "VlcPlayerAdapter"
 
 /**
+ * Structured, single-purpose logger for the Windows crossfade audit
+ * (see the user's request: exact-cause instrumentation, not another
+ * "this probably fixes it" patch). Every line goes through here so
+ * they're all searchable under one tag/format and carry a timestamp +
+ * thread name, which matters because the whole bug class under
+ * investigation is about *ordering* across the VLC native callback
+ * thread, the coroutine (Main/Swing) thread, and the position-poll
+ * loop.
+ *
+ * Log line shape:
+ *   CROSSFADE_AUDIT | t=<epochMs> | thread=<name> | event=<EVENT> | player=<id|none> | role=<role|-> | <details>
+ *
+ * `player` is the [VlcPlayer.id] (assigned at construction, stable for
+ * that instance's whole lifetime) so two players active at once during
+ * a crossfade can always be told apart in the log, including after one
+ * of them is released.
+ */
+private object CrossfadeAudit {
+    private const val AUDIT_TAG = "CROSSFADE_AUDIT"
+    private val nextId = java.util.concurrent.atomic.AtomicInteger(0)
+
+    fun nextPlayerId(): Int = nextId.incrementAndGet()
+
+    fun log(
+        event: String,
+        playerId: Int? = null,
+        role: String? = null,
+        details: String = "",
+    ) {
+        val playerStr = playerId?.toString() ?: "none"
+        val roleStr = role ?: "-"
+        Logger.d(
+            AUDIT_TAG,
+            "t=${System.currentTimeMillis()} thread=${Thread.currentThread().name} " +
+                "event=$event player=$playerStr role=$roleStr $details",
+        )
+    }
+}
+
+/**
  * VLC (vlcj) implementation of MediaPlayerInterface
  * Features:
  * - Queue management with auto-load for next track
@@ -1216,7 +1256,7 @@ class VlcPlayerAdapter(
             return VlcPlayer(
                 mediaPlayer = embeddedPlayer,
                 videoSurface = videoPanel,
-            )
+            ).also { CrossfadeAudit.log("CREATE_KIND", playerId = it.id, details = "kind=video source=${source.url}") }
         }
 
         // Audio-only player
@@ -1225,7 +1265,7 @@ class VlcPlayerAdapter(
         return VlcPlayer(
             mediaPlayer = player,
             videoSurface = null,
-        )
+        ).also { CrossfadeAudit.log("CREATE_KIND", playerId = it.id, details = "kind=audio source=${source.url}") }
     }
 
     /**
@@ -1242,16 +1282,20 @@ class VlcPlayerAdapter(
             object : MediaPlayerEventAdapter() {
                 override fun finished(mediaPlayer: MediaPlayer) {
                     Logger.d(TAG, "End of stream reached")
+                    val emittingId = playerIdFor(mediaPlayer)
+                    CrossfadeAudit.log("CB_FINISHED", playerId = emittingId, details = "isCrossfading=$isCrossfading")
                     coroutineScope.launch {
                         // Ignore events from a player that is no longer current
                         if (currentPlayer?.mediaPlayer != mediaPlayer) {
                             Logger.w(TAG, "Ignoring finished() from stale player")
+                            CrossfadeAudit.log("CB_FINISHED_IGNORED_STALE", playerId = emittingId)
                             return@launch
                         }
                         // During crossfade, the old player will naturally finish near the end.
                         // Ignore it - the crossfade is already handling the transition.
                         if (isCrossfading) {
                             Logger.d(TAG, "Ignoring finished() during crossfade (old player ended)")
+                            CrossfadeAudit.log("CB_FINISHED_IGNORED_CROSSFADING", playerId = emittingId)
                             return@launch
                         }
                         transitionToState(InternalState.ENDED)
@@ -1261,18 +1305,22 @@ class VlcPlayerAdapter(
 
                 override fun error(mediaPlayer: MediaPlayer) {
                     Logger.e(TAG, "VLC playback error")
+                    val emittingId = playerIdFor(mediaPlayer)
+                    CrossfadeAudit.log("CB_ERROR", playerId = emittingId, details = "isCrossfading=$isCrossfading")
                     coroutineScope.launch {
                         // Ignore errors from a player that is no longer current.
                         // This can happen when the old player fires error() after
                         // a new track has started loading (playlist/index already updated).
                         if (currentPlayer?.mediaPlayer != mediaPlayer) {
                             Logger.w(TAG, "Ignoring error() from stale player")
+                            CrossfadeAudit.log("CB_ERROR_IGNORED_STALE", playerId = emittingId)
                             return@launch
                         }
                         // During crossfade, ignore errors from the old player -
                         // it's fading out and will be released soon anyway.
                         if (isCrossfading) {
                             Logger.w(TAG, "Ignoring error() during crossfade (old player error)")
+                            CrossfadeAudit.log("CB_ERROR_IGNORED_CROSSFADING", playerId = emittingId)
                             return@launch
                         }
                         val currentVideoId = playlist.getOrNull(localCurrentMediaItemIndex)?.mediaId
@@ -1313,6 +1361,7 @@ class VlcPlayerAdapter(
                 }
 
                 override fun playing(mediaPlayer: MediaPlayer) {
+                    CrossfadeAudit.log("CB_PLAYING", playerId = playerIdFor(mediaPlayer))
                     coroutineScope.launch {
                         if (currentPlayer?.mediaPlayer != mediaPlayer) return@launch
                         if (internalState != InternalState.PLAYING) {
@@ -1326,6 +1375,7 @@ class VlcPlayerAdapter(
                 }
 
                 override fun paused(mediaPlayer: MediaPlayer) {
+                    CrossfadeAudit.log("CB_PAUSED", playerId = playerIdFor(mediaPlayer))
                     coroutineScope.launch {
                         if (currentPlayer?.mediaPlayer != mediaPlayer) return@launch
                         if (internalState == InternalState.PLAYING) {
@@ -1336,6 +1386,7 @@ class VlcPlayerAdapter(
                 }
 
                 override fun stopped(mediaPlayer: MediaPlayer) {
+                    CrossfadeAudit.log("CB_STOPPED", playerId = playerIdFor(mediaPlayer))
                     coroutineScope.launch {
                         notifyEqualizerIntent(false)
                     }
@@ -1391,10 +1442,27 @@ class VlcPlayerAdapter(
 
                 override fun opening(mediaPlayer: MediaPlayer) {
                     Logger.d(TAG, "VLC opening media")
+                    CrossfadeAudit.log("CB_OPENING", playerId = playerIdFor(mediaPlayer))
                 }
             }
 
         player.setEventListener(listener)
+    }
+
+    /**
+     * Best-effort reverse lookup from a raw vlcj [MediaPlayer] (what native
+     * callbacks hand back) to our own [VlcPlayer.id], purely for the
+     * crossfade audit log - so a callback firing on a released/stale/old
+     * player can still be identified instead of logged as "player=none".
+     * Checks the two slots that can ever be alive (current + secondary/
+     * precached) rather than keeping a separate registry, since those are
+     * the only players with listeners attached at any given time.
+     */
+    private fun playerIdFor(mediaPlayer: MediaPlayer): Int? {
+        if (currentPlayer?.mediaPlayer === mediaPlayer) return currentPlayer?.id
+        if (secondaryPlayer?.mediaPlayer === mediaPlayer) return secondaryPlayer?.id
+        precachedPlayers.values.forEach { if (it.player.mediaPlayer === mediaPlayer) return it.player.id }
+        return null
     }
 
     /**
@@ -1425,6 +1493,7 @@ class VlcPlayerAdapter(
     private fun pauseAnyPrimedPrecachePlayer() {
         precachedPlayers.values.forEach { cached ->
             if (cached.player.isPrimed) {
+                CrossfadeAudit.log("PREROLL_RESET_ON_PAUSE", playerId = cached.player.id, role = "next-precached")
                 try {
                     cached.player.pause()
                     cached.player.seekTo(0)
@@ -1462,6 +1531,12 @@ class VlcPlayerAdapter(
             "t=${java.time.Instant.now()} thread=${Thread.currentThread().name} " +
                 "VlcPlayerAdapter.handleTrackEndInternal() | internalPlayWhenReady=$internalPlayWhenReady " +
                 "repeatMode=$internalRepeatMode crossfadeEnabled=$crossfadeEnabled index=$localCurrentMediaItemIndex",
+        )
+        CrossfadeAudit.log(
+            "TRACK_END",
+            playerId = currentPlayer?.id,
+            role = "current",
+            details = "isCrossfading=$isCrossfading crossfadeEnabled=$crossfadeEnabled index=$localCurrentMediaItemIndex",
         )
         // If crossfade is already in progress (triggered by position update before track ended),
         // don't interrupt it. The old player ending is expected — the crossfade will complete
@@ -1515,12 +1590,24 @@ class VlcPlayerAdapter(
                     val nextVideoId = nextMediaItem.mediaId
 
                     Logger.d(TAG, "Starting crossfade to track $nextIndex")
+                    CrossfadeAudit.log(
+                        "CROSSFADE_START",
+                        playerId = currentPlayer?.id,
+                        role = "current",
+                        details = "nextIndex=$nextIndex nextVideoId=$nextVideoId currentTime=${currentPlayer?.time} currentLength=${currentPlayer?.length}",
+                    )
 
                     // Extract URL on IO thread (network), VLC native calls stay on VLC thread
                     val cachedPrecache = precachedPlayers.remove(nextVideoId)
                     val nextPlayer: VlcPlayer? =
                         if (cachedPrecache?.player != null) {
                             Logger.d(TAG, "Using precached player for crossfade")
+                            CrossfadeAudit.log(
+                                "CROSSFADE_USING_PRECACHED",
+                                playerId = cachedPrecache.player.id,
+                                role = "next",
+                                details = "isPrimed=${cachedPrecache.player.isPrimed} time=${cachedPrecache.player.time}",
+                            )
                             cachedPrecache.player
                         } else {
                             val nextSource = withContext(Dispatchers.IO) { extractPlayableUrl(nextMediaItem) }
@@ -1531,6 +1618,7 @@ class VlcPlayerAdapter(
                                 createMediaPlayerInternal(nextSource).also { newPlayer ->
                                     val options = buildVlcOptions(nextSource)
                                     newPlayer.mediaPlayer.media().startPaused(nextSource.url, *options)
+                                    CrossfadeAudit.log("CROSSFADE_CREATED_FRESH", playerId = newPlayer.id, role = "next")
                                 }
                             }
                         }
@@ -1570,12 +1658,103 @@ class VlcPlayerAdapter(
                             // its actual intro. This is a LOCAL seek backwards into
                             // data VLC already has buffered/demuxed from having just
                             // played through it — not a fresh network fetch — so it's
-                            // effectively instant and doesn't reintroduce the original
+                            // effectively fast and doesn't reintroduce the original
                             // network-caching stutter.
+                            //
+                            // ROOT CAUSE (confirmed by API contract, not a guess):
+                            // vlcj's seekTo()/setTime() is fire-and-forget — it asks
+                            // VLC to reposition the demuxer/decoder but returns
+                            // immediately, before that reposition has actually
+                            // happened. The previous version of this code flipped
+                            // `isMute = false` on the very next line, with nothing in
+                            // between to confirm the seek had landed. That is an
+                            // unconditional synchronization bug regardless of how
+                            // often it manifests audibly: for some window after
+                            // unmuting, this player could still be emitting audio
+                            // from wherever it was before the seek (~3.5s in), not
+                            // from 0 — and if the seek finally lands mid-fade, once
+                            // the fade-in coroutine has already been raising this
+                            // player's volume for a bit, the listener hears an
+                            // abrupt position jump in the middle of what should be a
+                            // smooth transition. That sequence — hear a fragment
+                            // that isn't the intro, then the "official" transition,
+                            // then a jump/restart, then instability — matches what
+                            // was reported.
+                            //
+                            // FIX: wait for VLC's OWN confirmation that the seek
+                            // landed — the next timeChanged callback reporting a
+                            // position close to 0 — before touching isMute. This is
+                            // not a sleep/timeout: it's a real signal from the
+                            // native player, and if that signal never comes (seek
+                            // genuinely fails), the wait is cancelled the same way
+                            // any other suspend point in this coroutine already is
+                            // (track skip, crossfadeJob?.cancel() from
+                            // cancelCrossfadeAndCleanup) — no separate arbitrary
+                            // bound was added here.
+                            val timeBeforeSeek = nextPlayer.time
                             Logger.d(TAG, "Secondary player already pre-rolled, seeking back to 0 before unmute")
+                            CrossfadeAudit.log(
+                                "PREROLL_SEEK_BEFORE",
+                                playerId = nextPlayer.id,
+                                role = "next",
+                                details = "timeBeforeSeek=$timeBeforeSeek",
+                            )
+
+                            val seekAppliedSignal = CompletableDeferred<Unit>()
+                            // Threshold, not "first event": a stale timeChanged that
+                            // was already in flight from BEFORE seekTo(0) was issued
+                            // would report a time near timeBeforeSeek (~3.5s), not
+                            // near 0 — so filtering on the actual reported value
+                            // (rather than just "the next callback, whatever it
+                            // says") can't be fooled by that in-flight event and
+                            // only resolves once VLC reports a position that
+                            // genuinely reflects the seek having landed.
+                            val seekConfirmListener =
+                                object : MediaPlayerEventAdapter() {
+                                    override fun timeChanged(
+                                        mediaPlayer: MediaPlayer,
+                                        newTime: Long,
+                                    ) {
+                                        if (!seekAppliedSignal.isCompleted && newTime < SEEK_APPLIED_TIME_THRESHOLD_MS) {
+                                            CrossfadeAudit.log(
+                                                "PREROLL_SEEK_CONFIRMED",
+                                                playerId = nextPlayer.id,
+                                                role = "next",
+                                                details = "confirmedTime=$newTime",
+                                            )
+                                            seekAppliedSignal.complete(Unit)
+                                        }
+                                    }
+
+                                    override fun error(mediaPlayer: MediaPlayer) {
+                                        // Seek can't land if the player itself errored out —
+                                        // don't leave the fade waiting on a signal that will
+                                        // never come.
+                                        if (!seekAppliedSignal.isCompleted) {
+                                            CrossfadeAudit.log("PREROLL_SEEK_ERROR_DURING_WAIT", playerId = nextPlayer.id, role = "next")
+                                            seekAppliedSignal.complete(Unit)
+                                        }
+                                    }
+                                }
+                            // Additive listener via the raw vlcj API (not through
+                            // VlcPlayer.setEventListener, which replaces the single
+                            // tracked listener atomically) so this temporary
+                            // confirmation hook doesn't disturb whatever listener
+                            // setEventListener(null) is about to clear right after.
+                            nextPlayer.mediaPlayer.events().addMediaPlayerEventListener(seekConfirmListener)
                             nextPlayer.setEventListener(null)
                             nextPlayer.seekTo(0)
+                            seekAppliedSignal.await()
+                            nextPlayer.mediaPlayer.events().removeMediaPlayerEventListener(seekConfirmListener)
+
+                            val timeRightBeforeUnmute = nextPlayer.time
                             nextPlayer.mediaPlayer.audio().isMute = false
+                            CrossfadeAudit.log(
+                                "PREROLL_SEEK_AFTER",
+                                playerId = nextPlayer.id,
+                                role = "next",
+                                details = "timeRightBeforeUnmute=$timeRightBeforeUnmute (confirmed via real VLC signal, not a timeout)",
+                            )
                         } else {
                             val secondaryPlayingSignal = CompletableDeferred<Unit>()
                             nextPlayer.setEventListener(
@@ -1584,11 +1763,13 @@ class VlcPlayerAdapter(
                                         // No se llama a ninguna API de VLC acá, solo se resuelve
                                         // una primitiva de coroutines — seguro de invocar
                                         // directamente desde el hilo nativo de VLC.
+                                        CrossfadeAudit.log("PREROLL_FRESH_PLAYING_SIGNAL", playerId = nextPlayer.id, role = "next")
                                         secondaryPlayingSignal.complete(Unit)
                                     }
 
                                     override fun error(mediaPlayer: MediaPlayer) {
                                         Logger.e(TAG, "Secondary player error during crossfade")
+                                        CrossfadeAudit.log("PREROLL_FRESH_ERROR", playerId = nextPlayer.id, role = "next")
                                         secondaryPlayingSignal.complete(Unit)
                                         coroutineScope.launch {
                                             crossfadeJob?.cancel()
@@ -1603,7 +1784,13 @@ class VlcPlayerAdapter(
                             nextPlayer.mediaPlayer.audio().isMute = true
                             nextPlayer.setVolume(0)
                             nextPlayer.mediaPlayer.controls().play()
-                            withTimeoutOrNull(800L) { secondaryPlayingSignal.await() }
+                            val signalled = withTimeoutOrNull(800L) { secondaryPlayingSignal.await() } != null
+                            CrossfadeAudit.log(
+                                "PREROLL_FRESH_WAIT_RESULT",
+                                playerId = nextPlayer.id,
+                                role = "next",
+                                details = "signalledBeforeTimeout=$signalled",
+                            )
                             nextPlayer.mediaPlayer.audio().isMute = false
                         }
                     }
@@ -1692,6 +1879,12 @@ class VlcPlayerAdapter(
     private suspend fun cancelCrossfadeAndCleanup(revertIndex: Boolean) {
         val job = crossfadeJob
         crossfadeJob = null
+        CrossfadeAudit.log(
+            "CROSSFADE_CANCEL_REQUESTED",
+            playerId = secondaryPlayer?.id,
+            role = "next",
+            details = "revertIndex=$revertIndex",
+        )
         job?.cancel()
         job?.join()
         // secondaryPlayer may already be released by performCrossfade's catch block,
@@ -1733,6 +1926,12 @@ class VlcPlayerAdapter(
             "Crossfade animation: ${effectiveDurationMs}ms, $steps steps, ${delayPerStep}ms/step, " +
                 "internalVolume=$internalVolume",
         )
+        val fadeOutId = currentPlayer?.id
+        CrossfadeAudit.log(
+            "FADE_LOOP_START",
+            playerId = fadeOutId,
+            details = "nextPlayerId=${nextPlayer.id} durationMs=$effectiveDurationMs steps=$steps targetVolume=$targetVolume",
+        )
 
         try {
             for (step in 0..steps) {
@@ -1747,12 +1946,30 @@ class VlcPlayerAdapter(
                 val fadeInVolume = (targetVolume * kotlin.math.sin(angle)).toInt()
                 nextPlayer.setVolume(fadeInVolume)
 
+                // Snapshot both players' actual position/playing state at the
+                // start, middle and end of the fade (not every step - 50 steps
+                // of this would drown the log). This is the direct evidence for
+                // "does the incoming track's position stay monotonic through the
+                // fade" and "are both players genuinely playing at once".
+                if (step == 0 || step == steps / 2 || step == steps) {
+                    CrossfadeAudit.log(
+                        "FADE_LOOP_SNAPSHOT",
+                        playerId = fadeOutId,
+                        details =
+                            "step=$step/$steps outVolume=$fadeOutVolume outTime=${currentPlayer?.time} " +
+                                "outIsPlaying=${runCatching { currentPlayer?.mediaPlayer?.status()?.isPlaying }.getOrNull()} " +
+                                "nextPlayerId=${nextPlayer.id} inVolume=$fadeInVolume inTime=${nextPlayer.time} " +
+                                "inIsPlaying=${runCatching { nextPlayer.mediaPlayer.status().isPlaying }.getOrNull()}",
+                    )
+                }
+
                 delay(delayPerStep.toLong())
             }
 
             finalizeCrossfade(nextIndex, nextPlayer)
         } catch (e: CancellationException) {
             Logger.d(TAG, "Crossfade cancelled")
+            CrossfadeAudit.log("FADE_LOOP_CANCELLED", playerId = fadeOutId, details = "nextPlayerId=${nextPlayer.id}")
             nextPlayer.release()
             secondaryPlayer = null
             setCrossfading(false)
@@ -1767,6 +1984,17 @@ class VlcPlayerAdapter(
         nextPlayer: VlcPlayer,
     ) {
         Logger.d(TAG, "Crossfade complete, swapping players")
+        val oldPlayerId = currentPlayer?.id
+        val oldIsPlaying = runCatching { currentPlayer?.mediaPlayer?.status()?.isPlaying }.getOrNull()
+        val nextIsPlaying = runCatching { nextPlayer.mediaPlayer.status().isPlaying }.getOrNull()
+        CrossfadeAudit.log(
+            "CROSSFADE_SWAP",
+            playerId = oldPlayerId,
+            role = "old-current",
+            details =
+                "oldIsPlaying=$oldIsPlaying newPlayerId=${nextPlayer.id} newIsPlaying=$nextIsPlaying " +
+                    "bothPlayingSimultaneously=${oldIsPlaying == true && nextIsPlaying == true}",
+        )
 
         stopPositionUpdates()
 
@@ -1796,6 +2024,13 @@ class VlcPlayerAdapter(
         setCrossfading(false)
         crossfadeFromIndex = -1
         transitionToState(InternalState.PLAYING)
+
+        CrossfadeAudit.log(
+            "CROSSFADE_SWAP_COMPLETE",
+            playerId = nextPlayer.id,
+            role = "new-current",
+            details = "oldPlayerId=$oldPlayerId time=${nextPlayer.time}",
+        )
 
         // Start position tracking
         startPositionUpdates()
@@ -1962,6 +2197,14 @@ class VlcPlayerAdapter(
         // its buffer has time to stabilize before the fade makes it audible. This
         // margin mirrors AUDIO_NETWORK_CACHING_MS with a small safety cushion.
         const val PRECACHE_AUDIO_PREROLL_LEAD_MS = AUDIO_NETWORK_CACHING_MS + 500L
+
+        // How close to 0 a post-seek timeChanged report has to be before we
+        // trust it as confirmation the seek actually landed (see the
+        // isPrimed branch of triggerCrossfadeTransition). Generous enough to
+        // tolerate VLC's own polling granularity, tight enough that a stale
+        // pre-seek event (reporting ~PRECACHE_AUDIO_PREROLL_LEAD_MS) can
+        // never satisfy it by accident.
+        const val SEEK_APPLIED_TIME_THRESHOLD_MS = 500L
     }
 
     // ========== Position Updates ==========
@@ -2012,7 +2255,6 @@ class VlcPlayerAdapter(
                                         val timeRemaining = dur - pos
                                         val nextVideoId = playlist.getOrNull(getNextMediaItemIndex())?.mediaId
                                         val precachedNext = nextVideoId?.let { precachedPlayers[it] }
-                                        val isPrecached = precachedNext != null
                                         // A precached player only has media().prepare() called on it —
                                         // URL resolved, demuxer opened — NOT playing. It still needs
                                         // preparationBufferMs of real buffer fill after play() starts,
@@ -2036,8 +2278,7 @@ class VlcPlayerAdapter(
                                         // instant the fade needs stable audio. Bounded window (a few
                                         // seconds), so there's no meaningful position drift by the time
                                         // the real crossfade picks this player up.
-                                        if (isPrecached &&
-                                            precachedNext != null &&
+                                        if (precachedNext != null &&
                                             !precachedNext.player.isPrimed &&
                                             timeRemaining > triggerThreshold &&
                                             timeRemaining <= triggerThreshold + PRECACHE_AUDIO_PREROLL_LEAD_MS
@@ -2048,11 +2289,23 @@ class VlcPlayerAdapter(
                                             precachedPlayer.setVolume(0)
                                             precachedPlayer.play()
                                             Logger.d(TAG, "Pre-rolling precached player for $nextVideoId (${PRECACHE_AUDIO_PREROLL_LEAD_MS}ms lead)")
+                                            CrossfadeAudit.log(
+                                                "PREROLL_START",
+                                                playerId = precachedPlayer.id,
+                                                role = "next-precached",
+                                                details = "nextVideoId=$nextVideoId leadMs=$PRECACHE_AUDIO_PREROLL_LEAD_MS timeRemaining=$timeRemaining",
+                                            )
                                         }
 
                                         if (timeRemaining in 1..triggerThreshold) {
                                             if (hasNextMediaItem()) {
                                                 val nextIndex = getNextMediaItemIndex()
+                                                CrossfadeAudit.log(
+                                                    "CROSSFADE_TRIGGER_DECISION",
+                                                    playerId = currentPlayer?.id,
+                                                    role = "current",
+                                                    details = "timeRemaining=$timeRemaining triggerThreshold=$triggerThreshold nextIndex=$nextIndex",
+                                                )
                                                 triggerCrossfadeTransition(nextIndex)
                                             }
                                         }
@@ -2384,6 +2637,16 @@ class VlcPlayer(
         private const val TAG = "VlcPlayer"
     }
 
+    // Stable identity for this instance across its whole lifetime, so log
+    // lines from two players alive at once during a crossfade (and from a
+    // released one whose events may still trickle in) can be told apart.
+    // See CrossfadeAudit's doc.
+    val id: Int = CrossfadeAudit.nextPlayerId()
+
+    init {
+        CrossfadeAudit.log("CREATE", playerId = id)
+    }
+
     @Volatile
     var isReleased = false
         private set
@@ -2398,6 +2661,11 @@ class VlcPlayer(
     private var eventListener: MediaPlayerEventAdapter? = null
 
     fun setEventListener(listener: MediaPlayerEventAdapter?) {
+        CrossfadeAudit.log(
+            "LISTENER_SET",
+            playerId = id,
+            details = "attaching=${listener != null} hadPrevious=${eventListener != null}",
+        )
         eventListener?.let {
             try {
                 mediaPlayer.events().removeMediaPlayerEventListener(it)
@@ -2414,7 +2682,11 @@ class VlcPlayer(
     }
 
     fun play() {
-        if (isReleased) return
+        if (isReleased) {
+            CrossfadeAudit.log("PLAY_IGNORED_RELEASED", playerId = id)
+            return
+        }
+        CrossfadeAudit.log("PLAY", playerId = id)
         try {
             mediaPlayer.controls().play()
         } catch (e: Exception) {
@@ -2423,7 +2695,11 @@ class VlcPlayer(
     }
 
     fun pause() {
-        if (isReleased) return
+        if (isReleased) {
+            CrossfadeAudit.log("PAUSE_IGNORED_RELEASED", playerId = id)
+            return
+        }
+        CrossfadeAudit.log("PAUSE", playerId = id)
         try {
             mediaPlayer.controls().setPause(true)
         } catch (e: Exception) {
@@ -2432,7 +2708,11 @@ class VlcPlayer(
     }
 
     fun stop() {
-        if (isReleased) return
+        if (isReleased) {
+            CrossfadeAudit.log("STOP_IGNORED_RELEASED", playerId = id)
+            return
+        }
+        CrossfadeAudit.log("STOP", playerId = id)
         try {
             mediaPlayer.controls().stop()
         } catch (e: Exception) {
@@ -2443,9 +2723,19 @@ class VlcPlayer(
     /**
      * Set volume. VLC range: 0-200 (100 = normal).
      * We use 0-100 mapping from our 0.0-1.0 interface range.
+     *
+     * Logged on every call (not throttled) - this is exactly the "was the
+     * volume accidentally left at 0" and "what was each player's volume
+     * during the fade" evidence that was requested. If this turns out too
+     * noisy in practice, filter by player id in the log, not by removing
+     * calls here.
      */
     fun setVolume(volume: Int) {
-        if (isReleased) return
+        if (isReleased) {
+            CrossfadeAudit.log("SET_VOLUME_IGNORED_RELEASED", playerId = id, details = "requested=$volume")
+            return
+        }
+        CrossfadeAudit.log("SET_VOLUME", playerId = id, details = "value=$volume")
         try {
             mediaPlayer.audio().setVolume(volume)
         } catch (e: Exception) {
@@ -2454,7 +2744,19 @@ class VlcPlayer(
     }
 
     fun seekTo(timeMs: Long) {
-        if (isReleased) return
+        if (isReleased) {
+            CrossfadeAudit.log("SEEK_IGNORED_RELEASED", playerId = id, details = "requested=$timeMs")
+            return
+        }
+        // NOTE for the audit: seekTo() on vlcj is fire-and-forget - this log
+        // line fires the instant the seek is *issued*, not when VLC has
+        // actually finished repositioning the decoder. Compare this
+        // timestamp against the next SET_VOLUME/LISTENER_SET/PLAY entries
+        // for this same player id, and against this player's own
+        // TIME_SNAPSHOT entries (added around the isPrimed crossfade path)
+        // to see whether other calls proceed before the seek has visibly
+        // taken effect (i.e. before .time actually reads back near timeMs).
+        CrossfadeAudit.log("SEEK_ISSUED", playerId = id, details = "targetMs=$timeMs currentTimeReadback=${runCatching { mediaPlayer.status().time() }.getOrDefault(-1)}")
         try {
             mediaPlayer.controls().setTime(timeMs)
         } catch (e: Exception) {
@@ -2487,8 +2789,19 @@ class VlcPlayer(
             }
 
     fun release() {
-        if (isReleased) return
+        if (isReleased) {
+            // This is exactly the "existe algún release doble" case requested -
+            // logged distinctly (WARN) since it should never legitimately happen.
+            Logger.w(TAG, "Double release() attempted on player $id - ignoring")
+            CrossfadeAudit.log("RELEASE_DOUBLE_ATTEMPT", playerId = id)
+            return
+        }
         isReleased = true
+        CrossfadeAudit.log(
+            "RELEASE",
+            playerId = id,
+            details = "wasPlaying=${runCatching { mediaPlayer.status().isPlaying }.getOrDefault(false)}",
+        )
         try {
             setEventListener(null)
             // Run stop+release on a separate thread to avoid deadlock
@@ -2497,8 +2810,10 @@ class VlcPlayer(
                 try {
                     mediaPlayer.controls().stop()
                     mediaPlayer.release()
+                    CrossfadeAudit.log("RELEASE_COMPLETE", playerId = id)
                 } catch (e: Exception) {
                     Logger.w(TAG, "Error in async release: ${e.message}")
+                    CrossfadeAudit.log("RELEASE_ERROR", playerId = id, details = "error=${e.message}")
                 }
             }.start()
         } catch (e: Exception) {

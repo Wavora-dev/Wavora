@@ -37,6 +37,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -96,6 +97,8 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
@@ -122,7 +125,7 @@ import wavora.composeapp.generated.resources.this_link_is_not_supported
 import wavora.composeapp.generated.resources.unknown
 import wavora.composeapp.generated.resources.update_available
 import wavora.composeapp.generated.resources.update_message
-import wavora.composeapp.generated.resources.version_format
+import wavora.composeapp.generated.resources.update_launch_failed
 import wavora.composeapp.generated.resources.yes
 import kotlin.time.ExperimentalTime
 import com.wavora.app.ui.theme.LocalAppTypography
@@ -197,6 +200,11 @@ fun App(
     var shouldShowUpdateDialog by rememberSaveable {
         mutableStateOf(false)
     }
+
+    // Only used to move installUpdate()'s Windows-fallback path (disk I/O:
+    // extracting the bundled updater, launching it elevated) off the UI
+    // thread - see the "onClick" below. Not used anywhere else.
+    val updateCoroutineScope = rememberCoroutineScope()
 
     // Non-null only when the update has more than one .apk asset and none
     // of them could be confidently matched to this device's ABI - shows a
@@ -354,9 +362,7 @@ fun App(
 
     LaunchedEffect(updateData) {
         val response = updateData ?: return@LaunchedEffect
-        if (viewModel.showedUpdateDialog &&
-            response.tagName != getString(Res.string.version_format, VersionManager.getVersionName())
-        ) {
+        if (viewModel.showedUpdateDialog && VersionManager.isNewerVersion(response.tagName)) {
             shouldShowUpdateDialog = true
         }
     }
@@ -746,6 +752,27 @@ fun App(
                                         // guessing (see pickBestApkAsset's doc).
                                         supportsInAppUpdate() && response.apkAssets.size > 1 -> {
                                             apkPickerAssets = response.apkAssets
+                                        }
+                                        // Desktop: installUpdate() tries Conveyor's own
+                                        // update mechanism first (the primary path - see
+                                        // AppUpdate.jvm.kt's doc) and only falls back to
+                                        // downloading this zip + the bundled Windows
+                                        // updater if Conveyor itself isn't usable right
+                                        // now.
+                                        supportsInAppUpdate() && response.windowsZipDownloadUrl != null -> {
+                                            shouldShowUpdateDialog = false
+                                            viewModel.showedUpdateDialog = false
+                                            updateCoroutineScope.launch(Dispatchers.IO) {
+                                                val failurePrefix = getString(Res.string.update_launch_failed)
+                                                installUpdate(
+                                                    response.windowsZipDownloadUrl!!,
+                                                    response.tagName,
+                                                    response.windowsZipSha256,
+                                                    onError = { message ->
+                                                        viewModel.makeToast("$failurePrefix: $message")
+                                                    },
+                                                )
+                                            }
                                         }
                                         else -> {
                                             val apkUrl = response.apkDownloadUrl

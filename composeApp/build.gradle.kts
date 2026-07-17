@@ -202,6 +202,18 @@ kotlin {
             implementation(libs.sentry.jvm)
             implementation(libs.native.tray)
             implementation(projects.mediaJvmUi)
+            // Conveyor's official Control API (see AppUpdate.jvm.kt) — lets
+            // us genuinely ask "is Conveyor's own update mechanism usable
+            // right now, and does it see a newer version at the configured
+            // site?" instead of guessing. Verified real coordinates/API,
+            // not a placeholder: https://conveyor.hydraulic.dev/16.0/control-api-jvm/
+            implementation("dev.hydraulic.conveyor:conveyor-control:1.1")
+            // JNA (already used elsewhere in this project, e.g.
+            // core/data's macOS media integration) - here specifically for
+            // Shell32.ShellExecuteEx("runas") to elevate WavoraUpdater.exe
+            // without going through PowerShell (see AppUpdate.jvm.kt).
+            implementation(libs.jna)
+            implementation(libs.jna.platform)
         }
     }
 }
@@ -616,3 +628,69 @@ afterEvaluate {
         }
 }
 
+
+// ---------------------------------------------------------------------------
+// Bundle :wavoraUpdater (WavoraUpdater.exe + its own small runtime) as a
+// classpath resource inside composeApp's own jar, so AppUpdate.jvm.kt can
+// extract it to %LOCALAPPDATA%\Wavora\Updater\ without needing to know
+// anything about where/how it was built (see ensureUpdaterInstalled()'s
+// doc). Deliberately NOT distributed via Conveyor or as a separate
+// standalone download — it rides along inside the main app's own install,
+// the same way :wavoraUpdater's own resources (logo, etc.) are bundled -
+// see AppUpdate.jvm.kt's ensureUpdaterInstalled().
+//
+// NOTE (verify on a real build): `createDistributable` is the Compose
+// Desktop Gradle plugin's standard task name for a portable jpackage
+// "app image" (no installer wrapper) as of the version this project pins
+// in gradle/libs.versions.toml. If a future plugin version renames it,
+// this reference needs updating - `./gradlew :wavoraUpdater:tasks --all`
+// will show the actual name if this fails to resolve.
+// NOTE: this used to eagerly resolve `:wavoraUpdater:createDistributable`
+// via tasks.getByPath(...) and read its .outputs.files.singleFile at
+// CONFIGURATION time - both risky (forces cross-project task realization
+// during configuration, the same class of problem this project's own
+// desktopApp/build.gradle.kts already has a comment about re: Conveyor's
+// writeConveyorConfig; and .outputs.files isn't reliably populated before
+// the task has actually run). Rewritten to be fully lazy:
+//   - dependsOn(":wavoraUpdater:createDistributable") by task PATH
+//     (a String, not a resolved Task) - Gradle resolves this during task
+//     graph construction, not during script evaluation, so it never
+//     forces :wavoraUpdater's configuration ahead of when it would
+//     already happen.
+//   - the source directory is a Provider<Directory> built from
+//     :wavoraUpdater's own `layout.buildDirectory`, using the exact
+//     path Compose Desktop's jpackage app-image task is CONFIRMED to
+//     write to (see the real build log in the chat: "The distribution
+//     is written to ...\wavoraUpdater\build\compose\binaries\main\app")
+//     - not introspected from task outputs at all, just the known,
+//     stable convention plus the module's own `packageName`.
+val wavoraUpdaterProject = project(":wavoraUpdater")
+val wavoraUpdaterDistDir =
+    wavoraUpdaterProject.layout.buildDirectory.dir("compose/binaries/main/app/WavoraUpdater")
+
+val wavoraUpdaterResourcesDir = layout.buildDirectory.dir("generated/wavoraUpdaterResources")
+
+val bundleWavoraUpdater =
+    tasks.register<Zip>("bundleWavoraUpdater") {
+        group = "build"
+        description = "Zips :wavoraUpdater's jpackage app-image into a classpath resource for composeApp."
+        dependsOn(":wavoraUpdater:createDistributable")
+
+        // Zips the app-image folder's CONTENTS at the zip's root (not
+        // nested under another "WavoraUpdater/" level), since
+        // ensureUpdaterInstalled() (AppUpdate.jvm.kt) extracts straight
+        // into %LOCALAPPDATA%\Wavora\Updater\ expecting WavoraUpdater.exe
+        // at the top.
+        from(wavoraUpdaterDistDir)
+        archiveFileName.set("wavora-updater.zip")
+        destinationDirectory.set(wavoraUpdaterResourcesDir)
+    }
+
+kotlin.sourceSets.getByName("jvmMain").resources.srcDir(wavoraUpdaterResourcesDir)
+
+// KMP's JVM target resource-processing task - verify with
+// `./gradlew :composeApp:tasks --all` if this exact name ever changes
+// across Kotlin Gradle plugin versions.
+tasks.matching { it.name == "jvmProcessResources" }.configureEach {
+    dependsOn(bundleWavoraUpdater)
+}

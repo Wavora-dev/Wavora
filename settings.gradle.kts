@@ -71,6 +71,7 @@ include(
     ":crashlytics",
     ":crashlytics-empty",
     ":kizzy",
+    ":wavoraUpdater",
 )
 
 // core modules

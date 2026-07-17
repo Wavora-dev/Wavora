@@ -3,6 +3,21 @@
     <external-path
         name="external_files"
         path="." />
+    <!-- AUDIT NOTE (Problem 1, Windows/Android update flow): the update
+         APK is written to getExternalFilesDir(DIRECTORY_DOWNLOADS) in
+         AppUpdate.android.kt, i.e. Android/data/<pkg>/files/Download/.
+         That path is NOT covered by <external-path> (which maps to
+         Environment.getExternalStorageDirectory(), the external storage
+         ROOT) nor by <cache-path>/<external-cache-path>. Without an
+         <external-files-path> entry, FileProvider.getUriForFile() throws
+         IllegalArgumentException("Failed to find configured root..."),
+         which happened inside the download-complete BroadcastReceiver's
+         onReceive() - uncaught there, it silently killed that callback,
+         so the install prompt never appeared even though the download
+         itself succeeded. -->
+    <external-files-path
+        name="external_files_downloads"
+        path="." />
     <cache-path
         name="cache"
         path="." />

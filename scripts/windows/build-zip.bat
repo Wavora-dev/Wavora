@@ -20,6 +20,16 @@ copy /y "%~dp0install.ps1" "%BUNDLE%\" >nul
 copy /y "%OUTPUT%\wavora.crt" "%BUNDLE%\" >nul
 copy /y "%OUTPUT%\wavora.exe" "%BUNDLE%\" >nul
 
+REM install.ps1 espera wavora.ico junto a si mismo (icono del acceso
+REM directo de escritorio - ver AUDIT NOTE en install.ps1). Antes esto
+REM habia que copiarlo y renombrarlo a mano; ahora queda automatizado.
+if not exist "%~dp0..\..\composeApp\icon\circle_app_icon.ico" (
+    echo No se encontro composeApp\icon\circle_app_icon.ico
+    pause
+    exit /b 1
+)
+copy /y "%~dp0..\..\composeApp\icon\circle_app_icon.ico" "%BUNDLE%\wavora.ico" >nul
+
 for %%F in ("%OUTPUT%\*.msix") do copy /y "%%F" "%BUNDLE%\" >nul
 
 if exist "%OUTPUT%\AppwavoraWindows.zip" del "%OUTPUT%\AppwavoraWindows.zip"

@@ -19,6 +19,16 @@ data class UpdateData(
     // AppUpdate.currentDeviceAbis()) - e.g. a release that for whatever
     // reason didn't ship the expected Wavora-<abi>.apk naming.
     val apkAssets: List<ApkAsset> = emptyList(),
+    // GitHub release asset URL for AppwavoraWindows.zip - the bundle the
+    // Windows fallback updater downloads when Conveyor's own update
+    // mechanism isn't available (see AppUpdate.jvm.kt). Null when no
+    // matching asset is attached to the release.
+    val windowsZipDownloadUrl: String? = null,
+    // SHA-256 of that same asset (lowercase hex, no "sha256:" prefix),
+    // parsed from GitHub's own per-asset digest field. Null when GitHub
+    // hasn't published one (older release) - WavoraUpdater skips
+    // verification in that case rather than failing on its absence.
+    val windowsZipSha256: String? = null,
 )
 
 data class ApkAsset(
