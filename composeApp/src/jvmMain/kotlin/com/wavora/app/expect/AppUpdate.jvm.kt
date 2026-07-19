@@ -15,7 +15,7 @@ private const val TAG = "AppUpdate"
 // against the marker file written by ensureUpdaterInstalled() - NOT the
 // main app's own version, since the updater can (and should) go multiple
 // Wavora releases without changing at all.
-private const val BUNDLED_UPDATER_VERSION = 1
+private const val BUNDLED_UPDATER_VERSION = 2
 
 private fun isWindows(): Boolean = System.getProperty("os.name")?.contains("Windows", ignoreCase = true) == true
 

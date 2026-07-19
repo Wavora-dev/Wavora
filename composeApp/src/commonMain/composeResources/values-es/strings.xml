@@ -77,6 +77,8 @@
     <string name="prefer_320kbps_stream_description">Buscar automáticamente por flujo de audio de 320kbps cuando esté disponible en internet.</string>
     <string name="download_quality">Calidad de descarga</string>
     <string name="video_download_quality">Calidad de descarga de vídeo</string>
+    <string name="download_video_for_video_tracks">Descargar vídeo para pistas de vídeo</string>
+    <string name="when_off_only_audio_is_downloaded_for_video_tracks_regular_songs_are_not_affected">Si está desactivado, solo se descarga el audio para las pistas de vídeo (vídeos musicales, vídeos con letra, podcasts). Las canciones normales no se ven afectadas.</string>
     <string name="clear_downloaded_cache">Limpiar caché de descargas</string>
     <string name="clear_thumbnail_cache">Limpiar cache de imágenes</string>
     <string name="add">Añadir</string>

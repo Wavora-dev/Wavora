@@ -110,10 +110,19 @@ private fun downloadAndInstall(context: AppCompatActivity, downloadUrl: String, 
             }
         }
 
+    // AUDIT NOTE (cartel de instalar nunca aparecía solo): ACTION_DOWNLOAD_COMPLETE
+    // lo emite el proceso del sistema (com.android.providers.downloads), no esta
+    // app - es un broadcast de OTRO UID. Con RECEIVER_NOT_EXPORTED, Android
+    // descarta silenciosamente cualquier broadcast que no venga de la propia app,
+    // así que este receiver nunca llegaba a dispararse y el intent de instalación
+    // nunca se lanzaba automáticamente (el usuario solo veía la notificación de
+    // "descarga completa" del propio DownloadManager y tenía que tocarla a mano).
+    // Exportarlo es seguro: ACTION_DOWNLOAD_COMPLETE es un "protected broadcast"
+    // del sistema, ninguna app de terceros puede falsificarlo/enviarlo.
     ContextCompat.registerReceiver(
         appContext,
         receiver,
         IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-        ContextCompat.RECEIVER_NOT_EXPORTED,
+        ContextCompat.RECEIVER_EXPORTED,
     )
 }

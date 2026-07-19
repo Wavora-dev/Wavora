@@ -54,6 +54,27 @@ compose.desktop {
     application {
         mainClass = "com.wavora.updater.MainKt"
 
+        // AUDIT NOTE ("El nombre de archivo, el nombre de directorio o la
+        // sintaxis de la etiqueta del volumen no son correctos" / Windows
+        // ERROR_INVALID_NAME 123 durante la actualización): sin esto, la JVM
+        // embebida por jpackage hereda el codepage ANSI del sistema para
+        // sun.jnu.encoding en vez de UTF-8. runInstallScript() en
+        // UpdaterLogic.kt arma un ProcessBuilder("powershell.exe", ...,
+        // "-File", installScript.absolutePath) donde ese path vive bajo
+        // java.io.tmpdir (típicamente
+        // C:\Users\<usuario>\AppData\Local\Temp\...). Si el nombre de usuario
+        // de Windows tiene un caracter no-ASCII (ej. una tilde), un
+        // sun.jnu.encoding mal configurado hace que ProcessBuilder lo mangle
+        // a "?" al construir el argumento de línea de comandos - y "?" es un
+        // caracter inválido en rutas/nombres de Windows, lo que dispara
+        // exactamente ese error nativo al intentar ejecutar el script.
+        // Forzar UTF-8 explícitamente evita el problema independientemente
+        // del codepage del sistema.
+        jvmArgs += listOf(
+            "-Dfile.encoding=UTF-8",
+            "-Dsun.jnu.encoding=UTF-8",
+        )
+
         nativeDistributions {
             // AppImage here is the Compose Desktop Gradle plugin's generic
             // "portable app image" target (a runnable folder, no OS
