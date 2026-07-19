@@ -127,6 +127,22 @@ class VlcPlayerAdapter(
 
     // ========== VLC Factory ==========
     private val mediaPlayerFactory: MediaPlayerFactory
+    // EXPERIMENTAL FIX (audio glitches during crossfade overlap — root cause candidate):
+    // every crossfade requires two native MediaPlayer instances to play simultaneously for
+    // ~5s. All players previously came from ONE shared MediaPlayerFactory (one libVLC
+    // instance for the whole app). CrossfadeAudit logs showed every crossfade completing
+    // cleanly at the Kotlin/state level (isPlaying=true on both sides, correct volumes,
+    // clean swap) while the user still heard wrong audio, glitches, or mute — meaning the
+    // bug is happening below what our state tracking can see, in how libVLC mixes/handles
+    // audio output for two simultaneous native players. This is consistent with a
+    // documented VideoLAN forum report of libvlc_audio_set_volume/mute affecting all
+    // players sharing one libvlc instance on some Windows setups. This second, independent
+    // factory instance is created identically to the first; createMediaPlayerInternal()
+    // below alternates between them so the two players that are ever simultaneously alive
+    // (current + the one it's crossfading into) are never sourced from the same libVLC
+    // instance. Does not change crossfade timing, curve, or any other logic.
+    private val mediaPlayerFactorySecondary: MediaPlayerFactory
+    private val factoryToggle = java.util.concurrent.atomic.AtomicLong(0)
 
     init {
         System
@@ -153,7 +169,21 @@ class VlcPlayerAdapter(
                 "--network-caching=3000",
             )
 
+        // EXPERIMENTAL FIX (mute que se activa/desactiva solo en el player actual,
+        // justo cuando arranca un segundo player nativo simultáneo para el pre-roll):
+        // confirmado por logs, incluso con dos MediaPlayerFactory separadas — el flag
+        // de mute se altera fuera de nuestro código. Sospecha: la sesión de audio de
+        // Windows (WASAPI) se comparte a nivel de proceso más allá de cuántas
+        // instancias de libVLC haya. DirectSound es el backend de audio más viejo y
+        // tolerante a streams concurrentes del mismo proceso en Windows. Solo se
+        // aplica en Windows — no afecta macOS/Linux.
+        val isWindows = System.getProperty("os.name", "").lowercase().contains("win")
+        if (isWindows) {
+            factoryArgs.add("--aout=directsound")
+        }
+
         mediaPlayerFactory = MediaPlayerFactory(discovery, *factoryArgs.toTypedArray())
+        mediaPlayerFactorySecondary = MediaPlayerFactory(discovery, *factoryArgs.toTypedArray())
 
         // Load crossfade settings
         coroutineScope.launch {
@@ -267,7 +297,7 @@ class VlcPlayerAdapter(
     private var crossfadeEnabled = false
 
     @Volatile
-    private var crossfadeDurationMs = 5000
+    private var crossfadeDurationMs = 7000
 
     @Volatile
     private var djCrossfadeEnabled = false
@@ -435,6 +465,32 @@ class VlcPlayerAdapter(
         positionMs: Long,
     ) {
         if (mediaItemIndex !in playlist.indices) return
+
+        // INSTRUMENTATION ONLY (misma-canción-se-reinicia investigation): this call
+        // signature — mediaItemIndex == the currently playing index, positionMs == 0 —
+        // is exactly what a same-track restart looks like. Neither CrossfadeAudit nor
+        // the existing PB_TRACE calls in this file log a call to seekTo(index, pos)
+        // itself with its caller; handleTrackEndInternal()'s REPEAT_MODE_ONE branch is
+        // the only known code path that produces this exact signature, but it did NOT
+        // fire in the last session's log (zero TRACK_END events), so this restart is
+        // coming from somewhere else entirely — this catches it, whoever it is. Read-only,
+        // no behavior/timing change; the log call itself does not alter execution.
+        if (mediaItemIndex == localCurrentMediaItemIndex && positionMs == 0L) {
+            val callerFrames =
+                Thread
+                    .currentThread()
+                    .stackTrace
+                    .drop(1)
+                    .take(8)
+                    .joinToString(" <- ") { "${it.className}.${it.methodName}:${it.lineNumber}" }
+            CrossfadeAudit.log(
+                "SAME_TRACK_RESTART_TO_ZERO",
+                playerId = currentPlayer?.id,
+                role = "-",
+                details = "index=$mediaItemIndex internalRepeatMode=$internalRepeatMode " +
+                    "isCrossfading=$isCrossfading cachedPosition=$cachedPosition caller=$callerFrames",
+            )
+        }
 
         // ROOT CAUSE FIX (see PROMPT_02 Playback Transition Report) — same fix as
         // CrossfadeExoPlayerAdapter.seekTo() on Android, same underlying bug: `shouldPlay` must
@@ -998,6 +1054,11 @@ class VlcPlayerAdapter(
         } catch (e: Exception) {
             Logger.w(TAG, "Error releasing VLC factory: ${e.message}")
         }
+        try {
+            mediaPlayerFactorySecondary.release()
+        } catch (e: Exception) {
+            Logger.w(TAG, "Error releasing secondary VLC factory: ${e.message}")
+        }
     }
 
     // ========== Internal Methods ==========
@@ -1153,6 +1214,21 @@ class VlcPlayerAdapter(
                     _currentVideoSurface.value = player.videoSurface
                     setupPlayerEventsInternal(player)
                     player.setVolume((internalVolume * 100).toInt())
+                    // BUGFIX (permanent mute after reusing a precached player): a
+                    // precached player may have been pre-rolled muted by the crossfade
+                    // pre-roll (see PRECACHE_AUDIO_PREROLL_LEAD_MS / isPrimed) and then
+                    // reused HERE — via a manual seekTo()/seekToNext() or any other path
+                    // that lands in loadAndPlayTrackInternal() — instead of via
+                    // triggerCrossfadeTransition(), which is the only place that used to
+                    // explicitly set isMute = false. That left isMute = true stuck on a
+                    // player now promoted to currentPlayer, with nothing left to ever
+                    // unmute it (setVolume() does not clear VLC's mute flag). Force-unmute
+                    // unconditionally here — a no-op for a freshly created player, which
+                    // is never muted to begin with — so a reused precached player can
+                    // never end up as currentPlayer while still muted at the native VLC
+                    // level. Does not touch triggerCrossfadeTransition() or any other part
+                    // of the crossfade algorithm.
+                    player.mediaPlayer.audio().isMute = false
 
                     if (cachedPrecache != null) {
                         if (shouldPlay) {
@@ -1245,27 +1321,32 @@ class VlcPlayerAdapter(
      * via --input-slave (equivalent to Android's MergingMediaSource)
      */
     private fun createMediaPlayerInternal(source: PlayableSource): VlcPlayer {
+        // Alternates factories on every call — see mediaPlayerFactorySecondary comment above.
+        val useSecondary = factoryToggle.getAndIncrement() % 2L == 1L
+        val factory = if (useSecondary) mediaPlayerFactorySecondary else mediaPlayerFactory
+        val factoryLabel = if (useSecondary) "secondary" else "primary"
+
         if (source.isVideo) {
             Logger.d(TAG, "Creating video player with callback surface")
             val videoPanel = VlcVideoSurfacePanel()
 
-            val embeddedPlayer = mediaPlayerFactory.mediaPlayers().newEmbeddedMediaPlayer()
-            val surface = videoPanel.createVideoSurface(mediaPlayerFactory)
+            val embeddedPlayer = factory.mediaPlayers().newEmbeddedMediaPlayer()
+            val surface = videoPanel.createVideoSurface(factory)
             embeddedPlayer.videoSurface().set(surface)
 
             return VlcPlayer(
                 mediaPlayer = embeddedPlayer,
                 videoSurface = videoPanel,
-            ).also { CrossfadeAudit.log("CREATE_KIND", playerId = it.id, details = "kind=video source=${source.url}") }
+            ).also { CrossfadeAudit.log("CREATE_KIND", playerId = it.id, details = "kind=video source=${source.url} factory=$factoryLabel") }
         }
 
         // Audio-only player
         Logger.d(TAG, "Creating audio-only player")
-        val player = mediaPlayerFactory.mediaPlayers().newMediaPlayer()
+        val player = factory.mediaPlayers().newMediaPlayer()
         return VlcPlayer(
             mediaPlayer = player,
             videoSurface = null,
-        ).also { CrossfadeAudit.log("CREATE_KIND", playerId = it.id, details = "kind=audio source=${source.url}") }
+        ).also { CrossfadeAudit.log("CREATE_KIND", playerId = it.id, details = "kind=audio source=${source.url} factory=$factoryLabel") }
     }
 
     /**
@@ -1389,6 +1470,49 @@ class VlcPlayerAdapter(
                     CrossfadeAudit.log("CB_STOPPED", playerId = playerIdFor(mediaPlayer))
                     coroutineScope.launch {
                         notifyEqualizerIntent(false)
+
+                        // BUGFIX (freeze silencioso sin auto-recuperación): confirmado por
+                        // logs — el player promovido a currentPlayer puede entrar en estado
+                        // "Stopped" nativo por su cuenta, en medio de reproducción normal, sin
+                        // que sea un error(), sin ser un pause() del usuario y sin estar en
+                        // crossfade. Antes, esta función no hacía nada más que
+                        // notifyEqualizerIntent(false) — la reproducción quedaba muda para
+                        // siempre hasta que el usuario intervenía manualmente. Reusa el mismo
+                        // mecanismo de reintento que ya existe en error() (retryCount/
+                        // retryVideoId/maxRetryCount), pero retomando desde cachedPosition en
+                        // vez de 0, para no reiniciar la canción desde el principio.
+                        if (currentPlayer?.mediaPlayer != mediaPlayer) return@launch
+                        if (isCrossfading) return@launch
+                        if (!internalPlayWhenReady) return@launch
+
+                        val currentVideoId = playlist.getOrNull(localCurrentMediaItemIndex)?.mediaId
+                        if (currentVideoId != null) {
+                            if (retryVideoId != currentVideoId) {
+                                retryVideoId = currentVideoId
+                                retryCount = 0
+                            }
+                            if (retryCount < maxRetryCount) {
+                                retryCount++
+                                val resumePosition = cachedPosition
+                                Logger.w(
+                                    TAG,
+                                    "Recovering from unexpected stopped() (attempt $retryCount/$maxRetryCount) " +
+                                        "for $currentVideoId at position $resumePosition",
+                                )
+                                CrossfadeAudit.log(
+                                    "CB_STOPPED_RECOVERY_ATTEMPT",
+                                    playerId = playerIdFor(mediaPlayer),
+                                    details = "retryCount=$retryCount videoId=$currentVideoId resumePosition=$resumePosition",
+                                )
+                                try {
+                                    precachedPlayers.remove(currentVideoId)?.player?.release()
+                                    loadAndPlayTrackInternal(localCurrentMediaItemIndex, resumePosition, shouldPlay = true)
+                                } catch (e: Exception) {
+                                    if (e is CancellationException) throw e
+                                    Logger.e(TAG, "Stopped-recovery failed: ${e.message}", e)
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -1749,6 +1873,7 @@ class VlcPlayerAdapter(
 
                             val timeRightBeforeUnmute = nextPlayer.time
                             nextPlayer.mediaPlayer.audio().isMute = false
+                            nextPlayer.preRollIntentionallyUnmuted = true
                             CrossfadeAudit.log(
                                 "PREROLL_SEEK_AFTER",
                                 playerId = nextPlayer.id,
@@ -1792,6 +1917,13 @@ class VlcPlayerAdapter(
                                 details = "signalledBeforeTimeout=$signalled",
                             )
                             nextPlayer.mediaPlayer.audio().isMute = false
+                            nextPlayer.preRollIntentionallyUnmuted = true
+                            CrossfadeAudit.log(
+                                "PREROLL_FRESH_UNMUTE_RETURNED",
+                                playerId = nextPlayer.id,
+                                role = "next",
+                                details = "readbackTime=${runCatching { nextPlayer.mediaPlayer.status().time() }.getOrDefault(-1)}",
+                            )
                         }
                     }
 
@@ -1845,6 +1977,9 @@ class VlcPlayerAdapter(
                             if (dur > 0 && pos >= 0) (dur - pos) else resolvedConfigDurationMs.toLong()
                         } ?: resolvedConfigDurationMs.toLong()
 
+                    // Clamp de seguridad: la duración configurada no puede exceder el tiempo
+                    // real que le queda a la canción en este instante — crossfade simultáneo
+                    // de una sola fase, así que se compara 1:1 contra actualTimeRemaining.
                     val effectiveCrossfadeDurationMs =
                         minOf(
                             resolvedConfigDurationMs.toLong(),
@@ -1927,6 +2062,31 @@ class VlcPlayerAdapter(
                 "internalVolume=$internalVolume",
         )
         val fadeOutId = currentPlayer?.id
+
+        // BUGFIX (se traba y recién después sigue — 5s de fade-in sobre silencio):
+        // CrossfadeAudit confirmó que cuando una canción termina de forma NATURAL
+        // (CB_FINISHED) apenas antes de que el poll de posición dispare el crossfade
+        // preventivo, triggerCrossfadeTransition() arranca igual, pero el player
+        // "viejo" que se supone hace fade-out ya está detenido/terminado (isPlaying
+        // = false, time = -1). En ese caso no hay nada que mezclar: el loop de abajo
+        // igual tarda los 5 segundos completos subiendo el volumen del nuevo player
+        // desde 0, produciendo un instante de silencio seguido de una subida de
+        // volumen innecesariamente lenta. Si detectamos esto al arrancar, saltamos
+        // el fade animado y pasamos directo a volumen completo. No cambia nada del
+        // camino normal (outgoing todavía reproduciendo).
+        val outgoingAlreadyDead =
+            runCatching { currentPlayer?.mediaPlayer?.status()?.isPlaying }.getOrNull() != true
+        if (outgoingAlreadyDead) {
+            CrossfadeAudit.log(
+                "FADE_LOOP_SKIPPED_OUTGOING_DEAD",
+                playerId = fadeOutId,
+                details = "nextPlayerId=${nextPlayer.id} — outgoing already stopped/finished, jumping to full volume instead of animating",
+            )
+            nextPlayer.setVolume(targetVolume)
+            finalizeCrossfade(nextIndex, nextPlayer)
+            return
+        }
+
         CrossfadeAudit.log(
             "FADE_LOOP_START",
             playerId = fadeOutId,
@@ -1934,6 +2094,12 @@ class VlcPlayerAdapter(
         )
 
         try {
+            // Crossfade simultáneo real — un solo loop, potencia equitativa (equal-power).
+            // A y B cambian de volumen en la MISMA iteración: A baja de 100 a 0, B sube de
+            // 0 a 100, ambos audibles al mismo tiempo durante toda la transición. B ya está
+            // en su posición 0 (seekTo(0) confirmado antes de este punto — sin tocar) y
+            // empieza a subir de volumen en el mismo instante en que arranca este loop, no
+            // varios segundos después.
             for (step in 0..steps) {
                 currentCoroutineContext().ensureActive()
 
@@ -1946,11 +2112,6 @@ class VlcPlayerAdapter(
                 val fadeInVolume = (targetVolume * kotlin.math.sin(angle)).toInt()
                 nextPlayer.setVolume(fadeInVolume)
 
-                // Snapshot both players' actual position/playing state at the
-                // start, middle and end of the fade (not every step - 50 steps
-                // of this would drown the log). This is the direct evidence for
-                // "does the incoming track's position stay monotonic through the
-                // fade" and "are both players genuinely playing at once".
                 if (step == 0 || step == steps / 2 || step == steps) {
                     CrossfadeAudit.log(
                         "FADE_LOOP_SNAPSHOT",
@@ -1979,14 +2140,47 @@ class VlcPlayerAdapter(
     /**
      * Finalize crossfade: swap players and cleanup
      */
-    private fun finalizeCrossfade(
+    private suspend fun finalizeCrossfade(
         nextIndex: Int,
         nextPlayer: VlcPlayer,
     ) {
         Logger.d(TAG, "Crossfade complete, swapping players")
         val oldPlayerId = currentPlayer?.id
         val oldIsPlaying = runCatching { currentPlayer?.mediaPlayer?.status()?.isPlaying }.getOrNull()
-        val nextIsPlaying = runCatching { nextPlayer.mediaPlayer.status().isPlaying }.getOrNull()
+        var nextIsPlaying = runCatching { nextPlayer.mediaPlayer.status().isPlaying }.getOrNull()
+
+        // BUGFIX (canción se traba en mute tras el crossfade): CrossfadeAudit confirmó
+        // con logs reales (FADE_LOOP_SNAPSHOT) que el player "next" puede dejar de
+        // reproducir (isPlaying=false, time=-1) en algún punto DURANTE el fade, sin que
+        // el código lo detectara — el swap se completaba igual, promoviendo a
+        // currentPlayer un reproductor que ya no estaba sonando (progress bar
+        // congelada, sin audio). Antes de promoverlo, si no está reproduciendo,
+        // intentamos un único recovery best-effort: reanudar play() y forzar
+        // isMute=false (por si el estado interrumpido lo dejó muteado). Si igual sigue
+        // sin reproducir, seguimos con el swap de todas formas (no se cambia nada más
+        // del algoritmo) pero queda logueado para diagnóstico.
+        if (nextIsPlaying != true) {
+            CrossfadeAudit.log(
+                "CROSSFADE_NEXT_NOT_PLAYING_RECOVERY_ATTEMPT",
+                playerId = nextPlayer.id,
+                role = "new-current",
+                details = "nextIsPlayingBeforeRecovery=$nextIsPlaying",
+            )
+            try {
+                nextPlayer.mediaPlayer.audio().isMute = false
+                nextPlayer.preRollIntentionallyUnmuted = true
+                nextPlayer.mediaPlayer.controls().play()
+            } catch (e: Exception) {
+                Logger.w(TAG, "Error attempting crossfade recovery for player ${nextPlayer.id}: ${e.message}")
+            }
+            nextIsPlaying = runCatching { nextPlayer.mediaPlayer.status().isPlaying }.getOrNull()
+            CrossfadeAudit.log(
+                "CROSSFADE_NEXT_NOT_PLAYING_RECOVERY_RESULT",
+                playerId = nextPlayer.id,
+                role = "new-current",
+                details = "nextIsPlayingAfterRecovery=$nextIsPlaying",
+            )
+        }
         CrossfadeAudit.log(
             "CROSSFADE_SWAP",
             playerId = oldPlayerId,
@@ -2017,7 +2211,24 @@ class VlcPlayerAdapter(
         // (replaces the minimal crossfade error listener)
         setupPlayerEventsInternal(nextPlayer)
 
-        // Ensure correct volume
+        // FIX (kick de volumen post-crossfade — replica la acción confirmada por el
+        // usuario): tocar manualmente el botón de mute/unmute (que solo hace
+        // setVolume(0) y después setVolume(volumen real) — no toca isMute para nada)
+        // arregla el audio después de un crossfade con problemas. Un solo
+        // setVolume(target) — lo que hacíamos antes — puede no generar un cambio
+        // real si el volumen ya estaba cerca de ese valor, y sospechamos que hace
+        // falta un cambio de volumen genuino (una ida y vuelta) para forzar una
+        // resincronización a nivel nativo/Windows. Esto reproduce exactamente esa
+        // secuencia automáticamente, en vez de depender de que el usuario la haga
+        // a mano.
+        CrossfadeAudit.log(
+            "CROSSFADE_VOLUME_KICK",
+            playerId = currentPlayer?.id,
+            role = "new-current",
+            details = "target=${(internalVolume * 100).toInt()}",
+        )
+        currentPlayer?.setVolume(0)
+        delay(120L)
         currentPlayer?.setVolume((internalVolume * 100).toInt())
 
         // Reset state
@@ -2285,8 +2496,202 @@ class VlcPlayerAdapter(
                                         ) {
                                             val precachedPlayer = precachedNext.player
                                             precachedPlayer.isPrimed = true
+                                            CrossfadeAudit.log(
+                                                "PREROLL_RAW_MUTE_ISSUED",
+                                                playerId = precachedPlayer.id,
+                                                role = "next-precached",
+                                            )
                                             precachedPlayer.mediaPlayer.audio().isMute = true
+                                            CrossfadeAudit.log(
+                                                "PREROLL_RAW_MUTE_RETURNED",
+                                                playerId = precachedPlayer.id,
+                                                role = "next-precached",
+                                            )
                                             precachedPlayer.setVolume(0)
+                                            CrossfadeAudit.log(
+                                                "PREROLL_RAW_VOLUME0_RETURNED",
+                                                playerId = precachedPlayer.id,
+                                                role = "next-precached",
+                                            )
+                                            // INSTRUMENTATION ONLY (Bug 1A audio-leak evidence): a
+                                            // precached player normally has NO listener attached until
+                                            // it's promoted by triggerCrossfadeTransition() — the whole
+                                            // ~PRECACHE_AUDIO_PREROLL_LEAD_MS pre-roll window is a black
+                                            // box with no visibility into what VLC's native pipeline is
+                                            // actually doing (opening/buffering/first real frame) versus
+                                            // when the app believes mute+volume=0 already landed. This is
+                                            // an ADDITIVE raw vlcj listener (same pattern as
+                                            // seekConfirmListener above) — it does not use
+                                            // VlcPlayer.setEventListener, so it does not disturb or get
+                                            // disturbed by the existing tracked listener slot, and does
+                                            // not change any control flow. It self-detaches after 12
+                                            // timeChanged samples so it stops logging once the player is
+                                            // promoted and starts audible playback for the rest of the
+                                            // track. Does not touch the crossfade algorithm.
+                                            val rawSampleCount = java.util.concurrent.atomic.AtomicInteger(0)
+                                            val rawLastMute = java.util.concurrent.atomic.AtomicReference<Boolean?>(null)
+                                            lateinit var rawPrerollListener: MediaPlayerEventAdapter
+                                            rawPrerollListener =
+                                                object : MediaPlayerEventAdapter() {
+                                                    override fun opening(mediaPlayer: MediaPlayer) {
+                                                        CrossfadeAudit.log(
+                                                            "PREROLL_RAW_OPENING",
+                                                            playerId = precachedPlayer.id,
+                                                            role = "next-precached",
+                                                        )
+                                                    }
+
+                                                    override fun buffering(
+                                                        mediaPlayer: MediaPlayer,
+                                                        newCache: Float,
+                                                    ) {
+                                                        CrossfadeAudit.log(
+                                                            "PREROLL_RAW_BUFFERING",
+                                                            playerId = precachedPlayer.id,
+                                                            role = "next-precached",
+                                                            details = "cache=$newCache",
+                                                        )
+                                                    }
+
+                                                    override fun playing(mediaPlayer: MediaPlayer) {
+                                                        CrossfadeAudit.log(
+                                                            "PREROLL_RAW_PLAYING",
+                                                            playerId = precachedPlayer.id,
+                                                            role = "next-precached",
+                                                            details = "readbackTime=${runCatching { mediaPlayer.status().time() }.getOrDefault(-1)} " +
+                                                                "isMuteReadback=${runCatching { mediaPlayer.audio().isMute }.getOrDefault(null)}",
+                                                        )
+                                                        // FIX (fuga de audio antes del crossfade real): confirmado
+                                                        // con 4 capturas de log distintas — isMute vuelve solo a
+                                                        // false poco DESPUÉS de este evento playing(), mucho antes
+                                                        // de que el código pida el unmute real. Volvemos a forzar
+                                                        // isMute=true acá para tapar esa ventana — pero SOLO si
+                                                        // este player todavía no fue promovido a currentPlayer
+                                                        // (nunca debe mutear al player que está sonando de verdad).
+                                                        if (currentPlayer?.id != precachedPlayer.id && precachedPlayer.isPrimed && !precachedPlayer.preRollIntentionallyUnmuted) {
+                                                            runCatching { mediaPlayer.audio().isMute = true }
+                                                            CrossfadeAudit.log(
+                                                                "PREROLL_RAW_MUTE_REASSERTED",
+                                                                playerId = precachedPlayer.id,
+                                                                role = "next-precached",
+                                                            )
+                                                        }
+                                                    }
+
+                                                    // INSTRUMENTATION ONLY: these three were missing before —
+                                                    // they're the only remaining blind spot for "why did the
+                                                    // incoming player stop playing mid-fade" (confirmed by
+                                                    // FADE_LOOP_SNAPSHOT showing inTime=-1, inIsPlaying=false
+                                                    // with no direct cause captured anywhere). error() fires on
+                                                    // a genuine native/demux/decode failure; stopped()/paused()
+                                                    // fire if VLC's own state machine transitions away from
+                                                    // playing on its own. Whichever of these (if any) fires
+                                                    // between PREROLL_RAW_PLAYING and the fade breaking is the
+                                                    // direct cause. Read-only, no behavior change.
+                                                    override fun error(mediaPlayer: MediaPlayer) {
+                                                        CrossfadeAudit.log(
+                                                            "PREROLL_RAW_ERROR",
+                                                            playerId = precachedPlayer.id,
+                                                            role = "next-precached-or-promoted",
+                                                            details = "sample=${rawSampleCount.get()} " +
+                                                                "readbackTime=${runCatching { mediaPlayer.status().time() }.getOrDefault(-1)} " +
+                                                                "isMuteReadback=${runCatching { mediaPlayer.audio().isMute }.getOrDefault(null)}",
+                                                        )
+                                                    }
+
+                                                    override fun stopped(mediaPlayer: MediaPlayer) {
+                                                        CrossfadeAudit.log(
+                                                            "PREROLL_RAW_STOPPED",
+                                                            playerId = precachedPlayer.id,
+                                                            role = "next-precached-or-promoted",
+                                                            details = "sample=${rawSampleCount.get()} " +
+                                                                "readbackTime=${runCatching { mediaPlayer.status().time() }.getOrDefault(-1)} " +
+                                                                "isMuteReadback=${runCatching { mediaPlayer.audio().isMute }.getOrDefault(null)}",
+                                                        )
+                                                    }
+
+                                                    override fun paused(mediaPlayer: MediaPlayer) {
+                                                        CrossfadeAudit.log(
+                                                            "PREROLL_RAW_PAUSED",
+                                                            playerId = precachedPlayer.id,
+                                                            role = "next-precached-or-promoted",
+                                                            details = "sample=${rawSampleCount.get()} " +
+                                                                "readbackTime=${runCatching { mediaPlayer.status().time() }.getOrDefault(-1)} " +
+                                                                "isMuteReadback=${runCatching { mediaPlayer.audio().isMute }.getOrDefault(null)}",
+                                                        )
+                                                    }
+
+                                                    // INSTRUMENTATION ONLY (extended window): the first 12
+                                                    // samples log in full detail, exactly as before — that's
+                                                    // the evidence we already have for the pre-roll leak. Past
+                                                    // that, instead of detaching (which used to cut off right
+                                                    // around when this player gets promoted to currentPlayer
+                                                    // and starts real, indefinite playback), it keeps watching
+                                                    // but only logs when isMute actually CHANGES value versus
+                                                    // the last observed reading — plus a heartbeat every 40
+                                                    // samples so we can see it's still alive even with no
+                                                    // change. Detaches at sample 3000 (~20+ min of playback)
+                                                    // as a safety cap so it doesn't run forever. Read-only,
+                                                    // no control flow changed.
+                                                    override fun timeChanged(
+                                                        mediaPlayer: MediaPlayer,
+                                                        newTime: Long,
+                                                    ) {
+                                                        val n = rawSampleCount.incrementAndGet()
+                                                        val currentMute = runCatching { mediaPlayer.audio().isMute }.getOrNull()
+                                                        val previousMute = rawLastMute.getAndSet(currentMute)
+                                                        // FIX (misma causa que en playing()): si durante el
+                                                        // pre-roll el mute se cayó solo, lo volvemos a forzar acá
+                                                        // también — cubre el caso de que el drop pase un poco más
+                                                        // tarde que el evento playing(). Nunca toca al player una
+                                                        // vez promovido a currentPlayer (mismo guard).
+                                                        if (currentMute == false && currentPlayer?.id != precachedPlayer.id && precachedPlayer.isPrimed && !precachedPlayer.preRollIntentionallyUnmuted) {
+                                                            runCatching { mediaPlayer.audio().isMute = true }
+                                                            CrossfadeAudit.log(
+                                                                "PREROLL_RAW_MUTE_REASSERTED",
+                                                                playerId = precachedPlayer.id,
+                                                                role = "next-precached",
+                                                                details = "sample=$n",
+                                                            )
+                                                        }
+                                                        when {
+                                                            n <= 12 -> {
+                                                                CrossfadeAudit.log(
+                                                                    "PREROLL_RAW_TIME_CHANGED",
+                                                                    playerId = precachedPlayer.id,
+                                                                    role = "next-precached",
+                                                                    details = "sample=$n newTime=$newTime isMuteReadback=$currentMute",
+                                                                )
+                                                            }
+                                                            previousMute != currentMute -> {
+                                                                CrossfadeAudit.log(
+                                                                    "PREROLL_RAW_MUTE_CHANGED_LATE",
+                                                                    playerId = precachedPlayer.id,
+                                                                    role = "next-precached-or-promoted",
+                                                                    details = "sample=$n newTime=$newTime previousMute=$previousMute newMute=$currentMute",
+                                                                )
+                                                            }
+                                                            n % 40 == 0 -> {
+                                                                CrossfadeAudit.log(
+                                                                    "PREROLL_RAW_HEARTBEAT",
+                                                                    playerId = precachedPlayer.id,
+                                                                    role = "next-precached-or-promoted",
+                                                                    details = "sample=$n newTime=$newTime isMuteReadback=$currentMute",
+                                                                )
+                                                            }
+                                                        }
+                                                        if (n >= 3000) {
+                                                            try {
+                                                                mediaPlayer.events().removeMediaPlayerEventListener(rawPrerollListener)
+                                                            } catch (_: Exception) {
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            try {
+                                                precachedPlayer.mediaPlayer.events().addMediaPlayerEventListener(rawPrerollListener)
+                                            } catch (_: Exception) {
+                                            }
                                             precachedPlayer.play()
                                             Logger.d(TAG, "Pre-rolling precached player for $nextVideoId (${PRECACHE_AUDIO_PREROLL_LEAD_MS}ms lead)")
                                             CrossfadeAudit.log(
@@ -2657,6 +3062,14 @@ class VlcPlayer(
     // stable instead of starting decode at the exact instant it's needed.
     @Volatile
     var isPrimed = false
+
+    // Set to true at the exact moment triggerCrossfadeTransition() does the real,
+    // intentional unmute after the pre-roll (either branch). isPrimed alone isn't
+    // enough to know this — it stays true through the whole legitimate fade-in that
+    // follows. This flag is what the pre-roll's mute-reassertion fix checks, so it
+    // never re-mutes a player after its real unmute has already happened.
+    @Volatile
+    var preRollIntentionallyUnmuted = false
 
     private var eventListener: MediaPlayerEventAdapter? = null
 

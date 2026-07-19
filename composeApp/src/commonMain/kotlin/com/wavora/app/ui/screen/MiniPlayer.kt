@@ -722,45 +722,13 @@ fun MiniPlayer(
                                             .height(24.dp),
                                     contentAlignment = Alignment.Center,
                                 ) {
-                                    Crossfade(timelineState.loading) {
-                                        if (it) {
-                                            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-                                                LinearProgressIndicator(
-                                                    modifier =
-                                                        Modifier
-                                                            .fillMaxWidth()
-                                                            .height(4.dp)
-                                                            .padding(
-                                                                horizontal = 3.dp,
-                                                            ).clip(
-                                                                RoundedCornerShape(8.dp),
-                                                            ),
-                                                    color = wavoraPrimary,
-                                                    trackColor = wavoraBorder,
-                                                    strokeCap = StrokeCap.Round,
-                                                )
-                                            }
-                                        } else {
-                                            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
-                                                LinearProgressIndicator(
-                                                    progress = { timelineState.bufferedPercent.toFloat() / 100 },
-                                                    modifier =
-                                                        Modifier
-                                                            .fillMaxWidth()
-                                                            .height(4.dp)
-                                                            .padding(
-                                                                horizontal = 3.dp,
-                                                            ).clip(
-                                                                RoundedCornerShape(8.dp),
-                                                            ),
-                                                    color = wavoraSecondary,
-                                                    trackColor = wavoraBorder,
-                                                    strokeCap = StrokeCap.Round,
-                                                    drawStopIndicator = {},
-                                                )
-                                            }
-                                        }
-                                    }
+                                    // BUGFIX (barra celeste/cyan + línea violeta animada bajo el
+                                    // seekbar): se eliminaron los dos LinearProgressIndicator que
+                                    // vivían acá — el de progress=bufferedPercent (wavoraSecondary,
+                                    // cyan) y el indeterminado de loading (wavoraPrimary, con la
+                                    // animación deslizante propia de un indicador indeterminado de
+                                    // Material3). Ambos quedaban apilados encima/debajo del Slider
+                                    // real. No se quiere ninguno de los dos.
                                 }
                                 CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
                                     Slider(
