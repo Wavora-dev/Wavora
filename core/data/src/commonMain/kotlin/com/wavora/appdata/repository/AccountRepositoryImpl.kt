@@ -29,6 +29,12 @@ internal class AccountRepositoryImpl(
             youTube
                 .getAccountListWithPageId(cookie)
                 .onSuccess {
+                    // DIAGNOSTICO (auditoria persistencia de sesion Desktop): si esto
+                    // imprime "count=0" sin excepcion, la request llego a Google y
+                    // volvio OK pero sin cuentas (coherente con request sin
+                    // Authorization -> tratada como no autenticada). Si tira excepcion,
+                    // el detalle esta en el log "getAccountInfo: <mensaje>" de abajo.
+                    Logger.d(TAG, "DIAG getAccountInfo: onSuccess count=${it.size}")
                     emit(it.map { account -> account.toDomainAccountInfo() })
                 }.onFailure {
                     Logger.e(TAG, "getAccountInfo: ${it.message}", it)

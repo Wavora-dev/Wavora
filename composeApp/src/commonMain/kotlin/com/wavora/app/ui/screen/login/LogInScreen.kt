@@ -136,7 +136,16 @@ fun LoginScreen(
                 }
             ) { url ->
                 Logger.d("LogInScreen", "Current URL: $url")
-                if (url == Config.YOUTUBE_MUSIC_MAIN_URL) {
+                // AUDIT NOTE (Ronda 18 - mismo bug que el fix en
+                // Cookies.jvm.kt: exigir igualdad EXACTA contra
+                // "https://music.youtube.com/" hacía que la cuenta nunca
+                // se guardara en Desktop, aunque la página cargara bien -
+                // la URL real después del redirect de Google casi seguro
+                // trae algo de más (query params, sin la barra final).
+                // `startsWith` es más robusto y sigue funcionando igual en
+                // Android, que es la otra plataforma que comparte este
+                // archivo común.
+                if (url.startsWith(Config.YOUTUBE_MUSIC_MAIN_URL.removeSuffix("/"))) {
                     coroutineScope.launch {
                         val success =
                             createWebViewCookieManager()

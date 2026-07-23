@@ -41,7 +41,7 @@ Wavora's goal isn't to be "yet another YouTube Music wrapper." It exists to push
 
 **What Wavora does differently:**
 
-- **Genuinely native on every platform.** The desktop build isn't a browser in a box — it's a Compose Desktop application backed by libVLC through JNA/vlcj, with a real system tray, a floating always-on-top miniplayer window, and OS-level media integrations (macOS Now Playing Center, Windows protocol handler for `wavora://` deep links).
+- **Genuinely native on every platform.** The desktop build isn't a browser in a box — it's a Compose Desktop application backed by libVLC through JNA/vlcj, with a real system tray, a floating always-on-top miniplayer window, and OS-level media integrations (macOS Now Playing Center, Windows protocol handler for `wavora://` deep links). The one deliberate exception: on Windows, logging into YouTube Music opens a real, lazily-loaded embedded Chromium browser (via [KCEF](https://github.com/DatL4g/KCEF)) purely to capture the session cookie — it's disposed right after a successful login, so it isn't a persistent Electron-style engine sitting in the background.
 - **A real crossfade engine**, not a fade-in/fade-out hack — equal-power volume curves, an optional biquad-filter DJ Mode, and BPM/key-aware AutoMix, implemented in parallel on both the ExoPlayer (Android) and VLC (Desktop) backends.
 - **A community lyrics ecosystem** with its own Cloudflare Workers backend, AI-powered translation, and a voting system — instead of only scraping a single third-party source.
 - **No telemetry by default**, an optional non-Sentry crash-reporting build flavor (`crashlytics-empty`), proxy support, and a Piped-instance fallback for restricted networks.
@@ -94,7 +94,7 @@ Wavora's goal isn't to be "yet another YouTube Music wrapper." It exists to push
 - Community-sourced BPM/key metadata feeding the AutoMix crossfade engine
 
 ### ☁ Cloud & Social Integration
-- **YouTube / Google account** login (cookie-based, no OAuth app registration needed), with multi-account support and listening-history upload for better recommendations
+- **YouTube / Google account** login (cookie-based, no OAuth app registration needed), with multi-account support and listening-history upload for better recommendations — on Android via the system WebView, on Windows via a lazily-loaded embedded Chromium browser that's disposed right after a successful login
 - **Discord Rich Presence** — shows the current track, artist, and elapsed time in your Discord status via a direct WebSocket gateway connection (uses your own user token, not a bot)
 - **Spotify integration** — `sp_dc` cookie login for synced lyrics and animated Spotify Canvas backgrounds on the Now Playing screen
 
@@ -403,7 +403,7 @@ Sourced directly from `// TODO` markers currently present in the codebase — no
 
 Wavora is built on top of [**SimpMusic**](https://github.com/maxrave-dev/SimpMusic) by **maxrave-dev**, licensed under GPL-3.0 — the original Android YouTube Music client this project's playback pipeline, data layer, and general architecture trace back to.
 
-Wavora would not be possible without the following open-source projects: **Jetpack Compose** & **Compose Multiplatform**, **Media3/ExoPlayer**, **VLC** & **vlcj**, **Koin**, **Ktor**, **Room**, **Coil**, **NewPipeExtractor**, **BravePipeExtractor**, **PipePipeExtractor**, **Kizzy**, **Sentry**, **Kermit**, **Haze**, **Compottie**, and every other library listed under **Settings → Third-party libraries** inside the app itself, powered by AboutLibraries.
+Wavora would not be possible without the following open-source projects: **Jetpack Compose** & **Compose Multiplatform**, **Media3/ExoPlayer**, **VLC** & **vlcj**, **Koin**, **Ktor**, **Room**, **Coil**, **NewPipeExtractor**, **BravePipeExtractor**, **PipePipeExtractor**, **Kizzy**, **Sentry**, **Kermit**, **Haze**, **Compottie**, **KCEF** & **compose-webview-multiplatform** (embedded Chromium browser for YouTube login on Windows), and every other library listed under **Settings → Third-party libraries** inside the app itself, powered by AboutLibraries.
 
 ## License
 
@@ -430,7 +430,7 @@ El objetivo de Wavora no es ser "otro wrapper más de YouTube Music". Existe par
 
 **Qué hace Wavora distinto:**
 
-- **Genuinamente nativo en cada plataforma.** La build de escritorio no es un navegador metido en una caja — es una aplicación de Compose Desktop respaldada por libVLC a través de JNA/vlcj, con una bandeja del sistema real, una ventana de miniplayer flotante siempre-encima, e integraciones nativas del sistema operativo (Now Playing Center en macOS, manejador de protocolo `wavora://` para deep links en Windows).
+- **Genuinamente nativo en cada plataforma.** La build de escritorio no es un navegador metido en una caja — es una aplicación de Compose Desktop respaldada por libVLC a través de JNA/vlcj, con una bandeja del sistema real, una ventana de miniplayer flotante siempre-encima, e integraciones nativas del sistema operativo (Now Playing Center en macOS, manejador de protocolo `wavora://` para deep links en Windows). La única excepción deliberada: en Windows, al iniciar sesión en YouTube Music se abre un navegador Chromium real embebido (vía [KCEF](https://github.com/DatL4g/KCEF)), cargado solo cuando hace falta, únicamente para capturar la cookie de sesión — se libera apenas el login es exitoso, así que no queda un motor tipo Electron corriendo en segundo plano.
 - **Un motor de crossfade real**, no un simple fundido de entrada/salida — curvas de volumen de potencia constante, un Modo DJ opcional con barrido de filtro biquad, y AutoMix consciente del BPM/tonalidad, implementado en paralelo tanto en el backend de ExoPlayer (Android) como en el de VLC (Escritorio).
 - **Un ecosistema de letras comunitario** con su propio backend en Cloudflare Workers, traducción impulsada por IA, y un sistema de votación — en lugar de depender de un único proveedor externo.
 - **Sin telemetría por defecto**, una variante de build sin Sentry (`crashlytics-empty`) para no enviar ningún reporte de errores, soporte de proxy, y una instancia Piped como alternativa en redes restringidas.
@@ -483,7 +483,7 @@ El objetivo de Wavora no es ser "otro wrapper más de YouTube Music". Existe par
 - Metadatos de BPM/tonalidad aportados por la comunidad que alimentan el motor de crossfade AutoMix
 
 ### ☁ Integración en la nube y social
-- Inicio de sesión con cuenta de **YouTube/Google** (basado en cookies, sin necesidad de registrar una app OAuth), con soporte multicuenta y subida del historial de escucha para mejores recomendaciones
+- Inicio de sesión con cuenta de **YouTube/Google** (basado en cookies, sin necesidad de registrar una app OAuth), con soporte multicuenta y subida del historial de escucha para mejores recomendaciones — en Android vía el WebView del sistema, en Windows vía un navegador Chromium embebido que se carga solo cuando hace falta y se libera apenas el login es exitoso
 - **Discord Rich Presence** — mostrá la canción actual, el artista y el tiempo transcurrido en tu estado de Discord vía una conexión directa por WebSocket al Gateway (usa tu propio token de usuario, no un bot)
 - **Integración con Spotify** — inicio de sesión con cookie `sp_dc` para letras sincronizadas y fondos animados de Spotify Canvas en la pantalla de reproducción
 
@@ -650,7 +650,7 @@ Extraída directamente de los marcadores `// TODO` presentes hoy en el código �
 
 Wavora está construido sobre [**SimpMusic**](https://github.com/maxrave-dev/SimpMusic) de **maxrave-dev**, licenciado bajo GPL-3.0 — el cliente original de YouTube Music para Android del que este proyecto hereda su pipeline de reproducción, capa de datos, y arquitectura general.
 
-Wavora no sería posible sin los siguientes proyectos de código abierto: **Jetpack Compose** y **Compose Multiplatform**, **Media3/ExoPlayer**, **VLC** y **vlcj**, **Koin**, **Ktor**, **Room**, **Coil**, **NewPipeExtractor**, **BravePipeExtractor**, **PipePipeExtractor**, **Kizzy**, **Sentry**, **Kermit**, **Haze**, **Compottie**, y todas las demás librerías listadas en **Ajustes → Librerías de terceros** dentro de la propia app, impulsado por AboutLibraries.
+Wavora no sería posible sin los siguientes proyectos de código abierto: **Jetpack Compose** y **Compose Multiplatform**, **Media3/ExoPlayer**, **VLC** y **vlcj**, **Koin**, **Ktor**, **Room**, **Coil**, **NewPipeExtractor**, **BravePipeExtractor**, **PipePipeExtractor**, **Kizzy**, **Sentry**, **Kermit**, **Haze**, **Compottie**, **KCEF** y **compose-webview-multiplatform** (navegador Chromium embebido para el login de YouTube en Windows), y todas las demás librerías listadas en **Ajustes → Librerías de terceros** dentro de la propia app, impulsado por AboutLibraries.
 
 ## Licencia
 

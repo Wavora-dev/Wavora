@@ -77,7 +77,7 @@ kotlin {
             enable = true
         }
         compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
+            jvmTarget.set(JvmTarget.JVM_21)
         }
     }
 
@@ -91,7 +91,21 @@ kotlin {
 //        }
 //    }
 
-    jvm()
+    jvm {
+        // AUDIT NOTE: este target jvm() (usado directamente por
+        // :desktopApp) queda explícito en bytecode 21, igual que el resto
+        // del proyecto. Ver desktopApp/build.gradle.kts para el detalle
+        // completo de por qué el runtime terminó siendo JBR 21 y no JBR 17
+        // (una dependencia de terceros - cmptoast - viene precompilada a
+        // Java 21).
+        compilations.all {
+            compileTaskProvider.configure {
+                compilerOptions {
+                    jvmTarget.set(JvmTarget.JVM_21)
+                }
+            }
+        }
+    }
 
     sourceSets {
         dependencies {
@@ -214,6 +228,77 @@ kotlin {
             // without going through PowerShell (see AppUpdate.jvm.kt).
             implementation(libs.jna)
             implementation(libs.jna.platform)
+            // WebView real (KCEF/Chromium embebido) para el login de
+            // YouTube Music en Desktop - ver
+            // Login_YTMusic_Desktop_Fases1-4.md para la justificación
+            // completa de por qué esta librería y no KCEF directo ni
+            // un WebView nativo por SO. El repositorio jogamp que
+            // necesita ya estaba declarado en settings.gradle.kts.
+            // VERIFICAR versión vigente al momento de agregar esto -
+            // 1.8.4 es la última confirmada en la documentación oficial
+            // al momento de esta investigación (jul. 2026).
+            // AUDIT NOTE (causa raíz real, confirmada con evidencia real):
+            // compose-webview-multiplatform:1.8.4 trae por transitividad
+            // dev.datlag:kcef:2024.01.07.1 (enero 2024), compilado contra
+            // Ktor 2.x. En Ktor 2.x, ContentNegotiation era una clase/objeto
+            // real; en Ktor 3.x (que el resto de este proyecto usa, 3.5.0)
+            // pasó a ser una propiedad de nivel superior, no una clase - por
+            // eso KCEF 2024.01.07.1 tira NoClassDefFoundError buscando una
+            // clase que ya no existe con esa forma en Ktor 3.5.0.
+            // Confirmado abriendo el jar de content-negotiation-jvm-3.5.0.jar
+            // real: no contiene ContentNegotiation.class, solo
+            // ContentNegotiationConfig.class/ContentNegotiationKt.class. No
+            // es un problema de "falta la dependencia" (ya estaba presente,
+            // con ruta correcta, confirmado con jar tf) sino de
+            // incompatibilidad binaria entre versiones. Forzamos KCEF
+            // 2025.03.23 en su momento (la más nueva en Maven Central en esa
+            // fecha), compilada contra Ktor 3.x compatible con 3.5.0 - eso
+            // resolvió el NoClassDefFoundError.
+            // AUDIT NOTE (Ronda 17 - downgrade real, no relacionado a Ktor):
+            // 2025.03.23 crasheaba de forma 100% reproducible en el
+            // hardware real de Sebastián (i5-6200U + GTX 940MX, Optimus,
+            // Windows 10 22H2) con STATUS_BREAKPOINT dentro de libcef.dll,
+            // siempre en el mismo offset exacto, confirmado con Visor de
+            // Eventos - independiente de JVM/bytecode/sandbox/banderas de
+            // GPU/antivirus (todos descartados con evidencia real en
+            // rondas anteriores). El propio changelog de 2025.03.23 dice
+            // "Bumped jcef version" - un salto real de versión de Chromium.
+            // Se bajó a v2024.04.20.4 (release previo, confirmado por
+            // fuente clonada de KCEF que sigue usando Ktor 3.0.0 - mismo
+            // major que 3.5.0, no reintroduce el bug de ContentNegotiation)
+            // con la esperanza de que un Chromium más viejo sea compatible
+            // con este hardware específico. Pendiente confirmar con el
+            // próximo log si esto evita el crash.
+            implementation("dev.datlag:kcef:2024.04.20.4")
+            // WAVORA FORK (Escenario B, confirmado contra el código fuente
+            // real de la librería/KCEF/jcef): la 1.8.4 stock crea un
+            // CefRequestContext privado (con su propio cookie store,
+            // DISTINTO del global que lee webViewState.cookieManager /
+            // DesktopCookieManager) para poder aplicar el User-Agent
+            // custom. Reemplazada por :webview-fork, un módulo local con
+            // el mismo código de la 1.8.4 pero con el override de
+            // User-Agent movido a CefRequestHandler a nivel de CefClient
+            // (mismo mecanismo público que ya se usa acá mismo para
+            // addLifeSpanHandler) — el browser queda en el contexto por
+            // defecto del client, que es el global. Ver
+            // webview-fork/build.gradle.kts y los comentarios "WAVORA
+            // FORK" dentro de CefRequestExt.kt / WebView.desktop.kt para
+            // el detalle y la verificación completa. Mismo groupId de
+            // paquete (com.multiplatform.webview.*), así que no hace
+            // falta tocar ningún import en el resto de Wavora.
+            implementation(projects.webviewFork)
+            // Ver nota arriba: esto sigue siendo necesario para que KCEF
+            // pueda descargar su bundle de Chromium, independientemente de
+            // qué versión de KCEF termine resolviendo.
+            implementation(libs.ktor.client.content.negotiation)
+            // Agregado de forma preventiva junto con ContentNegotiation
+            // (mismo patrón que ya usa kotlinYtmusicScraper para su
+            // propio HttpClient) - no tengo forma de confirmar sin
+            // decompilar KCEF si su llamada interna realmente negocia
+            // JSON, pero es el emparejamiento estándar de Ktor y el
+            // costo de agregarlo de más es mínimo comparado con otro
+            // ida y vuelta de NoClassDefFoundError.
+            implementation(libs.ktor.serialization.kotlinx.json)
         }
     }
 }

@@ -32,6 +32,12 @@
          (a generic folder), even though launching it opened Wavora correctly
          with its real icon in the taskbar/window. Fix: point IconLocation at
          wavora.ico, bundled alongside this script.
+         AUDIT NOTE (icon disappears after deleting the installer folder):
+         a .lnk's IconLocation only stores a path, not the icon's bytes, so
+         pointing it at the extracted zip folder breaks the icon once that
+         folder is deleted. Fix: wavora.ico is copied to a persistent
+         %LOCALAPPDATA%\Wavora\ folder first, and the shortcut points there
+         instead — see the copy step right before shortcut creation below.
       5. Launch the app.
 
     Bundle requirement (same folder as this script):
@@ -106,6 +112,31 @@ $icon = Join-Path $scriptDir "wavora.ico"
 if (-not (Test-Path $icon)) {
     Write-Host "  [WARN] No se encontro wavora.ico en $scriptDir - el acceso directo de escritorio quedara sin icono propio." -ForegroundColor Yellow
     $icon = $null
+} else {
+    # AUDIT NOTE (icono del acceso directo desaparece si se borra la carpeta
+    # del instalador): $scriptDir es la carpeta donde el usuario descomprimio
+    # AppwavoraWindows.zip (ej. Desktop\wavora-installer\), NO la carpeta de
+    # instalacion real de la app (esa es el paquete MSIX, gestionado por
+    # Windows). El shortcut.IconLocation de mas abajo, antes, apuntaba
+    # directo a "$scriptDir\wavora.ico" - un .lnk solo GUARDA la ruta al
+    # archivo de icono, no una copia de sus bytes, asi que si el usuario
+    # borra esa carpeta temporal despues de instalar (comportamiento
+    # esperable, ya cumplio su proposito), el acceso directo se queda sin
+    # icono (Windows no encuentra el .ico y cae al generico). Fix: copiar
+    # wavora.ico a una carpeta persistente en %LOCALAPPDATA% (mismo patron
+    # ya usado para WavoraUpdater.exe) y apuntar el shortcut ahi en vez de
+    # a $scriptDir - esa carpeta sobrevive aunque se borre el zip extraido.
+    $persistentIconDir = Join-Path $env:LOCALAPPDATA "Wavora"
+    if (-not (Test-Path $persistentIconDir)) {
+        New-Item -ItemType Directory -Path $persistentIconDir -Force | Out-Null
+    }
+    $persistentIcon = Join-Path $persistentIconDir "wavora.ico"
+    try {
+        Copy-Item -Path $icon -Destination $persistentIcon -Force
+        $icon = $persistentIcon
+    } catch {
+        Write-Host "  [WARN] No se pudo copiar wavora.ico a $persistentIconDir, se usara la copia temporal: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
 }
 
 $msixCandidates = Get-ChildItem -Path $scriptDir -Filter "*.msix" -File |

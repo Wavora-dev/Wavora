@@ -1381,7 +1381,17 @@ class SettingsViewModel(
                     getLoggedIn()
                     true
                 } ?: run {
-                Logger.w("getAllGoogleAccount", "addAccount: Account info is null")
+                // DIAGNOSTICO (auditoria persistencia de sesion Desktop): ESTE es el
+                // punto exacto donde la app revierte la cookie/loggedIn optimistas que
+                // se habian seteado arriba (linea ~1322-1323). Si esto se imprime
+                // despues de un login que en la UI/WebView se vio exitoso, la causa
+                // esta en accountRepository.getAccountInfo(cookie) (ver logs
+                // "DIAG getAccountInfo" y "DIAG falta SAPISID..." mas arriba en el log).
+                Logger.w(
+                    "getAllGoogleAccount",
+                    "DIAG addAccount: getAccountInfo devolvio vacio/null -> REVIRTIENDO sesion " +
+                        "(cookie recibida len=${cookie.length})",
+                )
                 dataStoreManager.setCookie(currentCookie, currentPageId)
                 dataStoreManager.setLoggedIn(currentLoggedIn)
                 false

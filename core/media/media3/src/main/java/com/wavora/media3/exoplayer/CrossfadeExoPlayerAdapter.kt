@@ -1688,9 +1688,43 @@ internal class CrossfadeExoPlayerAdapter(
     private fun triggerCrossfadeTransition(nextIndex: Int) {
         if (nextIndex !in playlist.indices || isCrossfading) return
 
-        coroutineScope.launch {
+        // ROOT CAUSE FIX (mismo patrón que seekTo() — ver el comentario ahí
+        // sobre el bug "next song ends up Paused"): esta función puede
+        // tardar (awaitPlayerReady + carga de metadata AutoMix + espera de
+        // red), todo ANTES de que crossfadeJob quede asignado (recién se
+        // asignaba dentro de performCrossfade, varias líneas más abajo).
+        // Durante esa ventana, un pause() del usuario (o de un comando de
+        // MediaSession/Bluetooth) no tenía ningún job real para cancelar
+        // (crossfadeJob seguía null o apuntando a un job viejo ya
+        // terminado), así que la transición seguía su curso y llamaba
+        // nextPlayer.play() sin condición — igual que el bug ya
+        // documentado en seekTo(), pero sin el fix. Capturar
+        // internalPlayWhenReady acá, sincrónicamente, en el mismo thread
+        // que decide iniciar el crossfade (ExoPlayer's STATE_ENDED
+        // callback o el chequeo periódico de posición, ambos evidencia
+        // directa de que se estaba reproduciendo), cierra la misma
+        // ventana de carrera para el camino de crossfade.
+        val shouldPlay = internalPlayWhenReady
+        Logger.d(
+            "PB_TRACE",
+            "t=${java.time.Instant.now()} thread=${Thread.currentThread().name} " +
+                "CrossfadeExoPlayerAdapter.triggerCrossfadeTransition(index=$nextIndex) shouldPlay captured synchronously = $shouldPlay",
+        )
+
+        if (!shouldPlay) {
+            // Fading volume in/out only makes sense while actually listening.
+            // Falls back to the plain (non-crossfade) path, which already
+            // respects shouldPlay=false correctly (loads the next track
+            // paused, no play() call at all).
+            seekTo(nextIndex, 0)
+            return
+        }
+
+        setCrossfading(true)
+        crossfadeJob?.cancel()
+        crossfadeJob =
+            coroutineScope.launch {
             try {
-                setCrossfading(true)
                 val nextMediaItem = playlist[nextIndex]
                 val nextVideoId = nextMediaItem.mediaId
 

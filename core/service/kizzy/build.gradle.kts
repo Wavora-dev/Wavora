@@ -27,7 +27,20 @@ kotlin {
         }
     }
 
-    jvm()
+    jvm {
+        // AUDIT NOTE: no tenía jvmTarget explícito - fijado ahora a 21,
+        // igual que el resto del proyecto. Ver desktopApp/build.gradle.kts
+        // para el detalle completo de por qué el runtime es JBR 21 y no 17
+        // (una dependencia de terceros - cmptoast - viene precompilada a
+        // Java 21).
+        compilations.all {
+            compileTaskProvider.configure {
+                compilerOptions {
+                    jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+                }
+            }
+        }
+    }
 
     sourceSets {
         commonMain {

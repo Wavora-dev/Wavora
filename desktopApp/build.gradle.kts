@@ -1,6 +1,8 @@
 @file:Suppress("UnstableApiUsage")
 
 import org.apache.commons.io.FileUtils
+import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.gradle.jvm.toolchain.JvmVendorSpec
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.compose.desktop.application.tasks.AbstractJPackageTask
 import java.net.URI
@@ -37,6 +39,20 @@ plugins {
     alias(libs.plugins.conveyor)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.kotlin.multiplatform)
+    // AUDIT NOTE (login de YouTube Music en Desktop / KCEF): agrega
+    // ktor-client-content-negotiation al proyecto empujó el classpath
+    // por encima del límite de línea de comandos de Windows, y el
+    // mecanismo por default de Gradle para eso ("pathing jar" con
+    // Class-Path en el manifest) tiene un bug conocido y documentado
+    // donde algunas clases no se resuelven aunque el jar exista en
+    // disco (confirmado con diagnóstico real: la ruta del jar de
+    // content-negotiation existe, pero Class.forName no la encuentra -
+    // ver https://github.com/gradle/gradle/issues/10114 y #34003). Este
+    // plugin reemplaza ese mecanismo por un archivo de argumentos
+    // (@file), soportado nativamente desde Java 9, que no tiene este
+    // problema. OJO: solo funciona con la configuration cache
+    // desactivada (ver el comentario en gradle.properties).
+    id("com.redock.classpathtofile") version "0.1.0"
     // NOTE: `vlc.setup` lives in :composeApp (not here) because its eager
     // task iteration at apply time triggers Conveyor's writeConveyorConfig
     // creation, which then fails with "Task with name 'jar' not found" —
@@ -51,7 +67,30 @@ plugins {
 version = libs.versions.version.name.get().removeSuffix("-hf")
 
 kotlin {
-    // 21 matches :media-jvm-ui (requires 21+).
+    // AUDIT NOTE (login de YouTube Music en Desktop / KCEF - crash nativo
+    // persistente con exit code -2147483645 / STATUS_BREAKPOINT en
+    // libcef.dll justo al inicializar CefApp): la release de KCEF
+    // 2025.03.23 dice ser compatible con jbr-release-17.0.14b1367.22
+    // (JBR basado en JDK 17). Bajar el TOOLCHAIN DE COMPILACIÓN de todo
+    // :desktopApp a 17 resultó ser el camino equivocado - Gradle exige
+    // entonces que TODA la cadena de dependencias (incluidos
+    // core/common, core/domain, core/data, compartidos con Android)
+    // también sea compatible con 17, un efecto cascada demasiado
+    // riesgoso para lo que se busca acá. En su lugar, dejamos el
+    // toolchain de COMPILACIÓN en 21 (sin cambios).
+    // 2ª vuelta: el plan original era ejecutar con un `javaLauncher`/
+    // `executable` de JBR 17 (compilando igual en 21), asumiendo que
+    // bytecode 21 corre sin problema sobre un runtime 17 - ESO ERA
+    // INCORRECTO, una JVM nunca carga class files de una versión más
+    // nueva que la suya (confirmado con un crash real,
+    // UnsupportedClassVersionError, apenas se cargó la primera clase de
+    // la app). Además, `network.chaintech:cmptoast` (dependencia de
+    // terceros) viene precompilada a Java 21, así que ni bajando TODO
+    // nuestro propio bytecode a 17 se hubiera solucionado del todo. Se
+    // optó entonces por ejecutar con JBR 21 en vez de JBR 17 (ver
+    // `setExecutable` más abajo) - JetBrains también publica JBR en la
+    // línea 21, con soporte JCEF, así que sigue siendo un runtime válido
+    // para probar si arregla el crash de libcef.dll.
     jvmToolchain(21)
 
     // KMP jvm() target — Conveyor 2.0's writeConveyorConfig task looks up
@@ -62,6 +101,15 @@ kotlin {
         compilations.all {
             compileTaskProvider.configure {
                 compilerOptions {
+                    // AUDIT NOTE (2ª vuelta): la vuelta anterior había bajado
+                    // esto a 17 para matchear el runtime JBR 17 que se
+                    // probaba en ese momento (ver el comentario grande más
+                    // abajo, junto a `setExecutable`, sobre por qué se
+                    // volvió a subir el runtime a JBR 21). Bajar solo NUESTRO
+                    // bytecode no alcanza cuando una dependencia de terceros
+                    // (cmptoast) viene precompilada a Java 21 - por eso se
+                    // revierte este valor a 21, para matchear otra vez el
+                    // `jvmToolchain(21)` de arriba y el runtime JBR 21.
                     jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
                 }
             }
@@ -95,6 +143,31 @@ kotlin {
                 // org.json is bundled in the Android SDK but missing on JVM desktop; PipePipeExtractor
                 // references org.json.* so it must be provided explicitly here.
                 implementation(libs.org.json)
+
+                // AUDIT NOTE (login de YouTube Music en Desktop / KCEF):
+                // ya está declarado en composeApp/build.gradle.kts, pero
+                // el classpath REAL con el que corre `:desktopApp:run`
+                // no viene de jvmRuntimeClasspath sino de la config
+                // paralela `desktopRuntimeClasspath` de más abajo en
+                // este mismo archivo (ver el comentario ahí sobre
+                // "breaking the lock chain") - esa config no estaba
+                // reflejando el agregado hecho solo del lado de
+                // composeApp. Confirmado con diagnóstico real:
+                // java.class.path del proceso de Sebastián no contenía
+                // 'content-negotiation' pese a que
+                // :desktopApp:dependencies --configuration
+                // jvmRuntimeClasspath sí la mostraba resuelta.
+                // Declarándola acá también, directo en las dependencias
+                // propias de :desktopApp, evita depender de esa
+                // propagación rota.
+                // AUDIT NOTE: ver el comentario completo en
+                // composeApp/build.gradle.kts sobre por qué se fuerza esta
+                // versión - kcef 2024.01.07.1 (la que trae
+                // compose-webview-multiplatform por transitividad) es
+                // binariamente incompatible con Ktor 3.5.0.
+                implementation("dev.datlag:kcef:2024.04.20.4")
+                implementation(libs.ktor.client.content.negotiation)
+                implementation(libs.ktor.serialization.kotlinx.json)
             }
         }
     }
@@ -296,7 +369,29 @@ compose.desktop {
             // ProGuard 7.7.0 (Compose's default) can't read Java 25 bytecode (class v69) now shipped
             // by PipePipeExtractor, which broke :desktopApp:proguardReleaseJars. 7.8.x supports Java 25.
             version.set("7.8.1")
-            optimize.set(true)
+            // AUDIT NOTE (2026-07-23, integración KCEF/JCEF para el WebView del
+            // login de YouTube Music): JCEF y JOGL (su dependencia de bajo nivel)
+            // traen soporte opcional para un montón de toolkits/protocolos que
+            // Wavora nunca usa — remote-CEF-process vía Apache Thrift, SWT,
+            // JavaFX, Pack200. Ya agregamos -dontwarn/-keep para todos esos
+            // paquetes en proguard-desktop-rules.pro, lo cual alcanza para las
+            // fases de shrink/obfuscate. Pero optimize.set(true) hace análisis
+            // de flujo de tipos (partial evaluation) que necesita la jerarquía
+            // de clases COMPLETA para cualquier código que referencie esas
+            // clases opcionales, sin importar si están "kept" — y como esas
+            // superclases (org.eclipse.swt.widgets.Canvas, etc.) están
+            // genuinamente ausentes del classpath (a propósito, no las
+            // necesitamos), el optimizador tira
+            // IncompleteClassHierarchyException y aborta el build entero cada
+            // vez que topa con una cadena de tipos nueva involucrando alguna de
+            // ellas (confirmado con 2 rondas distintas: primero Thrift, después
+            // JOGL-SWT — patrón que iba a seguir apareciendo de a una).
+            // Shrink y obfuscate no tienen este problema (no hacen análisis de
+            // flujo), así que apagamos solo optimize: seguimos con el jar
+            // reducido/ofuscado (que es lo que realmente ahorra los ~750MB de
+            // Conveyor), perdiendo únicamente micro-optimizaciones de bytecode
+            // en código que de todos modos nunca se ejecuta.
+            optimize.set(false)
             obfuscate.set(true)
             configurationFiles.from(rootDir.resolve("composeApp/proguard-desktop-rules.pro"))
         }
@@ -304,7 +399,77 @@ compose.desktop {
 }
 
 afterEvaluate {
+    // AUDIT NOTE (ronda de "Toolchain from `executable` property does not
+    // match toolchain from `javaLauncher` property" - build real de
+    // Sebastián, :desktopApp:run FAILED): la ronda anterior usaba
+    // `javaLauncher.set(jbr17Launcher)` sobre TODOS los `JavaExec`, pero el
+    // plugin de Compose Desktop (org.jetbrains.compose) YA configura su
+    // propia tarea `run`/`runDistributable` con un `executable` explícito
+    // (resuelto a partir del toolchain de COMPILACIÓN, JDK 21, vía
+    // `jvmToolchain(21)` de más arriba) ANTES de que este bloque
+    // `afterEvaluate` corra. Gradle valida en tiempo de ejecución que
+    // `executable` y `javaLauncher`, si ambos están seteados
+    // explícitamente, apunten al MISMO toolchain - si no, tira
+    // exactamente este error y la tarea nunca llega a ejecutarse (por lo
+    // tanto nunca pudimos ni empezar a probar si JBR 17 arregla el crash
+    // de libcef.dll). Fix: en vez de agregar un SEGUNDO valor en
+    // conflicto (`javaLauncher`), resolvemos el ejecutable real de JBR 17
+    // nosotros mismos y lo asignamos directamente a `executable` -
+    // pisando el valor que puso Compose - así solo queda UNA fuente de
+    // verdad sobre qué JVM corre la tarea, sin nada con qué pueda chocar.
+    // AUDIT NOTE (2ª vuelta - crash real UnsupportedClassVersionError, esta
+    // vez en `multiplatform/network/cmptoast/ToastHostKt`, un ARTEFACTO
+    // PRECOMPILADO de una librería de terceros - network.chaintech:cmptoast):
+    // bajar el bytecode de NUESTROS módulos a 17 (ronda anterior) no alcanza,
+    // porque cualquier dependencia de terceros compilada a Java 21 (cosa muy
+    // común y fuera de nuestro control - no podemos recompilar un .jar
+    // externo) va a crashear con el mismo error apenas se cargue su primera
+    // clase, sin importar cuántos módulos propios bajemos. Es una pelea sin
+    // fin. Cambio de estrategia: en vez de bajar TODO a 17 para matchear
+    // JBR 17, se sube el runtime a JBR 21 (JetBrains también publica JBR en
+    // la línea 21, con soporte JCEF) para matchear lo que Kotlin/Gradle ya
+    // compila por defecto (jvmToolchain(21) de arriba). La nota de KCEF
+    // sobre "compatible con JBR 17.0.14" es sobre la versión del binario
+    // nativo de Chromium que el propio KCEF descarga (independiente del
+    // JVM host), no sobre el lenguaje Java del runtime - así que no hay
+    // motivo real para pensar que JBR 21 rompa esa parte, y si el crash de
+    // libcef.dll vuelve a aparecer bajo JBR 21, lo vamos a ver clarito en
+    // el próximo log y volvemos a evaluar desde ahí con evidencia real.
+    val jbrExecutablePath =
+        javaToolchains
+            .launcherFor {
+                languageVersion.set(JavaLanguageVersion.of(21))
+                vendor.set(JvmVendorSpec.JETBRAINS)
+            }.get()
+            .executablePath
+            .asFile
+            .absolutePath
+
     tasks.withType<JavaExec> {
+        // AUDIT NOTE (Ronda 12 - test de aislamiento): bajo JBR 21 resuelto
+        // acá, KCEF.init() se queda mudo para siempre - ni un solo % de
+        // descarga, ni error, nada (log real, 3 corridas seguidas
+        // idénticas) - y el Administrador de Tareas confirma que ni
+        // siquiera llega a lanzar el proceso hijo de Chromium (nada tipo
+        // jcef_helper.exe bajo java.exe). Dato clave de Sebastián: ANTES,
+        // bajo el JDK de Microsoft que Gradle usaba por defecto (sin este
+        // override), sí aparecía el % de descarga - solo crasheaba
+        // DESPUÉS, ya con Chromium corriendo, con STATUS_BREAKPOINT en
+        // libcef.dll. Eso apunta a que el JBR 21 que Gradle resuelve acá
+        // (probablemente un build "genérico", no necesariamente el
+        // mismo empaquetado con soporte JCEF completo que trae la IDE de
+        // JetBrains) es justamente lo que ahora impide que el subproceso
+        // de Chromium llegue siquiera a arrancar. Se comenta esta línea
+        // para volver al JDK por defecto de la máquina (Microsoft, JDK 21)
+        // como test de aislamiento - si con esto vuelve el % de descarga
+        // (aunque termine crasheando de nuevo), confirma que el problema
+        // está en ESTE JBR 21 específico, no en el bytecode/toolchain de
+        // compilación (que sigue sin tocarse, en 21). NO BORRAR el código
+        // de abajo - dejarlo comentado para poder volver a probarlo con
+        // otro build de JBR 21 (p.ej. uno con -jcef explícito) si hace
+        // falta más adelante.
+        // setExecutable(jbrExecutablePath)
+
         jvmArgs("--add-opens", "java.desktop/sun.awt=ALL-UNNAMED")
         jvmArgs("--add-opens", "java.desktop/java.awt.peer=ALL-UNNAMED")
         jvmArgs("--add-opens", "java.base/java.nio=ALL-UNNAMED")
@@ -326,6 +491,25 @@ afterEvaluate {
             jvmArgs("--add-opens", "java.desktop/sun.awt=ALL-UNNAMED")
             jvmArgs("--add-opens", "java.desktop/sun.lwawt=ALL-UNNAMED")
             jvmArgs("--add-opens", "java.desktop/sun.lwawt.macosx=ALL-UNNAMED")
+        }
+
+        // AUDIT NOTE (login de YouTube Music en Desktop / KCEF - crash
+        // nativo persistente con exit code -2147483645 / STATUS_BREAKPOINT
+        // en libcef.dll justo al inicializar CefApp): encontrado un reporte
+        // real de otro usuario con la MISMA versión exacta de KCEF
+        // (2025.03.23) y el mismo patrón de log (CefApp: set state
+        // INITIALIZING seguido de crash) en
+        // https://github.com/KevinnZou/compose-webview-multiplatform/issues/384
+        // - la solución que usa esa persona incluye estos add-opens
+        // específicos de Windows que este proyecto no tenía (solo tenía
+        // los de macOS arriba). sun.awt.windows/sun.java2d son APIs
+        // internas de AWT en Windows que JCEF necesita acceder
+        // reflectivamente para su integración de ventanas/renderizado -
+        // sin abrirlas, el puente nativo puede fallar un CHECK() interno
+        // al arrancar.
+        if (System.getProperty("os.name").contains("Win")) {
+            jvmArgs("--add-opens", "java.desktop/sun.awt.windows=ALL-UNNAMED")
+            jvmArgs("--add-opens", "java.desktop/sun.java2d=ALL-UNNAMED")
         }
     }
 

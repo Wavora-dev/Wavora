@@ -344,3 +344,57 @@
 # JNA references the signature-polymorphic java.lang.invoke.MethodHandle.invoke(...) overloads, which
 # ProGuard can't resolve as concrete methods. JNA itself is kept above; suppress these warnings.
 -dontwarn com.sun.jna.**
+
+# JCEF (dev.datlag:kcef -> dev.datlag:jcef, pulled in by :webview-fork for the
+# YouTube Music login WebView) ships optional support for a "remote CEF
+# process" mode (com.jetbrains.cef.remote.CefServer and friends) built on
+# Apache Thrift RPC, plus optional alternative-toolkit/codec integrations
+# (Eclipse SWT, ASM, XZ, zstd). Wavora never uses remote-process CEF or these
+# toolkits — the classes are referenced but never loaded at runtime.
+# Confirmed root cause of the ~41k "unresolved references" ProGuard warnings
+# in :desktopApp:proguardReleaseJars (2026-07-23 audit): 38636 of them were
+# org.apache.thrift alone, all originating from CefServer/ClientHandlers*/
+# NativeServerManager.
+-dontwarn org.apache.thrift.**
+-dontwarn org.eclipse.swt.**
+-dontwarn org.objectweb.asm.**
+-dontwarn org.tukaani.xz.**
+-dontwarn com.github.luben.**
+
+# Segunda mitad del mismo problema: las de arriba silencian las clases
+# FALTANTES (org.apache.thrift, etc.), pero ProGuard reporta los miembros
+# heredados/usados de esas clases faltantes bajo una categoría de warning
+# distinta ("unresolved references to program class members"), indexada por
+# la clase que SÍ está presente y las referencia — no por la clase ausente.
+# Confirmado con el segundo log (2026-07-23, 475 warnings): 427 vienen de
+# com.jetbrains.cef.remote.thrift_codegen.{Server,ClientHandlers} (mismo
+# código remoto de JCEF no usado), y el resto de la integración opcional de
+# JOGL con JavaFX/SWT (com.jogamp.newt.javafx.*, com.jogamp.opengl.swt.*,
+# com.jogamp.newt.swt.*, tampoco usada — Wavora corre sobre Swing) y del
+# soporte opcional de Pack200 en commons-compress
+# (org.apache.commons.compress.harmony.pack200.*, códec que no usamos).
+-dontwarn com.jetbrains.cef.remote.**
+-dontwarn com.jogamp.newt.javafx.**
+-dontwarn com.jogamp.opengl.swt.**
+-dontwarn com.jogamp.newt.swt.**
+-dontwarn org.apache.commons.compress.harmony.pack200.**
+
+# -dontwarn alone silencia el AVISO durante la fase de verificación, pero no
+# alcanza para la fase de OPTIMIZACIÓN (optimize.set(true)): ahí ProGuard
+# necesita la jerarquía de clases completa para poder analizar/fusionar
+# bytecode, y al toparse con una superclase inexistente (org.apache.thrift.*,
+# org.eclipse.swt.*, etc.) tira IncompleteClassHierarchyException y aborta
+# el build entero en vez de solo avisar. Confirmado con el error real:
+# "Can't find common super class of [...ThriftTransport$1] and
+# [...ThriftTransport$2]" (ambas anónimas extendiendo
+# org.apache.thrift.transport.TServerTransport, que no está en el
+# classpath a propósito).
+# Fix: además de -dontwarn, `-keep` sobre las mismas clases para que el
+# optimizador las deje intactas (no las analiza ni fusiona), evitando que
+# intente resolver esa jerarquía. Mismo patrón documentado para casos
+# equivalentes con Guava/Apache POI y ProGuard.
+-keep class com.jetbrains.cef.remote.** { *; }
+-keep class com.jogamp.newt.javafx.** { *; }
+-keep class com.jogamp.opengl.swt.** { *; }
+-keep class com.jogamp.newt.swt.** { *; }
+-keep class org.apache.commons.compress.harmony.pack200.** { *; }

@@ -132,7 +132,7 @@ internal class DataStoreManagerImpl(
 
     override val language: Flow<String> =
         settingsDataStore.data.map { preferences ->
-            preferences[stringPreferencesKey(SELECTED_LANGUAGE)] ?: SUPPORTED_LANGUAGE.codes.first()
+            preferences[stringPreferencesKey(SELECTED_LANGUAGE)] ?: defaultLanguageCode()
         }
 
     override fun getString(key: String): Flow<String?> =
@@ -1515,3 +1515,25 @@ internal class DataStoreManagerImpl(
 }
 
 expect fun createDataStoreInstance(): DataStore<Preferences>
+
+// AUDIT NOTE (carteles en inglés antes de elegir idioma): antes, el
+// default acá era simplemente SUPPORTED_LANGUAGE.codes.first()
+// ("en-US"), sin importar el idioma real del sistema operativo. Como
+// DesktopApp.kt (y el equivalente en Android) llaman a
+// changeLanguageNative() con este valor en CADA arranque - incluso
+// antes de que el usuario elija nada en el onboarding - eso forzaba
+// inglés a la fuerza en máquinas configuradas en otros idiomas
+// (confirmado: la JVM de Sebastián arranca detectando es-AR, pero la
+// app igual mostraba inglés). Ahora se detecta el idioma real del
+// sistema (expect/actual por plataforma) y se matchea contra los
+// idiomas que la app realmente soporta, cayendo a inglés solo si el
+// sistema está en un idioma que Wavora no tiene traducido.
+expect fun getSystemDefaultLanguageCode(): String
+
+private fun defaultLanguageCode(): String {
+    val systemCode = getSystemDefaultLanguageCode()
+    val systemLanguage = systemCode.substringBefore("-").lowercase()
+    return SUPPORTED_LANGUAGE.codes.firstOrNull {
+        it.substringBefore("-").lowercase() == systemLanguage
+    } ?: SUPPORTED_LANGUAGE.codes.first()
+}

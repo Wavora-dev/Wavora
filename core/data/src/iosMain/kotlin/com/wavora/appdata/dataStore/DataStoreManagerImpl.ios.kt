@@ -23,3 +23,7 @@ producePath = {
     requireNotNull(documentDirectory).path + "/$SETTINGS_FILENAME.preferences_pb"
 }
 )
+
+// Ver el comentario completo en la versión JVM de este archivo.
+actual fun getSystemDefaultLanguageCode(): String =
+    platform.Foundation.NSLocale.currentLocale.localeIdentifier.replace("_", "-")

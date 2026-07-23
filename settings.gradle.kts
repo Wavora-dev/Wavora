@@ -72,6 +72,10 @@ include(
     ":crashlytics-empty",
     ":kizzy",
     ":wavoraUpdater",
+    // WAVORA FORK (Escenario B) — reemplaza a la dependencia externa
+    // io.github.kevinnzou:compose-webview-multiplatform:1.8.4. Ver
+    // webview-fork/build.gradle.kts para el detalle completo.
+    ":webview-fork",
 )
 
 // core modules

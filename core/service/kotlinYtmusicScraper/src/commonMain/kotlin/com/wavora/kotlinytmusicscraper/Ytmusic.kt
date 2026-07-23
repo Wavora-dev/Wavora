@@ -125,6 +125,18 @@ class Ytmusic {
         set(value) {
             field = value
             cookieMap = if (value == null) emptyMap() else parseCookieString(value)
+            // DIAGNOSTICO (auditoria persistencia de sesion Desktop): este setter es
+            // COMUN a Android y Desktop, asi que este log permite comparar directamente
+            // que keys de cookie llegan en cada plataforma para el mismo login. Si en
+            // Android aparecen SAPISID/__Secure-3PAPISID y en Desktop no, confirma que
+            // la diferencia esta en la captura de KCEF (ver log en Cookies.jvm.kt) y no
+            // en este codigo comun.
+            Logger.d(
+                "Ytmusic",
+                "DIAG cookie seteado, keys=${cookieMap.keys} " +
+                    "| tiene SAPISID=${"SAPISID" in cookieMap} " +
+                    "| tiene __Secure-3PAPISID=${"__Secure-3PAPISID" in cookieMap}",
+            )
             extractor.logIn(value)
         }
 
@@ -228,7 +240,17 @@ class Ytmusic {
                 val cookie = customCookie ?: this@Ytmusic.cookie
                 cookie?.let { cookie ->
                     append("Cookie", cookie)
-                    if ("SAPISID" !in cookieMap || "__Secure-3PAPISID" !in cookieMap) return@let
+                    if ("SAPISID" !in cookieMap || "__Secure-3PAPISID" !in cookieMap) {
+                        // DIAGNOSTICO (auditoria persistencia de sesion Desktop): este es
+                        // el punto exacto donde, si faltan estas cookies, la request sale
+                        // SIN header Authorization. Antes esto pasaba en silencio.
+                        Logger.w(
+                            TAG,
+                            "DIAG falta SAPISID/__Secure-3PAPISID en cookieMap (keys=${cookieMap.keys}) - " +
+                                "request sale SIN Authorization header",
+                        )
+                        return@let
+                    }
                     // BUG FIX: epochSeconds is already Unix time in SECONDS. Dividing it by
                     // 1000 here turned it into a bogus timestamp from ~1970, which Google
                     // rejects as an invalid/expired SAPISIDHASH -- surfacing to the user as
@@ -248,7 +270,17 @@ class Ytmusic {
     @OptIn(ExperimentalTime::class)
     internal fun getAuthorizationHeader(): String? =
         cookie?.let { cookie ->
-            if ("SAPISID" !in cookieMap || "__Secure-3PAPISID" !in cookieMap) return@let null
+            if ("SAPISID" !in cookieMap || "__Secure-3PAPISID" !in cookieMap) {
+                // DIAGNOSTICO (auditoria persistencia de sesion Desktop): mismo caso que
+                // en ytClient() pero para getAccountListWithPageId/getAccountSwitcherEndpoint,
+                // que es la llamada que dispara el revert en SettingsViewModel.addAccount().
+                Logger.w(
+                    TAG,
+                    "DIAG getAuthorizationHeader: falta SAPISID/__Secure-3PAPISID en cookieMap " +
+                        "(keys=${cookieMap.keys}) - getAccountListWithPageId va SIN Authorization",
+                )
+                return@let null
+            }
             // Same fix as ytClient's header block above.
             val currentTime = now().toInstant(TimeZone.currentSystemDefault()).epochSeconds
             val sapisidCookie = cookieMap["SAPISID"] ?: cookieMap["__Secure-3PAPISID"]
