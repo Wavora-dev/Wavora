@@ -39,10 +39,23 @@
          %LOCALAPPDATA%\Wavora\ folder first, and the shortcut points there
          instead — see the copy step right before shortcut creation below.
       5. Launch the app.
+      6. Register a classic Win32 "Uninstall" entry (HKLM\...\Uninstall\Wavora)
+         pointing at uninstall.ps1, copiado a la misma carpeta persistente que
+         el icono. MSIX no ejecuta ningun codigo propio al desinstalar, asi
+         que sin esto Windows solo borra el paquete MSIX y deja huerfanos el
+         acceso directo del escritorio y el icono persistente (ver
+         uninstall.ps1 para el detalle completo). Esta clave es lo que hace
+         que un boton "Desinstalar" real aparezca en Configuracion ->
+         Aplicaciones para Wavora, ademas de la entrada nativa del paquete
+         MSIX (las dos van a coexistir - ver AUDIT NOTE en el paso 6 mas
+         abajo).
 
     Bundle requirement (same folder as this script):
       - wavora.crt
-      - wavora.ico   (used only for the desktop shortcut's icon)
+      - wavora.ico          (usado para el shortcut Y el DisplayIcon del
+                              registro de desinstalacion)
+      - uninstall.ps1        )  se copian a la carpeta persistente para poder
+      - uninstall-wavora.bat )  desinstalar aunque se borre esta carpeta
       - a single *.msix (any name containing "wavora", e.g. wavora-1.1.2.x64.msix)
 
 .NOTES
@@ -109,6 +122,15 @@ if (-not (Test-Path $cert)) {
 }
 
 $icon = Join-Path $scriptDir "wavora.ico"
+
+# Carpeta persistente en %LOCALAPPDATA% para todo lo que el shortcut y la
+# entrada de desinstalacion necesitan sobrevivir despues de que el usuario
+# borre esta carpeta temporal (mismo patron ya usado para WavoraUpdater.exe).
+$persistentDir = Join-Path $env:LOCALAPPDATA "Wavora"
+if (-not (Test-Path $persistentDir)) {
+    New-Item -ItemType Directory -Path $persistentDir -Force | Out-Null
+}
+
 if (-not (Test-Path $icon)) {
     Write-Host "  [WARN] No se encontro wavora.ico en $scriptDir - el acceso directo de escritorio quedara sin icono propio." -ForegroundColor Yellow
     $icon = $null
@@ -123,19 +145,38 @@ if (-not (Test-Path $icon)) {
     # borra esa carpeta temporal despues de instalar (comportamiento
     # esperable, ya cumplio su proposito), el acceso directo se queda sin
     # icono (Windows no encuentra el .ico y cae al generico). Fix: copiar
-    # wavora.ico a una carpeta persistente en %LOCALAPPDATA% (mismo patron
-    # ya usado para WavoraUpdater.exe) y apuntar el shortcut ahi en vez de
-    # a $scriptDir - esa carpeta sobrevive aunque se borre el zip extraido.
-    $persistentIconDir = Join-Path $env:LOCALAPPDATA "Wavora"
-    if (-not (Test-Path $persistentIconDir)) {
-        New-Item -ItemType Directory -Path $persistentIconDir -Force | Out-Null
-    }
-    $persistentIcon = Join-Path $persistentIconDir "wavora.ico"
+    # wavora.ico a $persistentDir y apuntar el shortcut ahi en vez de a
+    # $scriptDir - esa carpeta sobrevive aunque se borre el zip extraido.
+    $persistentIcon = Join-Path $persistentDir "wavora.ico"
     try {
         Copy-Item -Path $icon -Destination $persistentIcon -Force
         $icon = $persistentIcon
     } catch {
-        Write-Host "  [WARN] No se pudo copiar wavora.ico a $persistentIconDir, se usara la copia temporal: $($_.Exception.Message)" -ForegroundColor Yellow
+        Write-Host "  [WARN] No se pudo copiar wavora.ico a $persistentDir, se usara la copia temporal: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
+
+# Mismo problema que el icono: la entrada de desinstalacion que se registra
+# mas abajo necesita un UninstallString que apunte a algo persistente, no a
+# $scriptDir (que el usuario puede borrar apenas termina de instalar). Se
+# copian ahora, junto con el icono, para tenerlos listos.
+$persistentUninstallPs1 = Join-Path $persistentDir "uninstall.ps1"
+$persistentUninstallBat = Join-Path $persistentDir "uninstall-wavora.bat"
+$uninstallScriptsOk = $true
+foreach ($pair in @(
+    @{ Src = Join-Path $scriptDir "uninstall.ps1"; Dst = $persistentUninstallPs1 },
+    @{ Src = Join-Path $scriptDir "uninstall-wavora.bat"; Dst = $persistentUninstallBat }
+)) {
+    if (-not (Test-Path $pair.Src)) {
+        Write-Host "  [WARN] No se encontro $($pair.Src) - no se va a registrar la entrada de desinstalacion en Configuracion -> Aplicaciones." -ForegroundColor Yellow
+        $uninstallScriptsOk = $false
+        continue
+    }
+    try {
+        Copy-Item -Path $pair.Src -Destination $pair.Dst -Force
+    } catch {
+        Write-Host "  [WARN] No se pudo copiar $($pair.Src) a $persistentDir : $($_.Exception.Message)" -ForegroundColor Yellow
+        $uninstallScriptsOk = $false
     }
 }
 
@@ -223,6 +264,29 @@ if (-not $startApp) {
         Write-Host "  [WARN] No se pudo abrir la app automaticamente. Buscala en el menu de inicio." -ForegroundColor Yellow
     }
 }
+
+# --- 7. Entrada de desinstalacion clasica: DESACTIVADA A PROPOSITO -----------
+# AUDIT NOTE (reversión, ronda posterior de la misma auditoría): esto SÍ
+# generaba una segunda entrada real "Wavora" en Configuración ->
+# Aplicaciones/Programas y características (una la del paquete MSIX
+# nativo, gestionada por Windows; otra esta, con UninstallString apuntando
+# a uninstall-wavora.bat) - documentado como comportamiento esperado en
+# la nota anterior, pero confirmado que genera confusión real en el
+# usuario ("aparece 2 veces, una sin peso y otra de 366mb").
+#
+# Se decide priorizar una sola entrada visible. Costo conocido y aceptado:
+# sin esta clave, desinstalar el paquete MSIX (desde Configuración, con su
+# única entrada nativa restante) ya NO dispara la limpieza extra que hacía
+# uninstall-wavora.bat (el acceso directo de escritorio en
+# %LOCALAPPDATA%\Wavora y su copia de ícono pueden quedar huérfanos). Es
+# un costo cosmético menor (un .lnk viejo) frente a confundir al usuario
+# con dos entradas - los scripts persistentes de desinstalación
+# (uninstall.ps1 / uninstall-wavora.bat) se siguen copiando más arriba en
+# este archivo por si se necesita correrlos a mano, simplemente ya no se
+# registran como una entrada separada de Windows.
+#
+# if ($uninstallScriptsOk) { ... } # bloque completo removido - ver git
+# history de este archivo si hace falta restaurarlo.
 
 Write-Host ""
 Write-Host "Wavora se instalo correctamente." -ForegroundColor Green

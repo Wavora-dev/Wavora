@@ -6,6 +6,7 @@ import dev.datlag.kcef.KCEF
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,6 +17,11 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 private const val TAG = "KcefBootstrap"
+
+// Umbral del watchdog diagnóstico (Problema 4). La propia Ronda 23 (ver AUDIT
+// NOTE en Cookies.jvm.kt) ya documentó un caso real de 27+ segundos solo para
+// CefApp INITIALIZING->INITIALIZED. 45s da margen a eso.
+private const val KCEF_WATCHDOG_TIMEOUT_MS = 45_000L
 
 /**
  * Lazily bootstraps KCEF (Kotlin CEF - a real embedded Chromium) so Desktop
@@ -118,6 +124,28 @@ object KcefBootstrap {
 
                 _state.value = State.Initializing
                 Logger.d(TAG, "State -> Initializing (a punto de llamar a KCEF.init)")
+                com.wavora.app.diagnostics.StartupTiming.begin("KCEF.init")
+
+                // Watchdog puramente diagnóstico (Problema 4): NO cancela ni
+                // interviene en KCEF.init(), solo observa. Si a los
+                // KCEF_WATCHDOG_TIMEOUT_MS el estado todavía no llegó a
+                // Ready/Failed/RestartRequired, vuelca todos los stack traces
+                // de todos los hilos de la JVM al log — muestra en qué
+                // llamada exacta queda bloqueado, en vez de seguir sin saber
+                // si es red, disco, un mutex o una llamada nativa colgada.
+                val watchdogJob =
+                    bootstrapScope.launch {
+                        kotlinx.coroutines.delay(KCEF_WATCHDOG_TIMEOUT_MS)
+                        if (_state.value == State.Initializing) {
+                            Logger.w(
+                                TAG,
+                                "===== WATCHDOG: KCEF sigue en Initializing después de " +
+                                    "${KCEF_WATCHDOG_TIMEOUT_MS}ms - volcando todos los hilos =====",
+                            )
+                            dumpAllThreads()
+                        }
+                    }
+
                 withContext(Dispatchers.IO) {
                     try {
                         // Reuses the SAME data-directory convention the rest
@@ -189,17 +217,46 @@ object KcefBootstrap {
                                 "version=${System.getProperty("java.version")} " +
                                 "home=${System.getProperty("java.home")}",
                         )
+                        var lastLoggedDownloadPercent = -1
+                        // AUDIT INSTRUMENTATION - PUNTO 4 (pedido explícito,
+                        // solo evidencia): justo antes de llamar a KCEF.init().
+                        // Si un proceso hijo relanzado por CEF llega hasta acá,
+                        // confirma que nada en el camino lo detectó como
+                        // subproceso - está a punto de iniciar su PROPIO KCEF.
+                        Logger.d(TAG, "===== DIAGNOSTICO ARRANQUE DE PROCESO - PUNTO 4: justo antes de KCEF.init() =====")
                         KCEF.init(
                             builder = {
                                 installDir(installDir)
                                 progress {
                                     onDownloading { percent ->
-                                        Logger.d(TAG, "State -> Downloading ${percent.coerceIn(0f, 100f)}%")
-                                        _state.value = State.Downloading(percent.coerceIn(0f, 100f))
+                                        val clamped = percent.coerceIn(0f, 100f)
+                                        _state.value = State.Downloading(clamped)
+                                        // AUDIT FIX: onDownloading dispara con granularidad de
+                                        // milésimas de porcentaje (confirmado con log real: ~69k
+                                        // callbacks en una sola descarga). Loguear cada uno hacía
+                                        // I/O sincrónico a disco por cada llamada (AuditFileLogWriter
+                                        // es synchronized + autoFlush=true), generando contención de
+                                        // lock entre los workers de coroutines - candidato real al
+                                        // pico de CPU reportado durante la descarga. Solo logueamos
+                                        // al cambiar el porcentaje entero; el StateFlow (línea
+                                        // anterior) sigue actualizándose en cada callback para que la
+                                        // barra de progreso de la UI no pierda granularidad.
+                                        val intPercent = clamped.toInt()
+                                        if (intPercent != lastLoggedDownloadPercent) {
+                                            lastLoggedDownloadPercent = intPercent
+                                            Logger.d(TAG, "State -> Downloading $intPercent%")
+                                        }
                                     }
                                     onInitialized {
+                                        // AUDIT INSTRUMENTATION - PUNTO 5 (pedido
+                                        // explícito, solo evidencia): justo después
+                                        // de que KCEF terminó de inicializar en
+                                        // ESTE proceso.
+                                        Logger.d(TAG, "===== DIAGNOSTICO ARRANQUE DE PROCESO - PUNTO 5: justo después de KCEF.init() (onInitialized) =====")
                                         Logger.d(TAG, "State -> Ready (KCEF.onInitialized)")
                                         _state.value = State.Ready
+                                        watchdogJob.cancel()
+                                        com.wavora.app.diagnostics.StartupTiming.end("KCEF.init")
                                     }
                                 }
                                 // AUDIT NOTE (Ronda 13 - confirmado leyendo el
@@ -267,15 +324,48 @@ object KcefBootstrap {
                                 settings {
                                     cachePath = cacheDir.absolutePath
                                     noSandbox = true
+                                    // DIAGNÓSTICO (auditoría de estabilidad Desktop):
+                                    // no cambia ningún comportamiento de CEF, solo
+                                    // pide que el propio JCEF vuelque a un archivo
+                                    // el mismo log nativo que en `gradlew run`
+                                    // aparece en stdout como
+                                    // "JCEF_I(...): version: ... settings:
+                                    // browser_subprocess_path=..." - eso es lo que
+                                    // confirmó que en gradlew el valor llega bien.
+                                    // El paquete MSIX no tiene consola, así que sin
+                                    // esto no hay forma de ver ese mismo dato ahí.
+                                    // Con logFile seteado, JCEF escribe ese volcado
+                                    // (y el resto de su logging nativo) folder
+                                    // adentro de kcefHome, sin importar cómo se
+                                    // haya lanzado el proceso.
+                                    logFile = File(kcefHome, "jcef_native.log").absolutePath
+                                    // FIX (Ronda 27): sin esto, CEF usa su default
+                                    // documentado (CefExecuteProcess()) de relanzar el
+                                    // ejecutable del browser process para sus
+                                    // subprocesos. Wavora.exe es un lanzador de JVM, no
+                                    // el helper nativo que CEF espera para eso - por
+                                    // eso cada subproceso (--type=renderer,
+                                    // --type=gpu-process, etc.) terminaba arrancando la
+                                    // app Kotlin/Compose completa en vez de comportarse
+                                    // como subproceso de CEF. jcef_helper.exe SÍ es ese
+                                    // helper nativo (ver native/jcef_helper.cpp del
+                                    // repo de java-cef: WinMain() que solo llama a
+                                    // CefExecuteProcess(), sin JVM). Confirmado que
+                                    // vive directo en installDir, sin subcarpeta.
+                                    browserSubProcessPath = File(installDir, "jcef_helper.exe").absolutePath
                                 }
                             },
                             onError = { error ->
                                 Logger.e(TAG, "KCEF init failed", error)
                                 _state.value = State.Failed(error?.message ?: "Unknown KCEF error")
+                                watchdogJob.cancel()
+                                com.wavora.app.diagnostics.StartupTiming.end("KCEF.init")
                             },
                             onRestartRequired = {
                                 Logger.w(TAG, "KCEF reports a restart is required to finish setup")
                                 _state.value = State.RestartRequired
+                                watchdogJob.cancel()
+                                com.wavora.app.diagnostics.StartupTiming.end("KCEF.init")
                             },
                         )
                     } catch (e: Exception) {
@@ -286,10 +376,29 @@ object KcefBootstrap {
                         // Initializing forever.
                         Logger.e(TAG, "Unexpected error during KCEF init", e)
                         _state.value = State.Failed(e.message ?: "Unknown error")
+                        watchdogJob.cancel()
+                        com.wavora.app.diagnostics.StartupTiming.end("KCEF.init")
                     }
                 }
             }
         }
+    }
+
+    // Instrumentación (Problema 4). Thread.getAllStackTraces() es API
+    // estándar de java.lang.Thread, sin dependencias nuevas. Vuelca el stack
+    // completo de cada hilo vivo en ese instante — incluye el hilo que llamó
+    // a KCEF.init() y cualquier hilo que CEF ya haya arrancado.
+    private fun dumpAllThreads() {
+        val allStacks = Thread.getAllStackTraces()
+        Logger.w(TAG, "----- THREAD DUMP (${allStacks.size} hilos) -----")
+        allStacks.entries.sortedBy { it.key.name }.forEach { (thread, stack) ->
+            val header =
+                "Thread \"${thread.name}\" id=${thread.id} state=${thread.state} " +
+                    "daemon=${thread.isDaemon} priority=${thread.priority}"
+            val frames = stack.joinToString("\n") { "    at $it" }
+            Logger.w(TAG, "$header\n$frames")
+        }
+        Logger.w(TAG, "----- FIN THREAD DUMP -----")
     }
 
     /**
@@ -309,9 +418,27 @@ object KcefBootstrap {
     fun disposeAfterSuccessfulLogin() {
         if (_state.value !is State.Ready) return
         bootstrapScope.launch {
-            Logger.d(TAG, "Login exitoso - liberando KCEF para minimizar consumo en segundo plano")
+            Logger.d(TAG, "===== CERRANDO KCEF: login exitoso - liberando para minimizar consumo en segundo plano =====")
+            // HIPÓTESIS (auditoría de estabilidad Desktop, sin confirmar con
+            // log real todavía - ver comentario completo más abajo):
+            // CefApp.dispose() (código fuente de java-cef, CefApp.java) es
+            // condicional: si en ese momento todavía queda vivo el
+            // CefClient interno del WebView(...) de compose-webview-multiplatform
+            // (se libera recién cuando Compose desmonta ese composable, en
+            // el próximo frame, NO sincrónicamente en esta misma llamada),
+            // dispose() se queda esperando a que ese cliente se libere solo
+            // en vez de apagar CEF ya mismo - lo cual dejaría los procesos
+            // hijo vivos indefinidamente si esa liberación nunca llega a
+            // dispararse a tiempo. Este delay le da a Compose una changue
+            // de sobra para desmontar el WebView (que dispara la liberación
+            // real del CefClient) antes de pedir el shutdown. Es un
+            // mitigante conservador, no un fix confirmado - pendiente
+            // revisar el log de Kotlin de una corrida real para confirmar
+            // si esto era la causa.
+            delay(500)
             KCEF.dispose()
             disposedForSession = true
+            Logger.d(TAG, "===== KCEF.dispose() completado =====")
         }
     }
 }

@@ -89,6 +89,69 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
     // Install crash dialog handler first — catches all uncaught exceptions
     CrashDialog.install()
 
+    // Instrumentación persistente (pedido explícito de devgodot para poder
+    // encontrar la causa raíz de los Problemas 1/2/4, que todavía no tienen
+    // evidencia concluyente). Se instala lo primero posible, antes de
+    // Koin/VLC/Sentry/nada, para no perderse ni un segundo del arranque.
+    // Agrega un LogWriter de archivo a Kermit y arranca el censo de procesos
+    // + sampler de CPU en un scope propio de vida larga (no atado a la
+    // composición, que todavía ni existe en este punto).
+    val auditScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Default)
+    try {
+        // VERIFICAR al compilar: Logger.setLogWriters(vararg LogWriter) es la
+        // API pública estable de kermit 2.1.0 para reemplazar los writers
+        // activos - no se pudo compilar en el entorno de auditoría (sin
+        // Windows/GUI) para confirmarlo con el IDE. Nota: esto REEMPLAZA el
+        // writer de consola por defecto, no lo suma - si el IDE ofrece un
+        // método para agregar en vez de reemplazar (p. ej. addLogWriter),
+        // usar ese en su lugar para no perder la salida a consola en modo
+        // desarrollo.
+        co.touchlab.kermit.Logger.setLogWriters(com.wavora.app.diagnostics.AuditFileLogWriter())
+        Logger.d(TAG, "===== Log de archivo instalado en ${com.wavora.app.diagnostics.AuditFileLogWriter.logFile.absolutePath} =====")
+    } catch (e: Throwable) {
+        System.err.println("No se pudo instalar el file log writer: ${e.message}")
+    }
+
+    // AUDIT INSTRUMENTATION (pedido explícito - NO es un fix, solo evidencia):
+    // antes de decidir si la causa raíz de los Wavora.exe hijos ejecutando la
+    // app completa es (1) KCEF los relanza con flags de subproceso de CEF
+    // (--type=renderer, --type=gpu-process, etc.) que este main() nunca revisa,
+    // o (2) alguna otra cosa los relanza sin ningún flag de CEF de por medio,
+    // logueamos todo lo que el proceso puede ver de sí mismo apenas arranca -
+    // antes de Koin/VLC/KCEF, para no perdernos nada. Se pone inmediatamente
+    // después de instalar el log writer (necesario para que esto se escriba a
+    // disco), no antes.
+    try {
+        val handle = ProcessHandle.current()
+        val info = handle.info()
+        val pid = handle.pid()
+        val ppid = handle.parent().map { it.pid() }.orElse(-1L)
+        val execPath = info.command().orElse("(no disponible)")
+        val fullCommandLine = info.commandLine().orElse("(no disponible)")
+        val jvmArguments = info.arguments().map { it.joinToString(" ") }.orElse("(no disponible)")
+        val mainArgs = args.joinToString(" ")
+        val allArgsForFlagCheck = "$fullCommandLine $jvmArguments $mainArgs"
+        val cefFlagsToCheck = listOf(
+            "--type=", "--no-zygote", "--lang", "--no-sandbox", "--field-trial-handle",
+            "--enable-features", "--disable-features", "--utility-sub-type",
+            "--service-sandbox-type", "--renderer-client-id", "--channel=",
+        )
+        val cefFlagsFound = cefFlagsToCheck.filter { allArgsForFlagCheck.contains(it) }
+        Logger.d(TAG, "===== DIAGNOSTICO ARRANQUE DE PROCESO - PUNTO 2: comienzo de runDesktopApp() =====")
+        Logger.d(TAG, "PID=$pid PPID=$ppid")
+        Logger.d(TAG, "Ejecutable (ProcessHandle.info().command())=$execPath")
+        Logger.d(TAG, "Command line completa (ProcessHandle.info().commandLine())=$fullCommandLine")
+        Logger.d(TAG, "Arguments (ProcessHandle.info().arguments())=$jvmArguments")
+        Logger.d(TAG, "args recibidos por main()/runDesktopApp()=$mainArgs")
+        Logger.d(TAG, "Flags de CEF/Chromium detectados=${if (cefFlagsFound.isEmpty()) "NINGUNO" else cefFlagsFound.joinToString(", ")}")
+        Logger.d(TAG, "===== FIN DIAGNOSTICO ARRANQUE DE PROCESO =====")
+    } catch (e: Throwable) {
+        System.err.println("No se pudo loguear el diagnostico de arranque de proceso: ${e.message}")
+    }
+    com.wavora.app.diagnostics.ProcessCensus.snapshot(label = "arranque (antes de Koin)")
+    com.wavora.app.diagnostics.ProcessCensus.startPeriodicSnapshots(auditScope)
+    com.wavora.app.diagnostics.CpuThreadSampler.startSampling(auditScope)
+
     System.setProperty("compose.swing.render.on.graphics", "true")
     System.setProperty("compose.interop.blending", "true")
     // WAVORA FIX: COMPONENT layers cause invisible/blank windows on Windows 10/11
@@ -159,6 +222,12 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
     // idioma → Sentry → MediaPlayerHandler → protocolo Windows → SharedViewModel
     // → deep link listener); lo único que cambió es que ahora corre en un hilo
     // de fondo en vez de bloquear el hilo que lanza la UI.
+    // AUDIT INSTRUMENTATION - PUNTO 3 (pedido explícito, solo evidencia): si un
+    // proceso que debería ser un subproceso liviano de CEF llega hasta acá,
+    // está a punto de crear una ventana Compose Desktop completa (Skia/AWT) -
+    // relevante para explicar el crash "SkiaLayer is disposed" reportado al
+    // cerrar, si el proceso muere mientras esto está en marcha.
+    Logger.d(TAG, "===== DIAGNOSTICO ARRANQUE DE PROCESO - PUNTO 3: justo antes de application{} / crear ventana principal =====")
     application {
         var appReady by remember { mutableStateOf<AppReady?>(null) }
         // WAVORA SPLASH FIX (Objetivo 1, Problema 4): antes, apenas `appReady`
@@ -172,16 +241,43 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
         // cuando el init real terminó, solo que ahora con una transición.
         var splashExited by remember { mutableStateOf(false) }
 
+        // FIX (Problema 1 - "el splash queda atrapado, ni la X ni minimizar
+        // funcionan"): antes onCloseRequest era {} incondicional y
+        // alwaysOnTop=true no distinguía "arranque normal, todavía corriendo"
+        // de "algo se colgó, el usuario necesita poder salir". Ahora, si el
+        // arranque real (LaunchedEffect de arriba) no terminó en
+        // SPLASH_FORCE_CLOSE_TIMEOUT_MS, canForceClose pasa a true: recién
+        // ahí la X cierra la app de verdad y se suelta alwaysOnTop (para que
+        // minimizar funcione). Antes de ese timeout el comportamiento es
+        // IDÉNTICO al de antes — no cambia nada del arranque normal, que hoy
+        // tarda muchísimo menos que este umbral.
+        var canForceClose by remember { mutableStateOf(false) }
         LaunchedEffect(Unit) {
+            kotlinx.coroutines.delay(SPLASH_FORCE_CLOSE_TIMEOUT_MS)
+            if (appReady == null) {
+                Logger.w(
+                    TAG,
+                    "===== Splash: arranque supera ${SPLASH_FORCE_CLOSE_TIMEOUT_MS}ms sin terminar - " +
+                        "habilitando cierre manual (X / minimizar) =====",
+                )
+                canForceClose = true
+            }
+        }
+
+        LaunchedEffect(Unit) {
+            com.wavora.app.diagnostics.StartupTiming.begin("LaunchedEffect total (splash -> appReady)")
             val ready =
                 withContext(Dispatchers.Default) {
                     try {
                         // Initialize Koin ONCE before application starts
+                        com.wavora.app.diagnostics.StartupTiming.begin("startKoin + loadAllModules")
                         startKoin {
                             loadAllModules()
                             loadKoinModules(viewModelModule)
                         }
+                        com.wavora.app.diagnostics.StartupTiming.end("startKoin + loadAllModules")
 
+                        com.wavora.app.diagnostics.StartupTiming.begin("language + VersionManager + Sentry")
                         val language =
                             getKoin()
                                 .get<DataStoreManager>()
@@ -198,8 +294,11 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
                                 options.setDiagnosticLevel(SentryLevel.ERROR)
                             }
                         }
+                        com.wavora.app.diagnostics.StartupTiming.end("language + VersionManager + Sentry")
 
+                        com.wavora.app.diagnostics.StartupTiming.begin("MediaPlayerHandler (Koin get + VLC init)")
                         val mediaPlayerHandler = getKoin().get<MediaPlayerHandler>()
+                        com.wavora.app.diagnostics.StartupTiming.end("MediaPlayerHandler (Koin get + VLC init)")
                         mediaPlayerHandler.showToast = { type ->
                             showToast(
                                 when (type) {
@@ -226,10 +325,14 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
                         }
 
                         // Register wavora:// protocol handler on Windows (HKCU, no admin needed)
+                        com.wavora.app.diagnostics.StartupTiming.begin("WindowsProtocolRegistrar.register()")
                         WindowsProtocolRegistrar.register()
+                        com.wavora.app.diagnostics.StartupTiming.end("WindowsProtocolRegistrar.register()")
 
+                        com.wavora.app.diagnostics.StartupTiming.begin("SharedViewModel (Koin get + checkForUpdateIfEnabled)")
                         val sharedViewModel = getKoin().get<SharedViewModel>()
                         sharedViewModel.checkForUpdateIfEnabled()
+                        com.wavora.app.diagnostics.StartupTiming.end("SharedViewModel (Koin get + checkForUpdateIfEnabled)")
 
                         // Connect deep link handler to SharedViewModel
                         DesktopDeepLinkHandler.listener = { intent ->
@@ -247,6 +350,7 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
                         throw e
                     }
                 }
+            com.wavora.app.diagnostics.StartupTiming.end("LaunchedEffect total (splash -> appReady)")
             appReady = ready
         }
 
@@ -255,6 +359,7 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
             SplashWindow(
                 visible = currentAppReady == null,
                 onExitFinished = { splashExited = true },
+                canForceClose = canForceClose,
             )
         }
         if (currentAppReady != null && splashExited) {
@@ -273,6 +378,11 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
  * [SplashScreen].
  */
 private val SPLASH_WINDOW_SIZE = 528.dp
+
+// FIX (Problema 1). 30s es generoso frente a lo que tarda un arranque normal
+// (segundos, según los propios StartupTiming agregados arriba) — solo se
+// activa si algo realmente se colgó.
+private const val SPLASH_FORCE_CLOSE_TIMEOUT_MS = 30_000L
 
 /**
  * Calcula la posición para que una ventana de [windowSize] quede centrada en
@@ -320,11 +430,19 @@ private fun centeredOnActiveScreen(windowSize: androidx.compose.ui.unit.Dp): and
  * animación de salida cuando `visible` pasa a `false`; recién cuando esa
  * animación termina se invoca [onExitFinished], que en [runDesktopApp] dispara
  * el desmonte real de esta ventana. No tiene ningún timer de arranque propio.
+ *
+ * @param canForceClose Cuando es `false` (arranque normal en curso), el
+ *   comportamiento es el de siempre: sin botones de cierre nativos, siempre
+ *   encima. Cuando pasa a `true` (arranque colgado más de
+ *   [SPLASH_FORCE_CLOSE_TIMEOUT_MS], ver `runDesktopApp`), la X cierra la
+ *   aplicación de verdad y se suelta `alwaysOnTop` para que minimizar
+ *   funcione — así el usuario nunca queda atrapado sin poder salir.
  */
 @androidx.compose.runtime.Composable
 private fun androidx.compose.ui.window.ApplicationScope.SplashWindow(
     visible: Boolean,
     onExitFinished: () -> Unit,
+    canForceClose: Boolean,
 ) {
     val windowState =
         remember {
@@ -334,12 +452,17 @@ private fun androidx.compose.ui.window.ApplicationScope.SplashWindow(
             )
         }
     Window(
-        onCloseRequest = {},
+        onCloseRequest = {
+            if (canForceClose) {
+                Logger.w(TAG, "===== Splash: usuario cerró manualmente tras timeout de arranque =====")
+                exitApplication()
+            }
+        },
         title = "Wavora",
         undecorated = true,
         transparent = true,
         resizable = false,
-        alwaysOnTop = true,
+        alwaysOnTop = !canForceClose,
         state = windowState,
     ) {
         SplashScreen(visible = visible, onExitFinished = onExitFinished)

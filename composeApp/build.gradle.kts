@@ -228,6 +228,13 @@ kotlin {
             // without going through PowerShell (see AppUpdate.jvm.kt).
             implementation(libs.jna)
             implementation(libs.jna.platform)
+            // AUDIT FIX (compilación real, ver log compartido): kermit está
+            // declarado como `implementation` en core/common (no `api`), así
+            // que no llega transitivamente acá pese a `api(projects.common)`.
+            // AuditFileLogWriter.kt y DesktopApp.kt usan co.touchlab.kermit.*
+            // directo (no solo el wrapper com.wavora.logger.Logger), así que
+            // necesitan la dependencia propia en este módulo.
+            implementation(libs.kermit.logging)
             // WebView real (KCEF/Chromium embebido) para el login de
             // YouTube Music en Desktop - ver
             // Login_YTMusic_Desktop_Fases1-4.md para la justificación

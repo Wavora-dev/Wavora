@@ -707,6 +707,12 @@ internal class MediaServiceHandlerImpl(
 
     // Region: Override functions
     override fun startProgressUpdate() {
+        // FIX (mismo hallazgo que en JvmMediaPlayerHandlerImpl.kt - ver ese
+        // archivo para el trazado completo): sin cancelar el job anterior,
+        // startProgressUpdate() llamado dos veces seguidas para la misma
+        // reproducción (llamada directa + callback asíncrono de
+        // onIsPlayingChanged) dejaba el primer loop de 100ms huérfano.
+        progressJob?.cancel()
         progressJob =
             coroutineScope.launch {
                 var discordTickMs = 0L
@@ -730,6 +736,7 @@ internal class MediaServiceHandlerImpl(
     }
 
     override fun startBufferedUpdate() {
+        bufferedJob?.cancel()
         bufferedJob =
             coroutineScope.launch {
                 while (true) {

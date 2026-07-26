@@ -17,6 +17,8 @@ mkdir "%BUNDLE%"
 
 copy /y "%~dp0install-wavora.bat" "%BUNDLE%\" >nul
 copy /y "%~dp0install.ps1" "%BUNDLE%\" >nul
+copy /y "%~dp0uninstall-wavora.bat" "%BUNDLE%\" >nul
+copy /y "%~dp0uninstall.ps1" "%BUNDLE%\" >nul
 copy /y "%OUTPUT%\wavora.crt" "%BUNDLE%\" >nul
 copy /y "%OUTPUT%\wavora.exe" "%BUNDLE%\" >nul
 

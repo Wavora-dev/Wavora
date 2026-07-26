@@ -93,7 +93,7 @@ internal class DataStoreManagerImpl(
 
     override val quality: Flow<String> =
         settingsDataStore.data.map { preferences ->
-            preferences[QUALITY] ?: COMMON_QUALITY.items[0].toString()
+            preferences[QUALITY] ?: COMMON_QUALITY.items[2].toString()
         }
 
     override suspend fun setQuality(quality: String) {
@@ -106,7 +106,7 @@ internal class DataStoreManagerImpl(
 
     override val downloadQuality: Flow<String> =
         settingsDataStore.data.map { preferences ->
-            preferences[DOWNLOAD_QUALITY] ?: COMMON_QUALITY.items[0].toString()
+            preferences[DOWNLOAD_QUALITY] ?: COMMON_QUALITY.items[2].toString()
         }
 
     override suspend fun setDownloadQuality(quality: String) {
@@ -357,7 +357,7 @@ internal class DataStoreManagerImpl(
 
     override val sponsorBlockEnabled =
         settingsDataStore.data.map { preferences ->
-            preferences[SPONSOR_BLOCK_ENABLED] ?: FALSE
+            preferences[SPONSOR_BLOCK_ENABLED] ?: TRUE
         }
 
     override suspend fun setSponsorBlockEnabled(enabled: Boolean) {
@@ -481,11 +481,9 @@ internal class DataStoreManagerImpl(
         }
     }
 
-    // Defaults to TRUE: before this setting existed, a video song's video part was always
-    // downloaded alongside its audio, so an unset preference must preserve that behavior.
     override val downloadVideoEnabled =
         settingsDataStore.data.map { preferences ->
-            preferences[DOWNLOAD_VIDEO_ENABLED] ?: TRUE
+            preferences[DOWNLOAD_VIDEO_ENABLED] ?: FALSE
         }
 
     override suspend fun setDownloadVideoEnabled(enabled: Boolean) {
@@ -929,7 +927,7 @@ internal class DataStoreManagerImpl(
 
     override val blurFullscreenLyrics =
         settingsDataStore.data.map { preferences ->
-            preferences[BLUR_FULLSCREEN_LYRICS] ?: FALSE
+            preferences[BLUR_FULLSCREEN_LYRICS] ?: TRUE
         }
 
     override suspend fun setBlurFullscreenLyrics(blur: Boolean) {
@@ -948,7 +946,7 @@ internal class DataStoreManagerImpl(
 
     override val blurPlayerBackground =
         settingsDataStore.data.map { preferences ->
-            preferences[BLUR_PLAYER_BACKGROUND] ?: FALSE
+            preferences[BLUR_PLAYER_BACKGROUND] ?: TRUE
         }
 
     override suspend fun setBlurPlayerBackground(blur: Boolean) {

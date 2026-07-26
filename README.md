@@ -114,6 +114,7 @@ Wavora's goal isn't to be "yet another YouTube Music wrapper." It exists to push
   - macOS Now Playing Center + Remote Command Center (media keys, lock-screen widget)
   - Windows custom protocol handler (`wavora://`) for deep links
   - System tray integration
+  - YouTube Music login on Windows via a lazily-loaded embedded Chromium browser (KCEF), just to capture the session cookie — no persistent browser engine left running afterward
 
 ### 💾 Data
 - Full backup and restore of library, playlists, and settings (zip export/import)
@@ -503,6 +504,7 @@ El objetivo de Wavora no es ser "otro wrapper más de YouTube Music". Existe par
   - Now Playing Center + Remote Command Center en macOS (teclas multimedia, widget de pantalla de bloqueo)
   - Manejador de protocolo personalizado (`wavora://`) para deep links en Windows
   - Integración con la bandeja del sistema
+  - Inicio de sesión de YouTube Music en Windows vía un navegador Chromium embebido (KCEF) que se carga solo cuando hace falta, únicamente para capturar la cookie de sesión — no queda ningún motor de navegador corriendo en segundo plano después
 
 ### 💾 Datos
 - Backup y restauración completos de biblioteca, playlists y configuración (exportación/importación en zip)

@@ -125,6 +125,18 @@
 -keep class com.wavora.app.extension.AllExtKt$* { *; }
 -keep class com.wavora.scraper.extension.MapExtKt$* { *; }
 
+# Kermit (co.touchlab.kermit) — usado por com.wavora.logger.Logger y, desde
+# la instrumentación de auditoría, directo por AuditFileLogWriter/DesktopApp
+# (LogWriter, Severity, Logger.setLogWriters). Sin esta regla, obfuscate=true
+# (ver desktopApp/build.gradle.kts) puede renombrar clases/miembros de la
+# librería sin que ningún otro código kept los referencie de forma
+# consistente — mismo patrón ya visto acá con VLC/Koin/Ktor, que también
+# necesitaron -keep pese a estar claramente en uso. Hipótesis para explicar
+# por qué el LogWriter de archivo no está generando logs en el build
+# empaquetado (release) pese a compilar y "verse bien" en :run.
+-keep class co.touchlab.kermit.** { *; }
+-dontwarn co.touchlab.kermit.**
+
 ## Removes all Logs as they cause perfomance issues in prod
 #-assumenosideeffects class android.util.Log {
 #    public static int w(...);
@@ -398,3 +410,36 @@
 -keep class com.jogamp.opengl.swt.** { *; }
 -keep class com.jogamp.newt.swt.** { *; }
 -keep class org.apache.commons.compress.harmony.pack200.** { *; }
+
+# AUDIT NOTE (auditoría de estabilidad Desktop, evidencia acumulada):
+# faltaba un -keep para org.cef.** y dev.datlag.kcef.**. Esto es
+# candidato fuerte a la causa raíz de por qué browser_subprocess_path
+# (y no_sandbox, log_file, etc.) llegan bien en `gradlew run` (sin
+# ProGuard) pero no en el paquete instalado (con ProGuard/proguardReleaseJars):
+# el código nativo de java-cef (context.cpp, confirmado leyendo el
+# repo chromiumembedded/java-cef) lee los campos de org.cef.CefSettings
+# por NOMBRE, vía JNI puro (GetJNIFieldString(env, cls, obj,
+# "browser_subprocess_path", ...)) - esto es completamente invisible
+# para el análisis estático de ProGuard, que no tiene forma de saber
+# que código nativo depende de ese nombre exacto de campo. Sin un
+# -keep explícito, ProGuard es libre de renombrar esos campos al
+# shrinkear/ofuscar - la búsqueda nativa por nombre falla en silencio
+# (el guard `if (GetJNIFieldString(...) && !tmp.empty())` en
+# context.cpp simplemente no encuentra el campo y sigue de largo),
+# dejando browser_subprocess_path vacío en el lado nativo aunque
+# KcefBootstrap.kt lo haya seteado bien en Kotlin - lo cual coincide
+# exactamente con el comportamiento documentado por CEF para Windows
+# cuando ese valor llega vacío ("se usa el ejecutable del proceso
+# principal"). Mismo mecanismo explicaría por qué jcef_native.log
+# nunca se creó pese al clean build: el campo log_file tendría el
+# mismo problema.
+# No confirmado al 100% (no tenemos el mapping.txt de ProGuard para
+# verificar que el campo efectivamente se renombró) pero es la
+# explicación que unifica toda la evidencia de esta auditoría sin
+# contradicciones, y agregar este -keep no tiene downside (solo evita
+# que ProGuard toque estas clases puntuales, no afecta el resto del
+# shrinking).
+-keep class org.cef.** { *; }
+-keepclassmembers class org.cef.** { *; }
+-keep class dev.datlag.kcef.** { *; }
+-keepclassmembers class dev.datlag.kcef.** { *; }

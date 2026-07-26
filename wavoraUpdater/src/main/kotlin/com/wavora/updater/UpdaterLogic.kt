@@ -139,7 +139,24 @@ object UpdaterLogic {
             // is shown for UI continuity around the moment it already
             // happened inside the one install.ps1 invocation above.
         } finally {
-            workDir.deleteRecursively()
+            // AUDIT NOTE: deleteRecursively() de Kotlin no lanza excepcion si
+            // un archivo esta bloqueado - devuelve false en silencio y deja
+            // el resto de la carpeta huerfana en %TEMP%. Confirmado a mano
+            // por Sebastian: justo despues de instalar, a veces no se puede
+            // borrar el .msix todavia (Windows Defender / Antimalware
+            // Service Executable lo tiene abierto un momento mientras lo
+            // escanea). Reintentar con una espera corta cubre ese caso
+            // comun sin volver esto bloqueante si de verdad algo mas serio
+            // esta reteniendo el archivo (despues de los reintentos, sigue
+            // sin ser fatal para el update - la app ya se lanzo en el paso
+            // anterior).
+            var deleted = workDir.deleteRecursively()
+            var attempt = 0
+            while (!deleted && attempt < 5) {
+                Thread.sleep(1000)
+                deleted = workDir.deleteRecursively()
+                attempt++
+            }
         }
     }
 

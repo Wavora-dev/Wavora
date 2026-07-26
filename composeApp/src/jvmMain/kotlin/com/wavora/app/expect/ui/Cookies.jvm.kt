@@ -36,6 +36,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
@@ -246,6 +247,19 @@ private fun YouTubeLoginWebView(
     onPageFinished: (String) -> Unit,
 ) {
     val kcefState by KcefBootstrap.state.collectAsState()
+
+    // Instrumentación (Problema 4): marca exactamente cuándo se monta y
+    // desmonta este composable — junto con los logs de KcefBootstrap, permite
+    // ver si el "congelamiento" ocurre antes de llegar acá (composable nunca
+    // se monta), durante la inicialización de KCEF (ver StartupTiming/
+    // watchdog), o después (composable montado, KCEF Ready, pero algo más
+    // bloquea).
+    DisposableEffect(Unit) {
+        Logger.d("YouTubeLoginWebView", "===== ABRIENDO navegador embebido (initUrl=$initUrl) =====")
+        onDispose {
+            Logger.d("YouTubeLoginWebView", "===== CERRANDO navegador embebido (initUrl=$initUrl) =====")
+        }
+    }
 
     LaunchedEffect(Unit) {
         KcefBootstrap.ensureInitialized()
@@ -689,6 +703,24 @@ private fun YouTubeLoginWebView(
                             JvmWebViewCookieBridge.set(loaded, cookieHeader, netscapeCookie)
                             webViewState.cookieManager.removeAllCookies()
                             onPageFinished(loaded)
+                            // FIX (auditoría de estabilidad Desktop, evidencia
+                            // real: jcef_native.log seguía mostrando actividad
+                            // nativa ~2 minutos después de "KCEF.dispose()
+                            // completado" - confirma que el delay agregado en
+                            // disposeAfterSuccessfulLogin() no alcanzaba).
+                            // CefApp.dispose() (java-cef, CefApp.java) es
+                            // condicional a que no queden CefClient vivos -
+                            // si el que usa este WebView(...) nunca se libera
+                            // por su cuenta (el ciclo de disposal de
+                            // compose-webview-multiplatform, no confirmado
+                            // que lo haga bien), el shutdown real nunca
+                            // llega a dispararse. En vez de esperar a que se
+                            // libere solo, lo cerramos nosotros explícitamente
+                            // con la API pública y estable de JCEF
+                            // (CefBrowser.close(force=true)) usando la
+                            // referencia que ya capturábamos por reflection
+                            // más arriba para el diagnóstico (kcefBrowserRef).
+                            kcefBrowserRef?.close(true)
                             // Decisión explícita de Sebastián (Ronda 19):
                             // preferir consumo casi nulo en segundo plano
                             // por sobre poder re-loguear sin reiniciar la

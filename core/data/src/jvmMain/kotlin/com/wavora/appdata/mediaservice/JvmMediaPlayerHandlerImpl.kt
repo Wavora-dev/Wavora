@@ -787,6 +787,28 @@ class JvmMediaPlayerHandlerImpl(
 
     // Region: Override functions
     override fun startProgressUpdate() {
+        // FIX (auditoria devgodot - Problema 3, hallazgo demostrado con
+        // trazado completo de la maquina de estados de VlcPlayerAdapter):
+        // startProgressUpdate() se llama desde DOS lugares independientes
+        // para una misma reproduccion — directamente desde
+        // PlayerEvent.PlayPause (linea ~852) y, poco despues, de forma
+        // asincrona, desde onIsPlayingChanged(true) (linea ~2341) cuando
+        // VlcPlayerAdapter confirma la transicion a PLAYING. Sin cancelar el
+        // job anterior antes de reasignar `progressJob`, la primera
+        // corrutina (while(true){delay(100)}) quedaba huerfana y viva para
+        // siempre — cada pausa/play durante la sesion sumaba una mas. Este
+        // mismo archivo ya usa este guard en los otros 8 Job que maneja
+        // (sleepStart, getFormat, updateNotification, toggleLike,
+        // addQueueToPlayer, loadPlaylistOrAlbum, etc.) — este cambio solo
+        // alinea progressJob/bufferedJob con ese mismo patron existente, no
+        // introduce un patron nuevo.
+        //
+        // Comportamiento funcional: sin cambios. El unico job que puede
+        // estar vivo en cualquier momento sigue actualizando el progreso
+        // cada 100ms exactamente igual que antes — simplemente ahora nunca
+        // hay mas de uno a la vez.
+        Logger.d(TAG, "startProgressUpdate: cancelling previous job (active=${progressJob?.isActive}) before relaunch")
+        progressJob?.cancel()
         progressJob =
             coroutineScope.launch {
                 while (true) {
@@ -806,6 +828,13 @@ class JvmMediaPlayerHandlerImpl(
     }
 
     override fun startBufferedUpdate() {
+        // FIX (misma causa que startProgressUpdate, ver comentario arriba):
+        // onIsLoadingChanged(true) (linea ~2547) puede dispararse mas de una
+        // vez seguida durante un mismo episodio de buffering/red sin que
+        // startBufferedUpdate() lo protegiera. Mismo guard, mismo patron ya
+        // usado en el resto del archivo.
+        Logger.d(TAG, "startBufferedUpdate: cancelling previous job (active=${bufferedJob?.isActive}) before relaunch")
+        bufferedJob?.cancel()
         bufferedJob =
             coroutineScope.launch {
                 while (true) {
@@ -818,11 +847,13 @@ class JvmMediaPlayerHandlerImpl(
     }
 
     override fun stopProgressUpdate() {
+        Logger.d(TAG, "stopProgressUpdate: cancelling (active=${progressJob?.isActive})")
         progressJob?.cancel()
         Logger.w(TAG, "stopProgressUpdate: ${progressJob?.isActive}")
     }
 
     override fun stopBufferedUpdate() {
+        Logger.d(TAG, "stopBufferedUpdate: cancelling (active=${bufferedJob?.isActive})")
         bufferedJob?.cancel()
         _simpleMediaState.value =
             SimpleMediaState.Loading(player.bufferedPercentage, player.duration)
