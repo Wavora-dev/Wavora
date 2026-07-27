@@ -110,6 +110,7 @@ Wavora's goal isn't to be "yet another YouTube Music wrapper." It exists to push
 
 ### 📱 Platform
 - **Android** — background service with media-session notification, home-screen widget (Glance), Discord/Spotify/YouTube login flows
+- **Android TV** — separate build (own product flavor and APK) with a Leanback launcher entry and remote-control-friendly focus navigation across the app
 - **Desktop (Windows / macOS / Linux)** — standalone windowed app, floating draggable miniplayer window, full-screen player, custom title bar, scrollbars, VLC-based playback (libVLC)
   - macOS Now Playing Center + Remote Command Center (media keys, lock-screen widget)
   - Windows custom protocol handler (`wavora://`) for deep links
@@ -500,6 +501,7 @@ El objetivo de Wavora no es ser "otro wrapper más de YouTube Music". Existe par
 
 ### 📱 Plataforma
 - **Android** — servicio en segundo plano con notificación de sesión de medios, widget de pantalla de inicio (Glance), flujos de inicio de sesión de Discord/Spotify/YouTube
+- **Android TV** — build separado (flavor y APK propios) con entrada en el launcher de Leanback y navegación por foco pensada para control remoto en toda la app
 - **Escritorio (Windows / macOS / Linux)** — app de ventana independiente, miniplayer flotante y arrastrable, reproductor en pantalla completa, barra de título personalizada, scrollbars, reproducción basada en VLC (libVLC)
   - Now Playing Center + Remote Command Center en macOS (teclas multimedia, widget de pantalla de bloqueo)
   - Manejador de protocolo personalizado (`wavora://`) para deep links en Windows
