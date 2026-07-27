@@ -46,7 +46,7 @@ class DiscordRPC(
     }
 
     companion object {
-        private const val APPLICATION_ID = "1271273225120125040"
+        private const val APPLICATION_ID = "1530792392163328031"
         private const val APP_NAME: String = "Wavora"
         private const val APP_ICON: String =
             "https://fra.cloud.appwrite.io/v1/storage/buckets/683f1f620010ba0fa5b1/files/69007bc8001a28a7cea8/view?project=67ec0369002bd8a96885"

@@ -381,8 +381,27 @@ internal class CrossfadeExoPlayerAdapter(
                 }
 
                 InternalState.PLAYING -> {
+                    // FIX: antes esta rama solo actualizaba banderas internas y confiaba en
+                    // que el player real ya estuviera sonando porque internalState decía
+                    // "PLAYING". Si ese estado quedaba desincronizado del ExoPlayer real
+                    // (ej: tras una transición de pista que se traba a medias), tocar play()
+                    // acá no hacía nada de verdad -> quedaba "pausado" sin forma de
+                    // reactivarlo desde el botón de la app. Llamar a play() en el player real
+                    // es inofensivo aunque ya esté sonando, así que lo forzamos siempre.
+                    currentPlayer?.play()
                     internalPlayWhenReady = true
                     cachedIsLoading = false
+                }
+
+                InternalState.ERROR -> {
+                    // FIX: antes ERROR caía en el `else` de abajo y no hacía nada -> tocar
+                    // play() después de un error de red a mitad de canción (o al cargar la
+                    // siguiente) quedaba sin ningún efecto, dejando la app "trabada" hasta
+                    // que se forzaba una recarga completa con next/back. Ahora reintenta
+                    // cargar la pista actual desde la última posición conocida.
+                    Logger.w(TAG, "Play: Recovering from ERROR state, reloading current track")
+                    internalPlayWhenReady = true
+                    loadAndPlayTrackInternal(localCurrentMediaItemIndex, cachedPosition, true)
                 }
 
                 else -> {

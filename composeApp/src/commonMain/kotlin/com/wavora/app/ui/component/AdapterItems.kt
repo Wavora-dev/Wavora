@@ -138,6 +138,7 @@ fun HomeItem(
                                 ),
                             )
                         }
+                        .tvFocusIndicator()
                 } else {
                     Modifier
                 },
@@ -316,7 +317,8 @@ fun HomeItemContentPlaylist(
             .focusable(true)
             .clickable {
                 onClick()
-            },
+            }
+            .tvFocusIndicator(),
     ) {
         Column(
             modifier =
@@ -537,7 +539,8 @@ fun QuickPicksItem(
                 .focusable(true)
                 .clickable {
                     onClick()
-                },
+                }
+                .tvFocusIndicator(),
     ) {
         Row(
             modifier =
@@ -639,7 +642,8 @@ fun HomeItemSong(
                 }.combinedClickable(
                     onClick = onClick,
                     onLongClick = onLongClick,
-                ),
+                )
+                .tvFocusIndicator(),
     ) {
         Column(
             modifier =
@@ -741,7 +745,8 @@ fun HomeItemVideo(
             }.combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick,
-            ),
+            )
+            .tvFocusIndicator(),
     ) {
         Column(
             modifier =
@@ -822,7 +827,8 @@ fun HomeItemArtist(
             .focusable(true)
             .clickable {
                 onClick()
-            },
+            }
+            .tvFocusIndicator(),
     ) {
         Column(
             modifier =
@@ -938,7 +944,8 @@ fun ItemVideoChart(
             .focusable(true)
             .clickable {
                 onClick()
-            },
+            }
+            .tvFocusIndicator(),
     ) {
         Column(
             modifier =
@@ -1033,7 +1040,8 @@ fun ItemArtistChart(
             .focusable(true)
             .clickable {
                 onClick()
-            },
+            }
+            .tvFocusIndicator(),
     ) {
         Row(
             modifier =
@@ -1136,7 +1144,8 @@ fun ItemTrackChart(
                 .focusable(true)
                 .clickable {
                     onClick()
-                },
+                }
+                .tvFocusIndicator(),
     ) {
         Row(
             modifier =

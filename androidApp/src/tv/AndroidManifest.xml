@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Manifest exclusivo del flavor "tv". Gradle lo fusiona (merge) con el
+    AndroidManifest.xml de src/main automáticamente - NO reemplaza nada del
+    flavor "mobile", solo agrega lo que hace falta para que la app aparezca
+    en el launcher de Android TV.
+
+    No requiere tocar androidApp/src/main/AndroidManifest.xml para nada.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Requerido por Android TV / Play Store para listar la app como app de TV -->
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="true" />
+
+    <!-- Android TV no tiene pantalla táctil: sin esto, Play Store filtraría
+         la app y no la mostraría como instalable en dispositivos TV -->
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+
+    <application
+        android:banner="@drawable/tv_banner"
+        tools:node="merge">
+
+        <!--
+            Mismo activity que en mobile (".MainActivity"): al declarar el mismo
+            android:name, el merger de manifests fusiona este intent-filter
+            agregándolo a los que ya tiene en src/main, en vez de reemplazarlos.
+            Esto es lo que hace que la app aparezca en la fila de apps del
+            launcher de Android TV (Leanback).
+        -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

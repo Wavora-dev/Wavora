@@ -128,7 +128,17 @@ internal class SimpleMediaService :
         val controllerFuture = MediaController.Builder(this, sessionToken).buildAsync()
         controllerFuture.addListener({ controllerFuture.get() }, MoreExecutors.directExecutor())
 
-        if (runBlocking { dataStoreManager.keepServiceAlive.first() == DataStoreManager.TRUE }) {
+        // FIX (posible causa del ANR reportado en Sentry, Redmi Note 9 Pro): antes esto
+        // usaba runBlocking{} para leer el DataStore, bloqueando el hilo principal
+        // (Service.onCreate corre en main thread) hasta que termine la lectura de disco.
+        // En un dispositivo con almacenamiento lento o bajo presión de memoria (típico en
+        // hardware de gama media/baja), esa lectura puede demorar lo suficiente como para
+        // disparar un ANR "en segundo plano". Ahora se lanza en el scope de corutinas del
+        // servicio en vez de bloquear - todo lo que depende de este valor (que ya era
+        // exclusivamente para la feature opcional "keepServiceAlive") queda adentro del
+        // launch, sin afectar el resto de onCreate().
+        coroutineScope.launch {
+            if (dataStoreManager.keepServiceAlive.first() == DataStoreManager.TRUE) {
             val notificationManager = getSystemService<NotificationManager>()
             notificationManager?.run {
                 createNotificationChannel(
@@ -145,7 +155,7 @@ internal class SimpleMediaService :
             }
             playerNotificationManager =
                 PlayerNotificationManager
-                    .Builder(this, 2026, "media_playback_channel")
+                    .Builder(this@SimpleMediaService, 2026, "media_playback_channel")
                     .setNotificationListener(
                         object : PlayerNotificationManager.NotificationListener {
                             override fun onNotificationPosted(
@@ -154,10 +164,33 @@ internal class SimpleMediaService :
                                 ongoing: Boolean,
                             ) {
                                 fun startFg() {
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                        startForeground(notificationId, notification, FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
-                                    } else {
-                                        startForeground(notificationId, notification)
+                                    try {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                            startForeground(
+                                                notificationId,
+                                                notification,
+                                                FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
+                                            )
+                                        } else {
+                                            startForeground(notificationId, notification)
+                                        }
+                                    } catch (e: Exception) {
+                                        // FIX (crash real reportado en Sentry, Redmi Note 9 Pro/MIUI):
+                                        // ForegroundServiceStartNotAllowedException (API 31+) puede
+                                        // ocurrir en cualquier momento entre que el servicio arranca y
+                                        // que esta notificación asíncrona llega a postearse - sobre
+                                        // todo en fabricantes con gestión de batería agresiva (MIUI,
+                                        // ColorOS, etc.) que pueden revocar el permiso de foreground
+                                        // en el medio. Google documenta esto como algo esperable e
+                                        // indica capturarlo en vez de intentar prevenirlo del todo:
+                                        // https://developer.android.com/develop/background-work/services/fgs/exception
+                                        // Sin este catch, esto tiraba abajo toda la app en vez de
+                                        // simplemente perder esta actualización puntual de notificación.
+                                        Logger.e(
+                                            "Service",
+                                            "startForeground falló (probable restricción del " +
+                                                "fabricante), continuando sin crashear: ${e.message}",
+                                        )
                                     }
                                 }
                                 // Call startForeground once when the notification is first posted.
@@ -170,6 +203,7 @@ internal class SimpleMediaService :
             playerNotificationManager.setPlayer(player)
             playerNotificationManager.setSmallIcon(R.drawable.mono)
             mediaSession?.platformToken?.let { playerNotificationManager.setMediaSessionToken(it) }
+            }
         }
 
         simpleMediaServiceHandler.onUpdateNotification = { list ->

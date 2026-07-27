@@ -185,10 +185,10 @@ fun CreditScreen(
                 Text(text = stringResource(Res.string.issue_tracker))
             }
 
-            // Buy me a coffee button
+            // Support the app button (Patreon)
             TextButton(
                 onClick = {
-                    openUrl("https://cafecito.app/wavora")
+                    openUrl("https://www.patreon.com/Wavora")
                 },
                 modifier =
                     Modifier

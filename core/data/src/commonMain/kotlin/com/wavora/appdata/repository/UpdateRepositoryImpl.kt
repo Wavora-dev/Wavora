@@ -20,7 +20,17 @@ internal class UpdateRepositoryImpl(
                 .onSuccess { response ->
                     val apkAssets =
                         response.assets
-                            ?.filter { it?.name?.endsWith(".apk", ignoreCase = true) == true && it.browserDownloadUrl != null }
+                            ?.filter {
+                                it?.name?.endsWith(".apk", ignoreCase = true) == true &&
+                                    it.browserDownloadUrl != null &&
+                                    // Segunda capa de seguridad: aunque el nombre del APK de
+                                    // celular ya no debería llevar "mobile"/"tv" en el nombre
+                                    // (ver androidComponents en androidApp/build.gradle.kts),
+                                    // nunca hay que dejar que la app de celular termine
+                                    // instalándose el APK de la variante de Android TV por
+                                    // error si algún día conviven los dos en el mismo release.
+                                    it.name?.contains("-tv-", ignoreCase = true) != true
+                            }
                             ?.map {
                                 ApkAsset(
                                     name = it!!.name!!,

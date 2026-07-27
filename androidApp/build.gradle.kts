@@ -81,6 +81,23 @@ android {
         }
     }
 
+    // Flavor "mobile" = exactamente el comportamiento de siempre (mismo applicationId
+    // "com.wavora.app", sin sufijo). Flavor "tv" = mismo código, mismo módulo, pero con
+    // su propio manifest (androidApp/src/tv/AndroidManifest.xml) que agrega el
+    // launcher de Android TV (Leanback) y su propio applicationId (".tv") para que
+    // sea un APK totalmente separado e instalable en paralelo, sin pisar la app de
+    // celular ni requerir ningún cambio en ella.
+    flavorDimensions += "platform"
+    productFlavors {
+        create("mobile") {
+            dimension = "platform"
+        }
+        create("tv") {
+            dimension = "platform"
+            applicationIdSuffix = ".tv"
+        }
+    }
+
     // Opt-in release signing, sourced from env vars rather than a
     // committed keystore/properties file. Absent locally (release builds
     // stay unsigned, same as before this block existed) - present in CI
@@ -292,6 +309,22 @@ if (!isFullBuild) {
             tasks.named(name).configure {
                 finalizedBy(cleanSentryMetaTask)
             }
+        }
+    }
+}
+// Revertir el nombre de archivo del flavor "mobile" al de siempre (sin "-mobile"
+// en el nombre), para no romper la detección del auto-updater ni confundir a
+// quien instale el APK manualmente. El flavor "tv" SÍ mantiene "-tv-" en su
+// nombre a propósito, para poder distinguirlo con certeza si algún día conviven
+// ambos APKs en el mismo release de GitHub (ver también el filtro agregado en
+// UpdateRepositoryImpl.kt, que ignora explícitamente cualquier asset con "tv"
+// en el nombre al buscar actualizaciones desde la app de celular).
+androidComponents {
+    onVariants(selector().withFlavor("platform" to "mobile")) { variant ->
+        variant.outputs.forEach { output ->
+            output.outputFileName.set(
+                output.outputFileName.get().replace("-mobile", ""),
+            )
         }
     }
 }

@@ -192,6 +192,10 @@ import wavora.composeapp.generated.resources.blur_fullscreen_lyrics_description
 import wavora.composeapp.generated.resources.blur_player_background
 import wavora.composeapp.generated.resources.blur_player_background_description
 import wavora.composeapp.generated.resources.buy_me_a_coffee
+import wavora.composeapp.generated.resources.join_discord_server
+import wavora.composeapp.generated.resources.join_discord_server_subtitle
+import wavora.composeapp.generated.resources.follow_on_instagram
+import wavora.composeapp.generated.resources.follow_on_instagram_subtitle
 import wavora.composeapp.generated.resources.cancel
 import wavora.composeapp.generated.resources.canvas_info
 import wavora.composeapp.generated.resources.categories_sponsor_block
@@ -2124,10 +2128,24 @@ fun SettingScreen(
                     },
                 )
                 SettingItem(
+                    title = stringResource(Res.string.join_discord_server),
+                    subtitle = stringResource(Res.string.join_discord_server_subtitle),
+                    onClick = {
+                        uriHandler.openUri("https://discord.gg/zx6vMdNhEc")
+                    },
+                )
+                SettingItem(
+                    title = stringResource(Res.string.follow_on_instagram),
+                    subtitle = stringResource(Res.string.follow_on_instagram_subtitle),
+                    onClick = {
+                        uriHandler.openUri("https://www.instagram.com/wavora.music/")
+                    },
+                )
+                SettingItem(
                     title = stringResource(Res.string.buy_me_a_coffee),
                     subtitle = stringResource(Res.string.donation),
                     onClick = {
-                        uriHandler.openUri("https://cafecito.app/wavora")
+                        uriHandler.openUri("https://www.patreon.com/Wavora")
                     },
                 )
                 SettingItem(

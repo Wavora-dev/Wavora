@@ -952,11 +952,11 @@ fun App(
                             TextButton(
                                 onClick = {
                                     shouldShowCafecitoDialog = false
-                                    openUrl("https://cafecito.app/wavora")
+                                    openUrl("https://www.patreon.com/Wavora")
                                 },
                             ) {
                                 Text(
-                                    "☕  Support Wavora",
+                                    "💜 Support Wavora",
                                     style = LocalAppTypography.current.bodySmall.copy(
                                         color = Color(0xFFA259FF),
                                         fontWeight = FontWeight.Bold,
@@ -974,19 +974,19 @@ fun App(
                         },
                         title = {
                             Text(
-                                "Enjoying Wavora? ☕",
+                                "Enjoying Wavora?",
                                 style = LocalAppTypography.current.labelSmall.copy(fontWeight = FontWeight.Bold),
                             )
                         },
                         text = {
                             Column {
                                 Text(
-                                    "Wavora is free and always will be.\n\nIf you've been enjoying it, consider buying me a coffee — it helps keep development going and new features coming.",
+                                    "Wavora is free and always will be.\n\nIf you've been enjoying it, consider supporting the app on Patreon — it helps keep development going and new features coming.",
                                     style = LocalAppTypography.current.bodySmall,
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    "cafecito.app/wavora",
+                                    "www.patreon.com/Wavora",
                                     style = LocalAppTypography.current.bodySmall.copy(
                                         color = Color(0xFF00D4FF),
                                         textDecoration = TextDecoration.Underline,

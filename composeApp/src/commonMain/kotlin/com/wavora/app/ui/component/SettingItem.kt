@@ -41,7 +41,7 @@ fun SettingItem(
         Modifier
             .then(
                 if (onClick != null && isEnable) {
-                    Modifier.clickable { onClick.invoke() }
+                    Modifier.clickable { onClick.invoke() }.tvFocusIndicator()
                 } else {
                     Modifier
                 },

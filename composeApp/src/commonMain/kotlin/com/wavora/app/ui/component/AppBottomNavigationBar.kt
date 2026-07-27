@@ -125,9 +125,11 @@ fun AppBottomNavigationBar(
                     },
                     icon = screen.icon,
                     modifier =
-                        Modifier.windowInsetsPadding(
-                            NavigationBarDefaults.windowInsets,
-                        ),
+                        Modifier
+                            .windowInsetsPadding(
+                                NavigationBarDefaults.windowInsets,
+                            )
+                            .tvFocusIndicator(),
                 )
             }
         }
@@ -193,6 +195,7 @@ fun AppNavigationRail(
                     )
                 },
                 selected = selectedIndex == index,
+                modifier = Modifier.tvFocusIndicator(),
                 onClick = {
                     if (selectedIndex == screen.ordinal) {
                         if (currentBackStackEntry?.destination?.hierarchy?.any {

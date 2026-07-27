@@ -124,9 +124,13 @@
     <string name="version">Version</string>
     <string name="github">Github</string>
     <string name="wavora_dev">Wavora by wavora-dev</string>
-    <string name="buy_me_a_coffee">Buy me a coffee</string>
+    <string name="buy_me_a_coffee">Support the app</string>
     <string name="developer_blog">Developer Blog</string>
     <string name="developer_blog_tagline">Read dev notes, tutorials &amp; behind-the-scenes</string>
+    <string name="join_discord_server">Join our Discord server</string>
+    <string name="join_discord_server_subtitle">Chat with the community and get news first</string>
+    <string name="follow_on_instagram">Follow us on Instagram</string>
+    <string name="follow_on_instagram_subtitle">@wavora.music</string>
     <string name="blog_promo_title">Something new from the dev</string>
     <string name="blog_promo_message">Follow Wavora for updates — sharing the story behind Wavora, music-tech deep dives, and engineering notes. Give it a read if you're curious ✨</string>
     <string name="visit_blog">Visit blog</string>
@@ -359,7 +363,7 @@
     <string name="user_interface">Interface</string>
     <string name="translucent_bottom_navigation_bar">Translucent bottom navigation bar</string>
     <string name="you_can_see_the_content_below_the_bottom_bar">You can see the content below the bottom bar</string>
-    <string name="donation">If you love my work, give me a coffee</string>
+    <string name="donation">Support Wavora's development on Patreon</string>
     <string name="relax">Relax</string>
     <string name="sleep">Sleep</string>
     <string name="energize">Energize</string>
@@ -426,7 +430,7 @@
     <string name="enjoying_wavora">Enjoying Wavora</string>
     <string name="if_you_enjoy_using_wavora_star_wavora_on_github_or_leave_a_review_on">If you enjoy using Wavora, star Wavora on GitHub or leave a review on</string>
     <string name="if_you_love_my_work_consider">"If you love my work, consider "</string>
-    <string name="buying_me_a_coffee">buying me a coffee.</string>
+    <string name="buying_me_a_coffee">supporting the app on Patreon.</string>
     <string name="fade_audio_effect">Fade audio effect</string>
     <string name="disabled">Disable</string>
     <string name="fade_audio_effect_duration">Fade audio effect duration (ms) (Set to 0 for disable)</string>

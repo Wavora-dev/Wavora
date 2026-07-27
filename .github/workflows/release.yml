@@ -358,7 +358,7 @@ jobs:
       # releases/latest/download/<archivo>.
       #
       # Para la PRIMERA instalación armamos ADEMÁS un .zip de conveniencia,
-      # AppwavoraWindows.zip, con SOLO estos 6 archivos:
+      # AppwavoraWindows.zip, con SOLO estos 8 archivos:
       #   - install-wavora.bat  (repo: scripts/windows/install-wavora.bat)
       #   - install.ps1         (repo: scripts/windows/install.ps1 — NO el
       #                           install.ps1 que genera Conveyor. El nuestro
@@ -366,6 +366,8 @@ jobs:
       #                           por el mecanismo de red del .appinstaller,
       #                           que es la pieza que venía fallando con
       #                           0x80190194 / 0x80073CF0 / 0x800B0109.)
+      #   - uninstall-wavora.bat (repo: scripts/windows/uninstall-wavora.bat)
+      #   - uninstall.ps1        (repo: scripts/windows/uninstall.ps1)
       #   - wavora.crt          (generado por Conveyor en output/)
       #   - wavora.exe          (generado por Conveyor en output/)
       #   - wavora.ico          (repo: composeApp/icon/circle_app_icon.ico —
@@ -397,6 +399,8 @@ jobs:
           mkdir -p "$BUNDLE_DIR"
           cp scripts/windows/install-wavora.bat "$BUNDLE_DIR/"
           cp scripts/windows/install.ps1 "$BUNDLE_DIR/"
+          cp scripts/windows/uninstall-wavora.bat "$BUNDLE_DIR/"
+          cp scripts/windows/uninstall.ps1 "$BUNDLE_DIR/"
           cp output/wavora.crt "$BUNDLE_DIR/"
           cp output/wavora.exe "$BUNDLE_DIR/"
           cp composeApp/icon/circle_app_icon.ico "$BUNDLE_DIR/wavora.ico"
@@ -535,7 +539,7 @@ jobs:
           echo ""
           echo "Todas las URLs del .appinstaller resuelven correctamente."
 
-      - name: Validar que AppwavoraWindows.zip tiene exactamente los 6 archivos esperados
+      - name: Validar que AppwavoraWindows.zip tiene exactamente los 8 archivos esperados
         shell: bash
         run: |
           set -euo pipefail
@@ -543,7 +547,7 @@ jobs:
           curl -sL -o bundle.zip -w "%{http_code}\n" "$URL" | { read code; if [ "$code" != "200" ]; then echo "::error::GET $URL devolvió HTTP $code"; exit 1; fi; }
 
           ACTUAL=$(unzip -Z1 bundle.zip | sort)
-          EXPECTED=$(printf "AppwavoraWindows/install-wavora.bat\nAppwavoraWindows/install.ps1\nAppwavoraWindows/wavora.crt\nAppwavoraWindows/wavora.exe\nAppwavoraWindows/wavora.ico\n" | sort)
+          EXPECTED=$(printf "AppwavoraWindows/install-wavora.bat\nAppwavoraWindows/install.ps1\nAppwavoraWindows/uninstall-wavora.bat\nAppwavoraWindows/uninstall.ps1\nAppwavoraWindows/wavora.crt\nAppwavoraWindows/wavora.exe\nAppwavoraWindows/wavora.ico\n" | sort)
 
           echo "--- Contenido real ---"
           echo "$ACTUAL"
@@ -556,8 +560,8 @@ jobs:
 
           NON_MSIX=$(echo "$ACTUAL" | grep -v '\.msix$' | grep -v '/$' | sort)
           if [ "$NON_MSIX" != "$EXPECTED" ]; then
-            echo "::error::El contenido de AppwavoraWindows.zip no coincide con lo esperado (install-wavora.bat, install.ps1, wavora.crt, wavora.exe, wavora.ico, *.msix)."
+            echo "::error::El contenido de AppwavoraWindows.zip no coincide con lo esperado (install-wavora.bat, install.ps1, uninstall-wavora.bat, uninstall.ps1, wavora.crt, wavora.exe, wavora.ico, *.msix)."
             diff <(echo "$EXPECTED") <(echo "$NON_MSIX") || true
             exit 1
           fi
-          echo "OK: AppwavoraWindows.zip contiene exactamente los 6 archivos esperados."
+          echo "OK: AppwavoraWindows.zip contiene exactamente los 8 archivos esperados."

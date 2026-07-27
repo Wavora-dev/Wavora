@@ -88,12 +88,12 @@ fun ReviewDialog(
                     append(stringResource(Res.string.if_you_love_my_work_consider))
                     withLink(
                         LinkAnnotation.Url(
-                            "https://buymeacoffee.com/wavora",
+                            "https://www.patreon.com/Wavora",
                             TextLinkStyles(style = SpanStyle(textDecoration = TextDecoration.Underline, color = seed)),
                         ) {
                             onDoneReview.invoke()
                             onDismissRequest.invoke()
-                            uriHandler.openUri("https://buymeacoffee.com/wavora")
+                            uriHandler.openUri("https://www.patreon.com/Wavora")
                         },
                     ) {
                         append(stringResource(Res.string.buying_me_a_coffee))

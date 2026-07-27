@@ -112,6 +112,14 @@ internal class MediaServiceHandlerImpl(
     override val player: MediaPlayerInterface = getKoin().get()
 
     private var discordRPC: DiscordRPC? = null
+    // Reintento automático y silencioso ante errores transitorios de red durante la
+    // reproducción (corte de wifi/datos a mitad de canción, timeout resolviendo la
+    // siguiente pista). Antes CUALQUIER error pausaba la reproducción sin ningún
+    // reintento, dejando al usuario con la app "trabada" hasta que le daba play a
+    // mano. Se resetea a 0 apenas la reproducción vuelve a andar (onIsPlayingChanged).
+    private var playbackErrorRetryCount = 0
+    private val maxPlaybackErrorRetries = 2
+    private val playbackErrorRetryDelayMs = 1500L
     override var onUpdateNotification: (List<GenericCommandButton>) -> Unit = {}
     override var showToast: (ToastType) -> Unit = {}
     override var pushPlayerError: (PlayerError) -> Unit = {}
@@ -2279,6 +2287,7 @@ internal class MediaServiceHandlerImpl(
         )
         _controlState.value = _controlState.value.copy(isPlaying = isPlaying)
         if (isPlaying) {
+            playbackErrorRetryCount = 0
             startProgressUpdate()
             nowPlayingState.value.songEntity?.let { updateDiscordRpc(it) }
         } else {
@@ -2399,24 +2408,53 @@ internal class MediaServiceHandlerImpl(
         when (error.errorCode) {
             PlayerConstants.ERROR_CODE_TIMEOUT -> {
                 Logger.e("Player Error", "onPlayerError (${error.errorCode}): ${error.message}")
-                if (isAppInForeground()) {
-                    showToast(ToastType.PlayerError(error.errorCodeName))
-                } else {
-                    Logger.w("Player Error", "App is not in foreground, skipping toast")
-                }
-                player.pause()
+                handlePlayerErrorWithRetry(error)
             }
 
             else -> {
                 Logger.e("Player Error", "onPlayerError (${error.errorCode}): ${error.message}")
                 pushPlayerError(error)
-                if (isAppInForeground()) {
-                    showToast(ToastType.PlayerError(error.errorCodeName))
-                } else {
-                    Logger.w("Player Error", "App is not in foreground, skipping toast")
-                }
-                player.pause()
+                handlePlayerErrorWithRetry(error)
             }
+        }
+    }
+
+    /**
+     * Antes: cualquier error (timeout de red, falla resolviendo el stream de la
+     * siguiente canción, etc.) llamaba a player.pause() directo, sin ningún intento
+     * de recuperación - dejaba la reproducción trabada hasta que el usuario le daba
+     * play a mano. La gran mayoría de estos errores son transitorios (un hiccup de
+     * wifi/datos de un par de segundos), así que ahora reintentamos solos primero:
+     * - hasta [maxPlaybackErrorRetries] veces, con una pequeña espera entre intentos
+     * - en silencio, sin toast, para no interrumpir al usuario por algo que se
+     *   resuelve solo
+     * - player.play() ya sabe recuperarse desde el estado ERROR recargando la pista
+     *   actual desde la última posición conocida (ver CrossfadeExoPlayerAdapter.play())
+     * Si se agotan los reintentos, cae en el comportamiento de siempre (pausa +
+     * toast) - no se pierde ningún caso, solo se le da una chance de arreglarse solo
+     * antes de rendirse.
+     */
+    private fun handlePlayerErrorWithRetry(error: PlayerError) {
+        if (playbackErrorRetryCount < maxPlaybackErrorRetries) {
+            playbackErrorRetryCount++
+            Logger.w(
+                TAG,
+                "Player error: auto-retry $playbackErrorRetryCount/$maxPlaybackErrorRetries " +
+                    "in ${playbackErrorRetryDelayMs}ms (silencioso, sin pausar ni avisar)",
+            )
+            coroutineScope.launch {
+                delay(playbackErrorRetryDelayMs)
+                player.play()
+            }
+        } else {
+            Logger.w(TAG, "Player error: se agotaron los reintentos automáticos, pausando y avisando")
+            playbackErrorRetryCount = 0
+            if (isAppInForeground()) {
+                showToast(ToastType.PlayerError(error.errorCodeName))
+            } else {
+                Logger.w("Player Error", "App is not in foreground, skipping toast")
+            }
+            player.pause()
         }
     }
 

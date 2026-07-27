@@ -124,9 +124,13 @@
     <string name="version">Versión</string>
     <string name="github">GitHub</string>
     <string name="wavora_dev">wavora-dev</string>
-    <string name="buy_me_a_coffee">Cómprame un café</string>
+    <string name="buy_me_a_coffee">Apoyar la aplicación</string>
     <string name="developer_blog"></string>
     <string name="paypal">PayPal</string>
+    <string name="join_discord_server">Unite a nuestro servidor de Discord</string>
+    <string name="join_discord_server_subtitle">Chateá con la comunidad y enterate primero de las novedades</string>
+    <string name="follow_on_instagram">Seguinos en Instagram</string>
+    <string name="follow_on_instagram_subtitle">@wavora.music</string>
     <string name="title">Título</string>
     <string name="custom_order">Orden personalizado</string>
     <string name="album">Álbum</string>
@@ -366,7 +370,7 @@
     <string name="user_interface">Interfaz</string>
     <string name="translucent_bottom_navigation_bar">Barra de navegación inferior traslucida</string>
     <string name="you_can_see_the_content_below_the_bottom_bar">Puedes ver el contenido debajo de la barra inferior</string>
-    <string name="donation">Si te gusta mi trabajo, invítame un café</string>
+    <string name="donation">Apoyá el desarrollo de Wavora en Patreon</string>
     <string name="relax">Relax</string>
     <string name="sleep">Para dormir</string>
     <string name="energize">Enérgica</string>
@@ -431,7 +435,7 @@
     <string name="enjoying_wavora">Disfrutando Wavora</string>
     <string name="if_you_enjoy_using_wavora_star_wavora_on_github_or_leave_a_review_on">Si te gusta usar Wavora, da una estrella a Wavora en gituhb o deja una reseña</string>
     <string name="if_you_love_my_work_consider">"Si amas mi trabajo, considera "</string>
-    <string name="buying_me_a_coffee">comprame un café.</string>
+    <string name="buying_me_a_coffee">apoyando la app en Patreon.</string>
     <string name="fade_audio_effect">Efecto de desvanecimiento de audio</string>
     <string name="disabled">Desactivar</string>
     <string name="fade_audio_effect_duration">Duración del efecto de fundido (ms) (Establecer a 0 para desactivar)</string>

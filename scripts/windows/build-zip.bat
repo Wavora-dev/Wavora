@@ -32,6 +32,15 @@ if not exist "%~dp0..\..\composeApp\icon\circle_app_icon.ico" (
 )
 copy /y "%~dp0..\..\composeApp\icon\circle_app_icon.ico" "%BUNDLE%\wavora.ico" >nul
 
+set MSIX_COUNT=0
+for %%F in ("%OUTPUT%\*.msix") do set /a MSIX_COUNT+=1
+if not "%MSIX_COUNT%"=="1" (
+    echo Se esperaba exactamente 1 .msix en %OUTPUT%, se encontraron %MSIX_COUNT%.
+    echo Borra los .msix viejos de output\ antes de correr este script de nuevo.
+    pause
+    exit /b 1
+)
+
 for %%F in ("%OUTPUT%\*.msix") do copy /y "%%F" "%BUNDLE%\" >nul
 
 if exist "%OUTPUT%\AppwavoraWindows.zip" del "%OUTPUT%\AppwavoraWindows.zip"

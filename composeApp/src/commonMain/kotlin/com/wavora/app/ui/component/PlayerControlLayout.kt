@@ -81,7 +81,8 @@ fun PlayerControlLayout(
                         .clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onUIEvent(UIEvent.Shuffle)
-                        },
+                        }
+                        .tvFocusIndicator(),
                 contentAlignment = Alignment.Center,
             ) {
                 Crossfade(targetState = controllerState.isShuffle, label = "Shuffle Button") { isShuffle ->
@@ -118,7 +119,8 @@ fun PlayerControlLayout(
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 onUIEvent(UIEvent.Previous)
                             }
-                        },
+                        }
+                        .tvFocusIndicator(),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -154,7 +156,8 @@ fun PlayerControlLayout(
                         .clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onUIEvent(UIEvent.PlayPause)
-                        },
+                        }
+                        .tvFocusIndicator(),
                 contentAlignment = Alignment.Center,
             ) {
                 Crossfade(targetState = controllerState.isPlaying) { isPlaying ->
@@ -191,7 +194,8 @@ fun PlayerControlLayout(
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 onUIEvent(UIEvent.Next)
                             }
-                        },
+                        }
+                        .tvFocusIndicator(),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
@@ -224,7 +228,8 @@ fun PlayerControlLayout(
                         .clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onUIEvent(UIEvent.Repeat)
-                        },
+                        }
+                        .tvFocusIndicator(),
                 contentAlignment = Alignment.Center,
             ) {
                 Crossfade(targetState = controllerState.repeatState) { rs ->
