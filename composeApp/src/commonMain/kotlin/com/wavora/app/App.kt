@@ -139,7 +139,13 @@ import com.wavora.app.ui.theme.LocalAppTypography
  * manually instead of guessing (see [ApkAsset] usage below), since
  * downloading the wrong architecture's APK will fail to install. */
 private fun pickBestApkAsset(assets: List<ApkAsset>, deviceAbis: List<String>): ApkAsset? {
-    if (assets.isEmpty()) return null
+    // deviceAbis is empty on Desktop (see currentDeviceAbis()'s doc) - this
+    // must return null in that case, not fall through to the "universal"
+    // match below. Without this check, Desktop always "matched" the
+    // Android universal .apk as if it were the right asset, since the
+    // ABI loop below simply does nothing on an empty list and used to
+    // fall through unconditionally.
+    if (assets.isEmpty() || deviceAbis.isEmpty()) return null
     val abiToFilenameToken =
         mapOf(
             "arm64-v8a" to "arm64",
@@ -740,26 +746,22 @@ fun App(
                         confirmButton = {
                             TextButton(
                                 onClick = {
-                                    val bestMatch = pickBestApkAsset(response.apkAssets, currentDeviceAbis())
-                                    when {
-                                        supportsInAppUpdate() && bestMatch != null -> {
-                                            shouldShowUpdateDialog = false
-                                            viewModel.showedUpdateDialog = false
-                                            installUpdate(bestMatch.downloadUrl, response.tagName)
-                                        }
-                                        // More than one .apk and none matched this
-                                        // device's ABI confidently - ask instead of
-                                        // guessing (see pickBestApkAsset's doc).
-                                        supportsInAppUpdate() && response.apkAssets.size > 1 -> {
-                                            apkPickerAssets = response.apkAssets
-                                        }
-                                        // Desktop: installUpdate() tries Conveyor's own
-                                        // update mechanism first (the primary path - see
-                                        // AppUpdate.jvm.kt's doc) and only falls back to
-                                        // downloading this zip + the bundled Windows
-                                        // updater if Conveyor itself isn't usable right
-                                        // now.
-                                        supportsInAppUpdate() && response.windowsZipDownloadUrl != null -> {
+                                    val deviceAbis = currentDeviceAbis()
+                                    // Empty deviceAbis means Desktop (see
+                                    // currentDeviceAbis()'s doc - JVM's
+                                    // actual returns emptyList()). This is
+                                    // now the ONE gate for platform, checked
+                                    // before anything APK-related, so a
+                                    // Windows build can never reach the apk
+                                    // auto-match or the "pick one of these
+                                    // 4 apks" dialog just because a release
+                                    // happens to have more than one .apk
+                                    // asset attached - that's what actually
+                                    // broke before (Desktop was reaching
+                                    // apk-picking logic that was only ever
+                                    // meant for Android/Android TV).
+                                    if (deviceAbis.isEmpty()) {
+                                        if (supportsInAppUpdate() && response.windowsZipDownloadUrl != null) {
                                             shouldShowUpdateDialog = false
                                             viewModel.showedUpdateDialog = false
                                             updateCoroutineScope.launch(Dispatchers.IO) {
@@ -773,22 +775,44 @@ fun App(
                                                     },
                                                 )
                                             }
+                                        } else {
+                                            // No Windows zip on this release (or in-app
+                                            // update unsupported for some reason) - same
+                                            // manual fallback as always.
+                                            shouldShowUpdateDialog = false
+                                            viewModel.showedUpdateDialog = false
+                                            openUrl("https://github.com/Wavora-dev/Wavora/releases")
                                         }
-                                        else -> {
-                                            val apkUrl = response.apkDownloadUrl
-                                            if (supportsInAppUpdate() && apkUrl != null) {
+                                    } else {
+                                        // Android / Android TV.
+                                        val bestMatch = pickBestApkAsset(response.apkAssets, deviceAbis)
+                                        when {
+                                            supportsInAppUpdate() && bestMatch != null -> {
                                                 shouldShowUpdateDialog = false
                                                 viewModel.showedUpdateDialog = false
-                                                installUpdate(apkUrl, response.tagName)
-                                            } else {
-                                                // Desktop (Conveyor's background updater already
-                                                // owns this - see installUpdate's doc) or no .apk
-                                                // asset found on this release (F-Droid channel, or
-                                                // a GitHub release that forgot to attach one) -
-                                                // same manual fallback as before this change.
-                                                shouldShowUpdateDialog = false
-                                                viewModel.showedUpdateDialog = false
-                                                openUrl("https://github.com/Wavora-dev/Wavora/releases")
+                                                installUpdate(bestMatch.downloadUrl, response.tagName)
+                                            }
+                                            // More than one .apk and none matched this
+                                            // device's ABI confidently - ask instead of
+                                            // guessing (see pickBestApkAsset's doc).
+                                            supportsInAppUpdate() && response.apkAssets.size > 1 -> {
+                                                apkPickerAssets = response.apkAssets
+                                            }
+                                            else -> {
+                                                val apkUrl = response.apkDownloadUrl
+                                                if (supportsInAppUpdate() && apkUrl != null) {
+                                                    shouldShowUpdateDialog = false
+                                                    viewModel.showedUpdateDialog = false
+                                                    installUpdate(apkUrl, response.tagName)
+                                                } else {
+                                                    // No .apk asset found on this release
+                                                    // (F-Droid channel, or a GitHub release
+                                                    // that forgot to attach one) - same
+                                                    // manual fallback as before this change.
+                                                    shouldShowUpdateDialog = false
+                                                    viewModel.showedUpdateDialog = false
+                                                    openUrl("https://github.com/Wavora-dev/Wavora/releases")
+                                                }
                                             }
                                         }
                                     }
@@ -870,7 +894,7 @@ fun App(
                                         ),
                                 )
                                 Markdown(
-                                    response.body,
+                                    response.body.orEmpty().replace("\r\n", "\n").replace("\r", "\n"),
                                     typography =
                                         markdownTypography(
                                             h1 = LocalAppTypography.current.labelLarge,

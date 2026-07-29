@@ -3,11 +3,14 @@ package com.wavora.updater
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.PrintWriter
 import java.io.RandomAccessFile
+import java.io.StringWriter
 import java.net.HttpURLConnection
 import java.net.URI
 import java.nio.channels.FileLock
 import java.security.MessageDigest
+import java.time.Instant
 import java.util.zip.ZipInputStream
 
 /** Everything the caller (Main.kt / the UI) needs to run one update pass. */
@@ -35,6 +38,55 @@ enum class Stage {
 }
 
 class UpdaterException(message: String, cause: Throwable? = null) : Exception(message, cause)
+
+/**
+ * Minimal file-based logger for WavoraUpdater. This module deliberately has
+ * no dependency on the main app's Logger (kermit) - see the doc on
+ * :wavoraUpdater staying standalone - so this is a tiny from-scratch
+ * equivalent, just enough to leave a real trail on disk for whatever run
+ * just happened.
+ *
+ * Why this exists: before this, the ONLY failure signal a user could give
+ * us was a phone photo of the error screen showing a raw OS exception
+ * message (see e.message in UpdaterApp's catch block) - no stage, no file
+ * path, no stack trace. That's nearly undiagnosable. Every run now writes
+ * one log file with a timestamped name (so retries don't overwrite each
+ * other), one line per stage transition, and on failure the FULL exception
+ * (class name + message + stack trace), not just e.message.
+ */
+object UpdateLog {
+    private val logFile: File by lazy {
+        val dir = File(System.getenv("LOCALAPPDATA") ?: System.getProperty("java.io.tmpdir"), "Wavora/Updater/logs")
+        dir.mkdirs()
+        // Best-effort prune: keep only the 10 most recent log files so this
+        // folder doesn't grow forever across many update attempts.
+        dir.listFiles { f -> f.isFile && f.name.startsWith("update-") }
+            ?.sortedByDescending { it.lastModified() }
+            ?.drop(9)
+            ?.forEach { it.delete() }
+        File(dir, "update-${System.currentTimeMillis()}.log")
+    }
+
+    fun line(message: String) {
+        runCatching {
+            logFile.appendText("[${Instant.now()}] $message\n")
+        }
+    }
+
+    fun error(
+        context: String,
+        e: Throwable,
+    ) {
+        val sw = StringWriter()
+        e.printStackTrace(PrintWriter(sw))
+        runCatching {
+            logFile.appendText("[${Instant.now()}] ERROR at $context: ${e::class.qualifiedName}: ${e.message}\n$sw\n")
+        }
+    }
+
+    /** Path of this run's log file, for surfacing in the error UI. */
+    val path: String get() = logFile.absolutePath
+}
 
 /**
  * Single-instance protection: if the user mashes "Actualizar" more than
@@ -92,6 +144,30 @@ object UpdaterLogic {
         args: UpdaterArgs,
         onStage: StageCallback,
     ) = withContext(Dispatchers.IO) {
+        UpdateLog.line("=== Starting update run: version=${args.targetVersion} zipUrl=${args.zipUrl} sha256=${args.expectedSha256 ?: "none"} wavoraPid=${args.wavoraPid} ===")
+        // Logging every single onStage() call was a real bug, not just
+        // noise: downloadWithProgress() invokes this once per network
+        // read - for a 326MB file that's several thousand calls, each one
+        // opening, appending to, and closing the log file on disk. That
+        // I/O overhead was almost certainly the actual cause of the
+        // updater appearing to hang/never finish (confirmed by Sebastian:
+        // the log file itself was tens of thousands of lines of pure
+        // download progress). Only log DOWNLOADING at 5% steps; every
+        // other stage is infrequent enough to log unconditionally.
+        var lastLoggedDownloadBucket = -1
+        val loggedOnStage: StageCallback = { stage, progress ->
+            if (stage == Stage.DOWNLOADING && progress != null) {
+                val bucket = (progress * 20).toInt() // 20 buckets = 5% each
+                if (bucket != lastLoggedDownloadBucket) {
+                    lastLoggedDownloadBucket = bucket
+                    UpdateLog.line("Stage=$stage progress=$progress")
+                }
+            } else {
+                UpdateLog.line("Stage=$stage progress=$progress")
+            }
+            onStage(stage, progress)
+        }
+
         // Best-effort cleanup of workDirs left behind by a previous run that
         // never reached its own finally block below (process killed, Windows
         // restarted mid-update, power loss, etc.). Safe to do unconditionally
@@ -105,31 +181,31 @@ object UpdaterLogic {
         val workDir = File(System.getProperty("java.io.tmpdir"), "wavora-update-${System.currentTimeMillis()}")
         workDir.mkdirs()
         try {
-            waitForWavoraToExit(args.wavoraPid, onStage)
+            waitForWavoraToExit(args.wavoraPid, loggedOnStage)
 
             val zipFile = File(workDir, "AppwavoraWindows.zip")
-            downloadWithProgress(args.zipUrl, zipFile, onStage)
+            downloadWithProgress(args.zipUrl, zipFile, loggedOnStage)
 
             if (args.expectedSha256 != null) {
-                verifySha256(zipFile, args.expectedSha256, onStage)
+                verifySha256(zipFile, args.expectedSha256, loggedOnStage)
             }
 
             val extractDir = File(workDir, "extracted")
-            extractZip(zipFile, extractDir, onStage)
+            extractZip(zipFile, extractDir, loggedOnStage)
 
             val installScript =
                 extractDir.walkTopDown().firstOrNull { it.isFile && it.name.equals("install.ps1", ignoreCase = true) }
-                    ?: throw UpdaterException("No se encontró install.ps1 dentro del ZIP descargado")
+                    ?: throw UpdaterException("No se encontró install.ps1 dentro del ZIP descargado (log: ${UpdateLog.path})")
 
-            runInstallScript(installScript, onStage)
+            runInstallScript(installScript, loggedOnStage)
 
-            onStage(Stage.CLEANING, null)
+            loggedOnStage(Stage.CLEANING, null)
             // Nothing else to do here beyond the finally block below -
             // kept as an explicit stage so the UI shows it, since the
             // actual removal happens for BOTH the success and failure
             // paths (see finally).
 
-            onStage(Stage.LAUNCHING, null)
+            loggedOnStage(Stage.LAUNCHING, null)
             // install.ps1 already launches Wavora itself as its last step
             // (resolving the installed package's AppUserModelID via
             // Get-StartApps and `Start-Process shell:AppsFolder\<id>`) -
@@ -138,25 +214,35 @@ object UpdaterLogic {
             // than duplicate a fragile reimplementation here, this stage
             // is shown for UI continuity around the moment it already
             // happened inside the one install.ps1 invocation above.
+            UpdateLog.line("=== Update run finished successfully ===")
+        } catch (e: UpdaterException) {
+            // Already a clear, specific message from one of the checks
+            // above (own log line already written where it was thrown) -
+            // just log the file path used this run and let it propagate
+            // unchanged rather than wrapping a wrapper.
+            UpdateLog.error("run() - update failed", e)
+            throw e
+        } catch (e: Exception) {
+            UpdateLog.error("run() - update failed", e)
+            // Any OTHER exception type reaching here means some native
+            // call wasn't wrapped with context above - still better than
+            // showing the bare OS message with nothing else, so at least
+            // point at the log file for the full stack trace.
+            throw UpdaterException("${e.message ?: e::class.simpleName} (ver log: ${UpdateLog.path})", e)
         } finally {
-            // AUDIT NOTE: deleteRecursively() de Kotlin no lanza excepcion si
-            // un archivo esta bloqueado - devuelve false en silencio y deja
-            // el resto de la carpeta huerfana en %TEMP%. Confirmado a mano
-            // por Sebastian: justo despues de instalar, a veces no se puede
-            // borrar el .msix todavia (Windows Defender / Antimalware
-            // Service Executable lo tiene abierto un momento mientras lo
-            // escanea). Reintentar con una espera corta cubre ese caso
-            // comun sin volver esto bloqueante si de verdad algo mas serio
-            // esta reteniendo el archivo (despues de los reintentos, sigue
-            // sin ser fatal para el update - la app ya se lanzo en el paso
-            // anterior).
-            var deleted = workDir.deleteRecursively()
-            var attempt = 0
-            while (!deleted && attempt < 5) {
-                Thread.sleep(1000)
-                deleted = workDir.deleteRecursively()
-                attempt++
-            }
+            // NOTE: deliberately NOT deleting workDir here anymore. A
+            // single deleteRecursively() call on the freshly-written
+            // .msix can block for a long time - not fail fast, genuinely
+            // block the calling thread - because Windows Defender's
+            // on-access scan intercepts the delete/close and holds it up
+            // until the scan finishes (confirmed: this is what was
+            // keeping the app open at the LAUNCHING stage, consuming CPU
+            // for the halo animation, long after the real work was done).
+            // Closing the app promptly matters far more than removing
+            // this folder right now - the orphan cleanup at the top of
+            // the NEXT run already deletes any leftover
+            // wavora-update-* folder, by which point Defender's scan has
+            // long finished and the delete is instant.
         }
     }
 
@@ -215,6 +301,25 @@ object UpdaterLogic {
         if (totalBytes > 0 && readBytes != totalBytes) {
             throw UpdaterException("La descarga quedó incompleta ($readBytes de $totalBytes bytes)")
         }
+
+        // Magic-byte sanity check: a ZIP always starts with "PK". This
+        // catches the case where the HTTP response was 200 with a
+        // Content-Length that happened to match (e.g. a proxy/AV
+        // interstitial page, a GitHub error page, a truncated CDN
+        // response) - readBytes==totalBytes would pass above even though
+        // what we downloaded isn't a real installer at all. Without this,
+        // that case surfaces later as an opaque native error deep inside
+        // extraction with no indication the download itself was the
+        // actual problem.
+        val header = ByteArray(2)
+        RandomAccessFile(destination, "r").use { raf -> raf.readFully(header) }
+        if (header[0] != 'P'.code.toByte() || header[1] != 'K'.code.toByte()) {
+            UpdateLog.line("Downloaded file does not start with ZIP magic bytes (got ${header.joinToString { "%02x".format(it) }}) - size=${destination.length()}")
+            throw UpdaterException(
+                "El archivo descargado no es un ZIP válido (¿la URL cambió o algo interceptó la descarga? " +
+                    "tamaño: ${destination.length()} bytes)",
+            )
+        }
     }
 
     private fun verifySha256(
@@ -256,19 +361,36 @@ object UpdaterLogic {
         ZipInputStream(zipFile.inputStream()).use { zis ->
             var entry = zis.nextEntry
             while (entry != null) {
-                val outFile = File(destinationDir, entry.name)
-                // Zip-slip guard: refuse to extract any entry whose resolved
-                // path escapes destinationDir.
-                if (!outFile.canonicalFile.path.startsWith(canonicalDest.path + File.separator) &&
-                    outFile.canonicalFile != canonicalDest
-                ) {
-                    throw UpdaterException("Entrada de ZIP inválida (fuera del directorio de extracción): ${entry.name}")
-                }
-                if (entry.isDirectory) {
-                    outFile.mkdirs()
-                } else {
-                    outFile.parentFile?.mkdirs()
-                    outFile.outputStream().use { output -> zis.copyTo(output) }
+                val entryName = entry.name
+                val outFile = File(destinationDir, entryName)
+                try {
+                    // Zip-slip guard: refuse to extract any entry whose
+                    // resolved path escapes destinationDir.
+                    if (!outFile.canonicalFile.path.startsWith(canonicalDest.path + File.separator) &&
+                        outFile.canonicalFile != canonicalDest
+                    ) {
+                        throw UpdaterException("Entrada de ZIP inválida (fuera del directorio de extracción): $entryName")
+                    }
+                    if (entry.isDirectory) {
+                        outFile.mkdirs()
+                    } else {
+                        outFile.parentFile?.mkdirs()
+                        outFile.outputStream().use { output -> zis.copyTo(output) }
+                    }
+                } catch (e: UpdaterException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Wrap ANY native I/O failure (invalid filename chars,
+                    // reserved Windows device names like con/aux/nul, path
+                    // too long, etc.) with the exact entry name and target
+                    // path - this is what used to surface as a bare,
+                    // contextless Windows error string with no way to know
+                    // which of the hundreds of files in the zip caused it.
+                    UpdateLog.line("Failed extracting entry '$entryName' -> '${outFile.absolutePath}': ${e::class.simpleName}: ${e.message}")
+                    throw UpdaterException(
+                        "No se pudo extraer '$entryName' (destino: ${outFile.absolutePath}): ${e.message} (log: ${UpdateLog.path})",
+                        e,
+                    )
                 }
                 zis.closeEntry()
                 entry = zis.nextEntry
@@ -281,6 +403,21 @@ object UpdaterLogic {
         onStage: StageCallback,
     ) {
         onStage(Stage.INSTALLING, null)
+
+        // Pre-flight checks - if either of these is false, ProcessBuilder
+        // would fail deep inside a native CreateProcess call with an
+        // opaque OS error message (e.g. ERROR_INVALID_NAME) and no
+        // indication of WHICH path was the problem. Checking here first
+        // turns that into a clear, actionable message.
+        if (!installScript.exists()) {
+            throw UpdaterException("install.ps1 no existe en la ruta esperada: ${installScript.absolutePath}")
+        }
+        val workingDir = installScript.parentFile
+        if (workingDir == null || !workingDir.exists()) {
+            throw UpdaterException("El directorio de trabajo para install.ps1 no existe: ${workingDir?.absolutePath}")
+        }
+        UpdateLog.line("Launching install.ps1 at ${installScript.absolutePath} (cwd=${workingDir.absolutePath})")
+
         // The one deliberate exception to "everything in Kotlin": MSIX
         // package installation (Add-AppxPackage) and trusting the
         // self-signed cert (Import-Certificate to LocalMachine) have no
@@ -291,15 +428,23 @@ object UpdaterLogic {
         // AppUpdate.jvm.kt's launch via JNA Shell32.ShellExecute "runas"),
         // so this doesn't trigger a second UAC prompt.
         val process =
-            ProcessBuilder(
-                "powershell.exe",
-                "-NoProfile",
-                "-ExecutionPolicy", "Bypass",
-                "-WindowStyle", "Hidden",
-                "-File", installScript.absolutePath,
-                "-Silent",
-            ).directory(installScript.parentFile)
-                .start()
+            try {
+                ProcessBuilder(
+                    "powershell.exe",
+                    "-NoProfile",
+                    "-ExecutionPolicy", "Bypass",
+                    "-WindowStyle", "Hidden",
+                    "-File", installScript.absolutePath,
+                    "-Silent",
+                ).directory(workingDir)
+                    .start()
+            } catch (e: Exception) {
+                UpdateLog.error("runInstallScript() - ProcessBuilder.start() failed", e)
+                throw UpdaterException(
+                    "No se pudo iniciar install.ps1 (path=${installScript.absolutePath}, cwd=${workingDir.absolutePath}): ${e.message}",
+                    e,
+                )
+            }
 
         // Real process-exit wait (Process.waitFor()), not a sleep. The
         // bounded overload here is a safety net against a genuinely wedged

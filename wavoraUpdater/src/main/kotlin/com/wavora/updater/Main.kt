@@ -36,13 +36,24 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toComposeImageBitmap
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import org.jetbrains.skia.Image as SkiaImage
+import java.awt.Desktop
 import java.awt.Dimension
+import java.net.URI
+
+// Manual-download safety net: if the fully-automatic path fails for any
+// reason, this is where a user can always go grab the current release by
+// hand. /releases/latest (not a version-pinned URL) so this never goes
+// stale as new versions ship - it always resolves to whatever is newest
+// at the moment the user clicks it, regardless of which version this
+// particular copy of WavoraUpdater was bundled with.
+private const val MANUAL_DOWNLOAD_URL = "https://github.com/Wavora-dev/Wavora/releases/latest"
 
 // ===== Brand tokens (copied, not imported: wavoraUpdater deliberately does
 // not depend on :composeApp's theme module - see build.gradle.kts's doc on
@@ -112,8 +123,8 @@ private fun runUpdaterApplication(args: Array<String>) =
         val windowState =
             rememberWindowState(
                 position = WindowPosition.Aligned(Alignment.Center),
-                width = 380.dp,
-                height = 220.dp,
+                width = 460.dp,
+                height = 280.dp,
             )
 
         Window(
@@ -125,7 +136,7 @@ private fun runUpdaterApplication(args: Array<String>) =
             resizable = false,
             alwaysOnTop = true,
         ) {
-            window.minimumSize = Dimension(380, 220)
+            window.minimumSize = Dimension(460, 280)
             UpdaterApp(updaterArgs, onFinished = ::exitApplication)
         }
     }
@@ -160,7 +171,7 @@ private fun UpdaterApp(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(220.dp)
+                    .height(280.dp)
                     .clip(RoundedCornerShape(20.dp))
                     .background(wavoraBackground),
             contentAlignment = Alignment.Center,
@@ -191,12 +202,34 @@ private fun UpdaterApp(
                         text = errorMessage ?: "",
                         color = wavoraTextSecondary,
                         style = MaterialTheme.typography.bodySmall,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Button(
                             onClick = { attempt++ },
                             colors = ButtonDefaults.buttonColors(containerColor = wavoraPrimary),
                         ) { Text("Reintentar") }
+                        Button(
+                            onClick = {
+                                // Second safety net: if the automatic
+                                // updater itself can't finish, don't leave
+                                // the user stuck with nothing to do beyond
+                                // "Reintentar" (which just repeats the same
+                                // failure if the root cause hasn't
+                                // changed) - open the current release page
+                                // so they can grab AppwavoraWindows.zip by
+                                // hand, same as before autoupdate existed.
+                                // Desktop.browse() opens the user's actual
+                                // default browser (not KCEF/embedded) - a
+                                // plain external navigation, nothing to
+                                // manage or clean up here.
+                                runCatching {
+                                    Desktop.getDesktop().browse(URI(MANUAL_DOWNLOAD_URL))
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = wavoraGradientMid),
+                        ) { Text("Descargar manual") }
                         Button(
                             onClick = onFinished,
                             colors = ButtonDefaults.buttonColors(containerColor = wavoraBorder),
