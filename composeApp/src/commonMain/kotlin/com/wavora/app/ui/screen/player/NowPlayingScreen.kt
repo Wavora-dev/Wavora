@@ -140,6 +140,7 @@ import com.wavora.domain.mediaservice.handler.RepeatState
 import com.wavora.logger.Logger
 import com.wavora.app.Platform
 import com.wavora.app.expect.toggleMiniPlayer
+import com.wavora.app.expect.ui.CastButton
 import com.wavora.app.expect.ui.MediaPlayerView
 import com.wavora.app.expect.ui.MediaPlayerViewWithSubtitle
 import com.wavora.app.expect.ui.toImageBitmap
@@ -1484,6 +1485,18 @@ fun NowPlayingScreenContent(
                                     tint = Color.White,
                                 )
                             }
+                        }
+                        // Google Cast (Fase 4, Android-only). CastButton ya se
+                        // ocupa de no renderizar nada si no hay Google Play
+                        // Services disponible.
+                        if (getPlatform() == Platform.Android) {
+                            CastButton(
+                                modifier =
+                                    Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape)
+                                        .wavoraIconGradient(),
+                            )
                         }
                         IconButton(
                             modifier =

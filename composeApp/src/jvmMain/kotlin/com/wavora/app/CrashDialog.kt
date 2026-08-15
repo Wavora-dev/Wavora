@@ -1,6 +1,7 @@
 package com.wavora.app
 
 import com.wavora.app.utils.VersionManager
+import com.wavora.logger.Logger
 import io.sentry.Sentry
 import java.awt.BorderLayout
 import java.awt.Color
@@ -24,8 +25,24 @@ import kotlin.system.exitProcess
 
 object CrashDialog {
 
+    private const val TAG = "CrashDialog"
+
     fun install() {
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            // AUDIT FIX (evidencia, no cambia comportamiento): antes, un crash
+            // solo llegaba a Sentry y al diálogo Swing — nunca al log de sesión
+            // en disco (AuditFileLogWriter), porque este handler no pasaba por
+            // Logger. Resultado: cualquier IOException real (p. ej. el de
+            // DataStore) queda invisible en wavora-*.log aunque haya pasado en
+            // esa sesión, y solo se puede reconstruir por inferencia de
+            // timestamps. Esto solo agrega el registro; no altera el resto
+            // del flujo (Sentry, diálogo, exitProcess) en absoluto.
+            try {
+                Logger.e(TAG, "===== UNCAUGHT EXCEPTION en thread '${thread.name}' =====", throwable)
+            } catch (_: Throwable) {
+                // Si el propio logger está roto, no queremos perder el crash real por eso.
+            }
+
             try {
                 // Report to Sentry if available
                 if (BuildKonfig.sentryDsn.isNotEmpty()) {

@@ -121,6 +121,18 @@ interface DataStoreManager {
     suspend fun setWatchVideoInsteadOfPlayingAudio(watch: Boolean)
 
     /**
+     * Android only: si está activo, Wavora no pausa/baja el volumen cuando otra app
+     * (Instagram, un juego, YouTube, etc.) reproduce audio y le pide audio focus al
+     * sistema. Wavora simplemente nunca gestiona audio focus para el player activo,
+     * así que sigue sonando igual, mezclado con el audio de la otra app. Apagado por
+     * defecto (FALSE) porque mezclar audio sin que el usuario lo pida explícitamente
+     * no es el comportamiento esperado de una app de música.
+     */
+    val ignoreAudioFocusLoss: Flow<String>
+
+    suspend fun setIgnoreAudioFocusLoss(ignore: Boolean)
+
+    /**
      * Whether the video track of a video song is downloaded alongside its audio when the user
      * downloads it. Defaults to TRUE (existing behavior: download both, same as before this
      * setting existed). When set to false, only the audio part is downloaded for video songs —

@@ -13,7 +13,10 @@ import androidx.media3.common.audio.SonicAudioProcessor
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.cast.CastPlayer
+import androidx.media3.cast.SessionAvailabilityListener
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.SilenceSkippingAudioProcessor
@@ -28,6 +31,7 @@ import com.wavora.domain.repository.StreamRepository
 import com.wavora.logger.Logger
 import com.wavora.media3.audio.BiquadFilter
 import com.wavora.media3.audio.CrossfadeFilterAudioProcessor
+import com.wavora.media3.cast.CastPlayerManager
 import com.wavora.media3.exoplayer.CrossfadeExoPlayerAdapter.Companion.SPEED_PITCH_STEP
 import com.wavora.media3.service.mediasourcefactory.MergingMediaSourceFactory
 import kotlinx.coroutines.CancellationException
@@ -36,6 +40,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -75,6 +80,7 @@ internal class CrossfadeExoPlayerAdapter(
     private val mediaSourceFactory: MergingMediaSourceFactory,
     private val audioAttributes: AudioAttributes,
     private val streamRepository: StreamRepository,
+    private val castPlayerManager: CastPlayerManager,
 ) : MediaPlayerInterface {
     // ========== Internal State Enum (same as GstreamerPlayerAdapter) ==========
 
@@ -109,6 +115,37 @@ internal class CrossfadeExoPlayerAdapter(
             dataStoreManager.crossfadeDjMode.collect { enabled ->
                 djCrossfadeEnabled = (enabled == DataStoreManager.TRUE)
                 Logger.d(TAG, "DJ crossfade mode: $djCrossfadeEnabled")
+            }
+        }
+        coroutineScope.launch {
+            dataStoreManager.watchVideoInsteadOfPlayingAudio.collect { value ->
+                watchVideoModeEnabled = (value == DataStoreManager.TRUE)
+                Logger.d(TAG, "Watch video instead of audio: $watchVideoModeEnabled")
+            }
+        }
+        coroutineScope.launch {
+            dataStoreManager.ignoreAudioFocusLoss.collect { value ->
+                ignoreAudioFocusLossEnabled = (value == DataStoreManager.TRUE)
+                Logger.d(TAG, "Ignore audio focus loss: $ignoreAudioFocusLossEnabled")
+                // Re-aplicar en caliente sobre el player activo: no hace falta
+                // reiniciar la reproducción para que el toggle tenga efecto, ni
+                // esperar a que arranque la próxima canción.
+                currentPlayer?.setAudioAttributes(audioAttributes, !ignoreAudioFocusLossEnabled)
+            }
+        }
+        coroutineScope.launch {
+            castPlayerManager.castPlayerFlow.collect { cast ->
+                cast?.setSessionAvailabilityListener(
+                    object : SessionAvailabilityListener {
+                        override fun onCastSessionAvailable() {
+                            onCastSessionAvailable(cast)
+                        }
+
+                        override fun onCastSessionUnavailable() {
+                            onCastSessionUnavailable(cast)
+                        }
+                    },
+                )
             }
         }
     }
@@ -158,6 +195,7 @@ internal class CrossfadeExoPlayerAdapter(
     private var cachedIsLoading = false
 
     private var positionUpdateJob: Job? = null
+    private var castPositionUpdateJob: Job? = null
 
     // Active Player.Listener (equivalent to BusListeners in GstreamerPlayerAdapter)
     // Only ONE listener instance, attached to ONE ExoPlayer at a time.
@@ -188,6 +226,28 @@ internal class CrossfadeExoPlayerAdapter(
 
     @Volatile
     private var djCrossfadeEnabled = true
+
+    // AUDIT FIX: ver init{} y createExoPlayerInstance() para el porqué completo.
+    @Volatile
+    private var watchVideoModeEnabled = false
+
+    // FEATURE: ver init{} y createExoPlayerInstance() — permite que Wavora siga
+    // sonando cuando otra app (Instagram, un juego, etc.) le pide audio focus.
+    @Volatile
+    private var ignoreAudioFocusLossEnabled = false
+
+    // Google Cast (Fase 5). true mientras haya una sesión Cast conectada — los
+    // métodos de control (play/pause/seekTo/loadAndPlayTrackInternal) chequean
+    // esto primero y delegan en castPlayerManager.castPlayerFlow.value en vez
+    // de currentPlayer. Ver setupCastSessionListener() y los métodos afectados.
+    @Volatile
+    private var isCastingActive = false
+
+    // Listener paralelo, separado de setupPlayerListenerInternal() a propósito
+    // (esa función maneja crossfade/retry/precache — nada de eso aplica a
+    // Cast). Solo actualiza los mismos campos cacheados que ya leen los
+    // getters de MediaPlayerInterface (cachedPosition, internalState, etc.).
+    private var castPlayerListener: Player.Listener? = null
 
     @Volatile
     private var secondaryPlayer: ExoPlayer? = null
@@ -244,7 +304,7 @@ internal class CrossfadeExoPlayerAdapter(
     // ========== ForwardingPlayer for MediaSession ==========
 
     // Create an initial idle ExoPlayer for MediaSession to hold
-    private val initialPlayerWithFilter = createExoPlayerInstance(handleAudioFocus = true)
+    private val initialPlayerWithFilter = createExoPlayerInstance(handleAudioFocus = !ignoreAudioFocusLossEnabled)
 
     /**
      * Stable [Player] reference for MediaSession.
@@ -332,10 +392,32 @@ internal class CrossfadeExoPlayerAdapter(
                         ).build()
             }
 
+        // AUDIT FIX (causa raíz de los MediaCodecVideoRenderer / c2.qti.avc.decoder
+        // errors en Sentry Android): antes no había ningún DefaultTrackSelector acá,
+        // así que ExoPlayer usaba su selección de tracks por defecto — que instancia
+        // un renderer de VIDEO para cualquier track cuyo contenedor tenga una pista de
+        // video, sin importar si el usuario solo pidió audio ("Song", no "watch video").
+        // Para canciones que en YouTube no tienen un itag de audio-only disponible y
+        // caen a un formato combinado video+audio (como el video/mp4 360x360 avc1 que
+        // se ve en los breadcrumbs), esto significa que un fallo del decoder de
+        // hardware (c2.qti.avc.decoder) en la pista de VIDEO tira todo el player
+        // abajo — aunque la pista de audio del mismo contenedor esté perfecta.
+        // Ahora, salvo que el usuario tenga activo "ver video en vez de audio"
+        // (watchVideoInsteadOfPlayingAudio), deshabilitamos el track type de video
+        // en el selector: ExoPlayer ni siquiera va a intentar tocar ese decoder.
+        val trackSelector =
+            DefaultTrackSelector(context).apply {
+                parameters =
+                    buildUponParameters()
+                        .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, !watchVideoModeEnabled)
+                        .build()
+            }
+
         val player =
             ExoPlayer
                 .Builder(context)
                 .setAudioAttributes(audioAttributes, handleAudioFocus)
+                .setTrackSelector(trackSelector)
                 .setLoadControl(
                     DefaultLoadControl
                         .Builder()
@@ -365,6 +447,15 @@ internal class CrossfadeExoPlayerAdapter(
 
     override fun play() {
         Logger.d(TAG, "play() called (state: $internalState, playWhenReady: $internalPlayWhenReady)")
+
+        // Google Cast (Fase 5): delega en el CastPlayer, no en currentPlayer.
+        if (isCastingActive) {
+            castPlayerManager.castPlayerFlow.value?.play()
+            internalPlayWhenReady = true
+            transitionToState(InternalState.PLAYING)
+            return
+        }
+
         coroutineScope.launch {
             when (internalState) {
                 InternalState.READY, InternalState.ENDED, InternalState.PAUSED -> {
@@ -419,6 +510,15 @@ internal class CrossfadeExoPlayerAdapter(
                 "isCrossfading=$isCrossfading song=${currentPlayer?.currentMediaItem?.mediaId}",
         )
         Logger.d(TAG, "pause() called (state: $internalState, playWhenReady: $internalPlayWhenReady)")
+
+        // Google Cast (Fase 5): delega en el CastPlayer, no en currentPlayer.
+        if (isCastingActive) {
+            castPlayerManager.castPlayerFlow.value?.pause()
+            internalPlayWhenReady = false
+            transitionToState(InternalState.PAUSED)
+            return
+        }
+
         coroutineScope.launch {
             forwardingPlayer.suppressPlaybackEnded = false
             // Cancel any ongoing crossfade
@@ -489,6 +589,12 @@ internal class CrossfadeExoPlayerAdapter(
     }
 
     override fun seekTo(positionMs: Long) {
+        // Google Cast (Fase 5): delega en el CastPlayer, no en currentPlayer.
+        if (isCastingActive) {
+            castPlayerManager.castPlayerFlow.value?.seekTo(positionMs)
+            cachedPosition = positionMs
+            return
+        }
         currentPlayer?.let { player ->
             try {
                 player.seekTo(positionMs)
@@ -1115,6 +1221,8 @@ internal class CrossfadeExoPlayerAdapter(
         currentLoadJob?.cancel()
         precacheJob?.cancel()
         positionUpdateJob?.cancel()
+        stopCastPositionUpdates()
+        castPlayerManager.castPlayerFlow.value?.let { cleanupCastPlayerListenerInternal(it) }
 
         // Cancel crossfade
         crossfadeJob?.cancel()
@@ -1240,6 +1348,91 @@ internal class CrossfadeExoPlayerAdapter(
         val mediaItem = playlist[index]
         val videoId = mediaItem.mediaId
 
+        // Google Cast (Fase 5): mientras haya sesión activa, cargar acá
+        // significa cargar en el CastPlayer, no crear/reusar un ExoPlayer
+        // local. Esto cubre automáticamente seekToNext/seekToPrevious/
+        // repeat-mode-one, porque todos convergen en esta misma función.
+        //
+        // IMPORTANTE: mediaItem.toMedia3MediaItem() NO alcanza acá. Su URI es
+        // el mediaId/videoId simbólico — el ResolvingDataSource.Factory
+        // (Media3ServiceModule.kt) es quien lo intercepta y resuelve la URL
+        // real recién cuando ExoPlayer abre el DataSpec. El CastPlayer no
+        // pasa por ese mecanismo: hay que resolver la URL real ANTES de
+        // dársela, con la misma llamada que ya usa el ResolvingDataSource
+        // para el caso de audio.
+        if (isCastingActive) {
+            val cast = castPlayerManager.castPlayerFlow.value
+            if (cast != null) {
+                localCurrentMediaItemIndex = index
+                listeners.forEach {
+                    it.onMediaItemTransition(
+                        mediaItem,
+                        PlayerConstants.MEDIA_ITEM_TRANSITION_REASON_AUTO,
+                    )
+                }
+                coroutineScope.launch {
+                    val resolvedUrl =
+                        streamRepository
+                            .getStream(
+                                dataStoreManager,
+                                videoId,
+                                isDownloading = false,
+                                isVideo = false,
+                            ).lastOrNull()
+
+                    if (resolvedUrl == null) {
+                        Logger.e(TAG, "Cast: no se pudo resolver la URL de stream para $videoId")
+                        return@launch
+                    }
+                    if (!isCastingActive || castPlayerManager.castPlayerFlow.value !== cast) {
+                        // La sesión Cast cambió mientras resolvíamos la URL
+                        // (usuario desconectó/reconectó). No pisar el estado
+                        // de una sesión que ya no es la actual.
+                        return@launch
+                    }
+
+                    // AUDIT FIX (Chromecast no avanza sola al terminar la canción):
+                    // este MediaItem nunca declaraba un MIME type. Google Cast's
+                    // MediaInfo requiere `contentType` como campo esperado (no
+                    // opcional en la práctica - ver docs oficiales de Cast), y
+                    // DefaultMediaItemConverter (el converter que usa CastPlayer
+                    // acá, no pasamos uno custom) lo toma directo de
+                    // `mediaItem.localConfiguration.mimeType` - que quedaba en
+                    // null. Sin un contentType explícito, el receiver depende de
+                    // sniffear el stream/URL para saber qué está reproduciendo,
+                    // lo cual es plausible que degrade justo la detección de
+                    // fin-de-pista (duración/idle-reason) sin impedir que el
+                    // audio arranque - consistente con "castea y suena bien,
+                    // pero no avanza sola al terminar".
+                    //
+                    // NewFormatEntity ya tiene el mimeType real (limpio, sin el
+                    // ";codecs=..." - ver StreamRepositoryImpl.getStream) desde
+                    // la misma resolución de itag que acabamos de esperar acá
+                    // arriba, así que no hace falta adivinar ni hardcodear nada.
+                    val realMimeType = streamRepository.getNewFormat(videoId).firstOrNull()?.mimeType
+
+                    val castMediaItem =
+                        MediaItem
+                            .Builder()
+                            .setMediaId(mediaItem.mediaId)
+                            .setUri(resolvedUrl)
+                            .apply { if (!realMimeType.isNullOrBlank()) setMimeType(realMimeType) }
+                            .setMediaMetadata(mediaItem.metadata.toMedia3MediaMetadata())
+                            .build()
+
+                    cast.setMediaItem(castMediaItem, startPositionMs)
+                    cast.playWhenReady = shouldPlay
+                    cast.prepare()
+                }
+                return
+            }
+            // Caso borde: la sesión Cast cayó justo ahora y todavía no llegó
+            // onCastSessionUnavailable() a resetear isCastingActive. Preferible
+            // caer al camino local (audible) antes que dejar la reproducción
+            // trabada esperando un CastPlayer que ya no está.
+            Logger.w(TAG, "isCastingActive=true pero castPlayer es null; uso el player local como fallback")
+        }
+
         // Cancel previous load
         currentLoadJob?.cancel()
 
@@ -1314,8 +1507,9 @@ internal class CrossfadeExoPlayerAdapter(
                     }
 
                     // Enable audio focus and headphone-disconnect handling on the current player
-                    player.setAudioAttributes(audioAttributes, true)
-                    player.setHandleAudioBecomingNoisy(true)
+                    // (salvo que el usuario haya activado "ignorar audio focus")
+                    player.setAudioAttributes(audioAttributes, !ignoreAudioFocusLossEnabled)
+                    player.setHandleAudioBecomingNoisy(!ignoreAudioFocusLossEnabled)
 
                     // Apply settings
                     player.volume = internalVolume
@@ -1611,9 +1805,12 @@ internal class CrossfadeExoPlayerAdapter(
                 "CrossfadeExoPlayerAdapter.handleTrackEndInternal() | internalPlayWhenReady=$internalPlayWhenReady " +
                 "repeatMode=$internalRepeatMode crossfadeEnabled=$crossfadeEnabled index=$localCurrentMediaItemIndex",
         )
-        // Check if crossfade should be used
+        // Check if crossfade should be used. Nunca durante una sesión Cast
+        // (Fase 6 del plan): el crossfade asume dos ExoPlayer locales, y
+        // durante Cast el audio real lo maneja el CastPlayer, no ellos.
         val shouldCrossfade =
-            crossfadeEnabled &&
+            !isCastingActive &&
+                crossfadeEnabled &&
                 hasNextMediaItem() &&
                 !isCrossfading
 
@@ -2456,6 +2653,22 @@ internal class CrossfadeExoPlayerAdapter(
         // enough that STATE_READY actually means "safe to play without underrun".
         private const val CROSSFADE_BUFFER_FOR_PLAYBACK_MS = 1500
 
+        // AUDIT FIX (Chromecast no avanza sola al terminar la canción):
+        // confirmado con logs reales + captura de pantalla (pista de 4:32,
+        // se frena en pos=4:31.955) que el CastPlayer de Google, al llegar
+        // al final real de la pista, nunca reporta Player.STATE_ENDED - se
+        // queda en STATE_READY con isPlaying=false, indistinguible de una
+        // pausa manual del lado del código de la app. Como es una
+        // limitación del SDK/receiver de Cast (no de este código),
+        // onIsPlayingChanged() infiere el fin de pista cuando la
+        // reproducción se detiene a menos de este margen del final. 2500ms
+        // (no 1500 como en el primer intento) porque ahora se compara contra
+        // cachedPosition/cachedDuration, que se actualizan cada 500ms
+        // (startCastPositionUpdates) y por lo tanto pueden estar hasta
+        // 500ms desactualizados - se deja margen extra para no perder el
+        // caso real por ese desfasaje.
+        private const val CAST_INFERRED_END_THRESHOLD_MS = 2500L
+
         // DJ crossfade sigmoid steepness (higher = sharper S-curve transition)
         private const val DJ_FILTER_SIGMOID_K = 6f
 
@@ -2528,8 +2741,9 @@ internal class CrossfadeExoPlayerAdapter(
         // localCurrentMediaItemIndex already updated in triggerCrossfadeTransition()
 
         // Enable audio focus and headphone-disconnect handling on new current player
-        nextPlayer.setAudioAttributes(audioAttributes, true)
-        nextPlayer.setHandleAudioBecomingNoisy(true)
+        // (salvo que el usuario haya activado "ignorar audio focus")
+        nextPlayer.setAudioAttributes(audioAttributes, !ignoreAudioFocusLossEnabled)
+        nextPlayer.setHandleAudioBecomingNoisy(!ignoreAudioFocusLossEnabled)
 
         // Ensure correct volume and playback parameters
         currentPlayer?.volume = internalVolume
@@ -2551,6 +2765,171 @@ internal class CrossfadeExoPlayerAdapter(
 
         // Trigger next precache
         triggerPrecachingInternal()
+    }
+
+    // ========== Google Cast (Fase 5) ==========
+
+    /**
+     * Se dispara cuando el usuario conecta un dispositivo Cast. Corta
+     * cualquier crossfade en curso (Fase 6), pausa el ExoPlayer local, carga
+     * la canción actual en el CastPlayer desde la misma posición, y hace que
+     * la MediaSession también hable con el CastPlayer.
+     */
+    private fun onCastSessionAvailable(cast: CastPlayer) {
+        Logger.d(TAG, "Cast session available — switching to CastPlayer")
+
+        // Cortar cualquier crossfade en curso antes de tocar nada más.
+        crossfadeJob?.cancel()
+        crossfadeJob = null
+        currentPlayerFilter?.enabled = false
+        secondaryPlayerFilter?.enabled = false
+        setCrossfading(false)
+
+        stopPositionUpdates()
+
+        val resumePositionMs = currentPlayer?.currentPosition ?: cachedPosition
+        val wasPlaying = internalState == InternalState.PLAYING
+
+        currentPlayer?.pause()
+
+        isCastingActive = true
+        setupCastPlayerListenerInternal(cast)
+
+        // Rutea automáticamente a la rama de Cast de loadAndPlayTrackInternal,
+        // porque isCastingActive ya es true acá.
+        loadAndPlayTrackInternal(localCurrentMediaItemIndex, resumePositionMs, wasPlaying)
+
+        forwardingPlayer.swapDelegate(cast)
+        startCastPositionUpdates(cast)
+    }
+
+    /**
+     * Se dispara cuando el usuario desconecta la sesión Cast (o se cae la
+     * conexión). Vuelve a reproducir localmente desde la misma posición.
+     */
+    private fun onCastSessionUnavailable(cast: CastPlayer) {
+        Logger.d(TAG, "Cast session unavailable — switching back to local player")
+
+        val resumePositionMs = cast.currentPosition.coerceAtLeast(0L)
+        val wasPlaying = cast.isPlaying
+
+        stopCastPositionUpdates()
+        cleanupCastPlayerListenerInternal(cast)
+
+        isCastingActive = false
+
+        // Rutea al camino local normal, porque isCastingActive ya es false
+        // acá. Recrea/reusa el ExoPlayer local como en cualquier carga normal.
+        loadAndPlayTrackInternal(localCurrentMediaItemIndex, resumePositionMs, wasPlaying)
+
+        currentPlayer?.let { forwardingPlayer.swapDelegate(it) }
+    }
+
+    /**
+     * Listener paralelo y deliberadamente simple para el CastPlayer — NO
+     * reutiliza [setupPlayerListenerInternal] (esa función está entrelazada
+     * con crossfade/retry/precache, nada de eso aplica acá). Solo actualiza
+     * los mismos campos cacheados que ya leen los getters de
+     * [MediaPlayerInterface], y dispara el mismo avance automático
+     * ([handleTrackEndInternal]) al terminar una pista.
+     */
+    private fun setupCastPlayerListenerInternal(cast: CastPlayer) {
+        cleanupCastPlayerListenerInternal(cast)
+
+        val listener =
+            object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    when (playbackState) {
+                        Player.STATE_ENDED -> {
+                            transitionToState(InternalState.ENDED)
+                            handleTrackEndInternal()
+                        }
+
+                        Player.STATE_READY -> {
+                            val dur = cast.duration
+                            if (dur > 0) cachedDuration = dur
+                        }
+
+                        else -> Unit
+                    }
+                }
+
+                override fun onIsPlayingChanged(isPlaying: Boolean) {
+                    if (isPlaying) {
+                        transitionToState(InternalState.PLAYING)
+                    } else if (internalState == InternalState.PLAYING) {
+                        // AUDIT FIX #2 (el primer intento de este fix nunca
+                        // se disparaba - confirmado con logs reales:
+                        // "CAST_INFERRED_TRACK_END" no aparecía nunca pese a
+                        // que la canción sí terminaba a 208ms del final
+                        // real). La causa: acá abajo se leía cast.duration /
+                        // cast.currentPosition EN VIVO, justo en el instante
+                        // de este callback - y esos valores del SDK de Cast
+                        // pueden venir stale o inválidos (0/-1) justo en ese
+                        // momento exacto de la transición. cachedPosition/
+                        // cachedDuration (actualizados cada 500ms por
+                        // startCastPositionUpdates) demostraron ser
+                        // confiables en el mismo log real (174792ms, a 208ms
+                        // del final de una pista de 175000ms) - se usan como
+                        // fuente principal acá, con cast.duration/
+                        // currentPosition solo como respaldo si el cache
+                        // todavía no se pobló (pista recién arrancada).
+                        val dur = cachedDuration.takeIf { it > 0 } ?: cast.duration
+                        val pos = cachedPosition.takeIf { it > 0 } ?: cast.currentPosition
+                        val looksLikeTrackEnd =
+                            dur > 0 && pos > 0 && (dur - pos) <= CAST_INFERRED_END_THRESHOLD_MS
+                        if (looksLikeTrackEnd) {
+                            Logger.d(
+                                TAG,
+                                "CAST_INFERRED_TRACK_END: pos=$pos dur=$dur - " +
+                                    "CastPlayer never reported STATE_ENDED, inferring end of track",
+                            )
+                            transitionToState(InternalState.ENDED)
+                            handleTrackEndInternal()
+                        } else {
+                            transitionToState(InternalState.PAUSED)
+                        }
+                    }
+                }
+
+                override fun onPlayerError(error: PlaybackException) {
+                    Logger.e(TAG, "CastPlayer error: ${error.message}", error)
+                }
+            }
+
+        castPlayerListener = listener
+        cast.addListener(listener)
+    }
+
+    private fun cleanupCastPlayerListenerInternal(cast: CastPlayer) {
+        castPlayerListener?.let { cast.removeListener(it) }
+        castPlayerListener = null
+    }
+
+    /**
+     * Loop simple de actualización de posición mientras el CastPlayer está
+     * activo. Deliberadamente separado de [startPositionUpdates] (esa
+     * función está entrelazada con la lógica de crossfade/precache local).
+     */
+    private fun startCastPositionUpdates(cast: CastPlayer) {
+        stopCastPositionUpdates()
+        castPositionUpdateJob =
+            coroutineScope.launch {
+                while (isActive && isCastingActive) {
+                    val pos = cast.currentPosition
+                    val dur = cast.duration
+                    val buf = cast.bufferedPosition
+                    if (pos >= 0) cachedPosition = pos
+                    if (dur > 0) cachedDuration = dur
+                    if (buf >= 0) cachedBufferedPosition = buf
+                    delay(500)
+                }
+            }
+    }
+
+    private fun stopCastPositionUpdates() {
+        castPositionUpdateJob?.cancel()
+        castPositionUpdateJob = null
     }
 
     // ========== Internal: Position Updates ==========

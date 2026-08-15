@@ -165,11 +165,40 @@ class SharedViewModel(
         }
         viewModelScope.launch {
             // Forward timeline-ready events to NowPlayingViewModel
+            //
+            // AUDIT FIX (Windows: canción se "cuelga" a veces + 15k+ errores
+            // de WavoraLyricsProvider en 3 horas, hasta ~280/min sostenido):
+            // TimeLine es un data class que incluye `current` (posición de
+            // reproducción, ver TimeLine.kt), así que ANTES de este fix,
+            // cada tick de progreso emitía una instancia distinta de
+            // TimeLine, y sin ningún filtro entre `player.timeline` y
+            // `collectLatest`, onTimelineReady() se disparaba en cada tick
+            // de posición - no una sola vez cuando el timeline "está listo",
+            // que es lo que el comentario original y el nombre de la función
+            // prometen. Para una canción sin letras en ningún lado (backend
+            // devuelve "not_found" siempre), la guarda `lyricsData == null`
+            // en getLyricsFromFormat() nunca se satisface, así que cada tick
+            // de posición volvía a disparar toda la cadena de proveedores de
+            // letras (Wavora -> Spotify/LRCLib -> ...) - varias veces por
+            // segundo, durante toda la duración de esa canción. En una
+            // máquina de 4 núcleos esto es contención real de coroutines/CPU
+            // justo en el momento en que también corre la lógica de
+            // crossfade - candidato fuerte para el cuelgue reportado.
+            //
+            // distinctUntilChangedBy acá filtra por (videoId, timeline ya
+            // listo) en vez de por el valor crudo de TimeLine, así que
+            // onTimelineReady() vuelve a disparar solo una vez por canción
+            // (cuando el timeline pasa de "no listo" a "listo" para ESE
+            // video), tal como pide el nombre de la función.
             player.nowPlayingState
                 .filterNotNull()
                 .flatMapLatest { nowPlayingState ->
                     player.timeline.map { timeLine -> Pair(timeLine, nowPlayingState) }
-                }.collectLatest { (timeLine, nowPlayingState) ->
+                }
+                .distinctUntilChangedBy { (timeLine, nowPlayingState) ->
+                    nowPlayingState.songEntity?.videoId to (timeLine.total > 0)
+                }
+                .collectLatest { (timeLine, nowPlayingState) ->
                     if (timeLine.total > 0 && nowPlayingState.songEntity != null) {
                         nowPlaying.onTimelineReady(nowPlayingState, timeLine)
                     }

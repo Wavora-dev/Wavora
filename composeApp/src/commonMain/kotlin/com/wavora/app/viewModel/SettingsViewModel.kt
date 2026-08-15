@@ -94,6 +94,9 @@ class SettingsViewModel(
     private var _playVideoInsteadOfAudio: MutableStateFlow<String?> = MutableStateFlow(null)
     val playVideoInsteadOfAudio: StateFlow<String?> = _playVideoInsteadOfAudio
 
+    private var _ignoreAudioFocusLoss: MutableStateFlow<String?> = MutableStateFlow(null)
+    val ignoreAudioFocusLoss: StateFlow<String?> = _ignoreAudioFocusLoss
+
     private var _downloadVideoEnabled: MutableStateFlow<String?> = MutableStateFlow(null)
     val downloadVideoEnabled: StateFlow<String?> = _downloadVideoEnabled
     private var _videoQuality: MutableStateFlow<String?> = MutableStateFlow(null)
@@ -248,6 +251,7 @@ class SettingsViewModel(
         getLyricsProvider()
         getUseTranslation()
         getPlayVideoInsteadOfAudio()
+        getIgnoreAudioFocusLoss()
         getDownloadVideoEnabled()
         getVideoQuality()
         getSpotifyLogIn()
@@ -993,6 +997,25 @@ class SettingsViewModel(
         viewModelScope.launch {
             dataStoreManager.setWatchVideoInsteadOfPlayingAudio(playVideoInsteadOfAudio)
             getPlayVideoInsteadOfAudio()
+        }
+    }
+
+    /**
+     * Android only: cuando está activo, Wavora no pausa ni baja el volumen cuando
+     * otra app (Instagram, un juego, YouTube, etc.) le pide audio focus al sistema.
+     */
+    fun getIgnoreAudioFocusLoss() {
+        viewModelScope.launch {
+            dataStoreManager.ignoreAudioFocusLoss.collect { ignore ->
+                _ignoreAudioFocusLoss.emit(ignore)
+            }
+        }
+    }
+
+    fun setIgnoreAudioFocusLoss(ignore: Boolean) {
+        viewModelScope.launch {
+            dataStoreManager.setIgnoreAudioFocusLoss(ignore)
+            getIgnoreAudioFocusLoss()
         }
     }
 

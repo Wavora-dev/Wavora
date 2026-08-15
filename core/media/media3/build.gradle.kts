@@ -64,6 +64,8 @@ dependencies {
     implementation(libs.media3.exoplayer.smoothstreaming)
     implementation(libs.media3.exoplayer.workmanager)
     implementation(libs.media3.datasource.okhttp)
+    implementation(libs.media3.cast)
+    implementation(libs.play.services.cast.framework)
     implementation(libs.okhttp3.logging.interceptor)
     implementation(libs.coroutines.guava)
 }

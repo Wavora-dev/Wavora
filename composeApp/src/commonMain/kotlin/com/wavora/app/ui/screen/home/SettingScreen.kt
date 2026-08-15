@@ -105,6 +105,7 @@ import com.wavora.logger.Logger
 import com.wavora.app.Platform
 import com.wavora.app.expect.ui.fileSaverResult
 import com.wavora.app.expect.ui.openEqResult
+import multiplatform.network.cmptoast.showToast
 import com.wavora.app.extension.bytesToMB
 import com.wavora.app.extension.displayString
 import com.wavora.app.extension.isTwoLetterCode
@@ -242,6 +243,8 @@ import wavora.composeapp.generated.resources.guest
 import wavora.composeapp.generated.resources.help_build_lyrics_database
 import wavora.composeapp.generated.resources.help_build_lyrics_database_description
 import wavora.composeapp.generated.resources.http
+import wavora.composeapp.generated.resources.ignore_audio_focus_loss
+import wavora.composeapp.generated.resources.ignore_audio_focus_loss_subtitle
 import wavora.composeapp.generated.resources.intro_login_to_discord
 import wavora.composeapp.generated.resources.intro_login_to_spotify
 import wavora.composeapp.generated.resources.invalid
@@ -487,6 +490,7 @@ fun SettingScreen(
     val localTrackingEnabled by viewModel.localTrackingEnabled.collectAsStateWithLifecycle(initialValue = false)
     val combineLocalAndYouTubeLiked by viewModel.combineLocalAndYouTubeLiked.collectAsStateWithLifecycle()
     val playVideo by viewModel.playVideoInsteadOfAudio.map { it == TRUE }.collectAsStateWithLifecycle(initialValue = false)
+    val ignoreAudioFocusLoss by viewModel.ignoreAudioFocusLoss.map { it == TRUE }.collectAsStateWithLifecycle(initialValue = false)
     val videoQuality by viewModel.videoQuality.collectAsStateWithLifecycle()
     val sendData by viewModel.sendBackToGoogle.map { it == TRUE }.collectAsStateWithLifecycle(initialValue = false)
     val normalizeVolume by viewModel.normalizeVolume.map { it == TRUE }.collectAsStateWithLifecycle(initialValue = false)
@@ -754,6 +758,14 @@ fun SettingScreen(
                     smallSubtitle = true,
                     switch = (playVideo to { viewModel.setPlayVideoInsteadOfAudio(it) }),
                 )
+                if (getPlatform() == Platform.Android) {
+                    SettingItem(
+                        title = stringResource(Res.string.ignore_audio_focus_loss),
+                        subtitle = stringResource(Res.string.ignore_audio_focus_loss_subtitle),
+                        smallSubtitle = true,
+                        switch = (ignoreAudioFocusLoss to { viewModel.setIgnoreAudioFocusLoss(it) }),
+                    )
+                }
                 SettingItem(
                     title = stringResource(Res.string.video_quality),
                     subtitle = videoQuality ?: "",
@@ -2155,6 +2167,12 @@ fun SettingScreen(
                         showThirdPartyLibraries = true
                     },
                 )
+                // El botón de "Share diagnostic logs" que estaba acá se sacó
+                // a pedido: era solo para pedirle evidencia a un usuario real
+                // frente a un bug puntual durante testing, no para que lo vea
+                // todo el mundo en producción. La lógica de AuditFileLogWriter
+                // y shareLogs() queda intacta por si se necesita reactivar
+                // este botón más adelante (por ej. detrás de un flag de debug).
             }
         }
         item(key = "end") {

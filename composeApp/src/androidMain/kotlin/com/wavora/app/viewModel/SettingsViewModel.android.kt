@@ -332,4 +332,17 @@ actual fun changeLanguageNative(code: String) {
     }
 }
 
-actual fun detectSystemLanguageTag(): String = java.util.Locale.getDefault().toLanguageTag()
+actual fun detectSystemLanguageTag(): String {
+    // OJO: java.util.Locale.getDefault() en Android NO sirve acá. Una vez que
+    // se llama a AppCompatDelegate.setApplicationLocales(...) (lo que hace
+    // changeLanguageNative de este mismo archivo), Android pisa el Locale
+    // "default" del proceso con el override elegido, y esa preferencia queda
+    // pegada a nivel de sistema (Ajustes > Apps > Wavora > Idioma) incluso
+    // sobreviviendo reinstalaciones en algunos casos. Entonces Locale.getDefault()
+    // deja de reflejar el idioma real del dispositivo.
+    // Resources.getSystem() siempre lee la configuración real del sistema,
+    // sin importar qué override haya aplicado esta app.
+    val systemLocales = android.content.res.Resources.getSystem().configuration.locales
+    val systemLocale = if (!systemLocales.isEmpty) systemLocales[0] else java.util.Locale.getDefault()
+    return systemLocale.toLanguageTag()
+}

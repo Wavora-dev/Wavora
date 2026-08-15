@@ -77,7 +77,7 @@ object NotificationHandler {
         val builder =
             NotificationCompat
                 .Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.drawable.mono)
+                .setSmallIcon(R.drawable.ic_notification_w)
                 .setContentTitle(noti.name)
                 .setContentText(
                     if (noti.single.isNotEmpty()) {
@@ -109,9 +109,9 @@ object NotificationHandler {
         val notificationManager: NotificationManager =
             context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (notificationManager.getNotificationChannel(CHANNEL_ID) == null) {
-            val name = "Update Followed Artists"
+            val name = context.getString(R.string.followed_artists_channel_name)
             val descriptionText =
-                "This channel sends notification when followed artists release new music"
+                context.getString(R.string.followed_artists_channel_description)
             val importance = NotificationManager.IMPORTANCE_HIGH
             val channel =
                 NotificationChannel(CHANNEL_ID, name, importance).apply {

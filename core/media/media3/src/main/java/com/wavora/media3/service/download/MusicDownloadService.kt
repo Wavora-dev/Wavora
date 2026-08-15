@@ -36,7 +36,7 @@ internal class MusicDownloadService :
     ): Notification =
         (downloadUtil as DownloadUtils).downloadNotificationHelper.buildProgressNotification(
             this,
-            R.drawable.mono,
+            R.drawable.ic_notification_w,
             null,
             if (downloads.size == 1) {
                 Util.fromUtf8Bytes(downloads[0].request.data)

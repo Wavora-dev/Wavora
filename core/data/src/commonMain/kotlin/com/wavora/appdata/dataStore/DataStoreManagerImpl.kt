@@ -481,6 +481,19 @@ internal class DataStoreManagerImpl(
         }
     }
 
+    override val ignoreAudioFocusLoss =
+        settingsDataStore.data.map { preferences ->
+            preferences[IGNORE_AUDIO_FOCUS_LOSS] ?: FALSE
+        }
+
+    override suspend fun setIgnoreAudioFocusLoss(ignore: Boolean) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[IGNORE_AUDIO_FOCUS_LOSS] = if (ignore) TRUE else FALSE
+            }
+        }
+    }
+
     override val downloadVideoEnabled =
         settingsDataStore.data.map { preferences ->
             preferences[DOWNLOAD_VIDEO_ENABLED] ?: FALSE
@@ -1443,6 +1456,8 @@ internal class DataStoreManagerImpl(
         val MAX_SONG_CACHE_SIZE = intPreferencesKey("maxSongCacheSize")
         val WATCH_VIDEO_INSTEAD_OF_PLAYING_AUDIO =
             stringPreferencesKey("watch_video_instead_of_playing_audio")
+        val IGNORE_AUDIO_FOCUS_LOSS =
+            stringPreferencesKey("ignore_audio_focus_loss")
         val DOWNLOAD_VIDEO_ENABLED =
             stringPreferencesKey("download_video_enabled")
         val VIDEO_QUALITY = stringPreferencesKey("video_quality")

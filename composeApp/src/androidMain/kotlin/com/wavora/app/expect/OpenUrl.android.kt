@@ -30,3 +30,35 @@ actual fun shareUrl(
         Intent.createChooser(shareIntent, title)
     context.startActivity(chooserIntent)
 }
+
+actual fun shareLogs(): Boolean {
+    val context: AppCompatActivity = getKoin().get()
+    // El archivo REAL que está escribiendo el writer activo (instalado en
+    // WavoraApplication.onCreate()) - no uno recalculado acá, que apuntaría
+    // a un timestamp distinto que todavía no existe en disco.
+    val logFile = com.wavora.app.diagnostics.AuditFileLogWriter.activeLogFile
+    if (logFile == null || !logFile.exists() || logFile.length() == 0L) return false
+
+    return try {
+        val uri =
+            androidx.core.content.FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.FileProvider",
+                logFile,
+            )
+        val shareIntent =
+            Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, "Wavora - log de diagnóstico")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                setFlags(FLAG_ACTIVITY_NEW_TASK)
+            }
+        val chooserIntent = Intent.createChooser(shareIntent, "Compartir log de Wavora")
+        chooserIntent.setFlags(FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(chooserIntent)
+        true
+    } catch (e: Exception) {
+        false
+    }
+}

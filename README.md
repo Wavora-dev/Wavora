@@ -59,6 +59,8 @@ Wavora's goal isn't to be "yet another YouTube Music wrapper." It exists to push
 - Repeat (off / one / all), shuffle, and an endless queue (auto-radio once the queue ends)
 - Sleep timer (fixed minutes or "end of current song")
 - Skip-silence and SponsorBlock (automatic sponsor-segment skipping on music videos)
+- **Android**: optional toggle to keep playing through other apps' audio (ignores transient/permanent audio focus loss) — for when Instagram, a game, or any other app grabs the system's audio focus and you don't want Wavora to pause
+- **Android**: **Google Cast (Chromecast)** support — cast to any TV or Cast-ready speaker, with automatic switching between local and remote playback and crossfade disabled while casting
 - Loudness normalization across tracks
 - Selectable audio/video quality tiers
 - Offline downloads for songs, videos, full albums, and full playlists, with an "audio-only for video tracks" toggle
@@ -109,7 +111,7 @@ Wavora's goal isn't to be "yet another YouTube Music wrapper." It exists to push
 - Configurable app language and content region
 
 ### 📱 Platform
-- **Android** — background service with media-session notification, home-screen widget (Glance), Discord/Spotify/YouTube login flows
+- **Android** — background service with media-session notification, home-screen widget (Glance), Discord/Spotify/YouTube login flows, **Google Cast (Chromecast)** support — cast to any TV or Cast-ready speaker, with automatic switching between local and remote playback and crossfade disabled while casting
 - **Android TV** — separate build (own product flavor and APK) with a Leanback launcher entry and remote-control-friendly focus navigation across the app
 - **Desktop (Windows / macOS / Linux)** — standalone windowed app, floating draggable miniplayer window, full-screen player, custom title bar, scrollbars, VLC-based playback (libVLC)
   - macOS Now Playing Center + Remote Command Center (media keys, lock-screen widget)
@@ -450,6 +452,8 @@ El objetivo de Wavora no es ser "otro wrapper más de YouTube Music". Existe par
 - Repetir (desactivado / una / todas), aleatorio, y cola infinita (radio automática al terminar la cola)
 - Timer de sueño (minutos fijos o "al terminar la canción actual")
 - Omitir silencios y SponsorBlock (salteo automático de segmentos de patrocinadores en videos musicales)
+- **Android**: interruptor opcional para seguir sonando aunque otra app reproduzca audio (ignora la pérdida de audio focus transitoria o permanente) — para cuando Instagram, un juego u otra app le pide el audio focus al sistema y no querés que Wavora se pause
+- **Android**: soporte de **Google Cast (Chromecast)** — transmití a cualquier TV o parlante compatible, con cambio automático entre reproducción local y remota, y crossfade desactivado mientras transmitís
 - Normalización de volumen entre canciones
 - Niveles de calidad de audio/video seleccionables
 - Descargas offline de canciones, videos, álbumes completos y playlists completas, con un interruptor de "solo audio en pistas con video"
@@ -500,7 +504,7 @@ El objetivo de Wavora no es ser "otro wrapper más de YouTube Music". Existe par
 - Idioma de la app y región de contenido configurables
 
 ### 📱 Plataforma
-- **Android** — servicio en segundo plano con notificación de sesión de medios, widget de pantalla de inicio (Glance), flujos de inicio de sesión de Discord/Spotify/YouTube
+- **Android** — servicio en segundo plano con notificación de sesión de medios, widget de pantalla de inicio (Glance), flujos de inicio de sesión de Discord/Spotify/YouTube, soporte de **Google Cast (Chromecast)** — transmití a cualquier TV o parlante compatible, con cambio automático entre reproducción local y remota, y crossfade desactivado mientras transmitís
 - **Android TV** — build separado (flavor y APK propios) con entrada en el launcher de Leanback y navegación por foco pensada para control remoto en toda la app
 - **Escritorio (Windows / macOS / Linux)** — app de ventana independiente, miniplayer flotante y arrastrable, reproductor en pantalla completa, barra de título personalizada, scrollbars, reproducción basada en VLC (libVLC)
   - Now Playing Center + Remote Command Center en macOS (teclas multimedia, widget de pantalla de bloqueo)

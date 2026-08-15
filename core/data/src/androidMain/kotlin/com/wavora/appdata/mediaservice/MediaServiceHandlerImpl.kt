@@ -120,6 +120,8 @@ internal class MediaServiceHandlerImpl(
     private var playbackErrorRetryCount = 0
     private val maxPlaybackErrorRetries = 2
     private val playbackErrorRetryDelayMs = 1500L
+    // AUDIT FIX: ver explicación completa en onIsPlayingChanged() más abajo.
+    private var retryCountResetJob: Job? = null
     override var onUpdateNotification: (List<GenericCommandButton>) -> Unit = {}
     override var showToast: (ToastType) -> Unit = {}
     override var pushPlayerError: (PlayerError) -> Unit = {}
@@ -2287,7 +2289,28 @@ internal class MediaServiceHandlerImpl(
         )
         _controlState.value = _controlState.value.copy(isPlaying = isPlaying)
         if (isPlaying) {
-            playbackErrorRetryCount = 0
+            // AUDIT FIX (causa raíz confirmada del loop infinito de retry en Android):
+            // esto antes era `playbackErrorRetryCount = 0` directo acá. El problema es
+            // que ExoPlayer reporta isPlaying=true en cuanto arranca a intentar
+            // reproducir de nuevo tras player.play() (handlePlayerErrorWithRetry),
+            // AUNQUE el mismo decoder de hardware vaya a fallar de nuevo unos cientos
+            // de ms después (ver MediaCodecVideoRenderer / c2.qti.avc.decoder init
+            // failed en los breadcrumbs de Sentry). Resultado: cada reintento
+            // reseteaba su propio contador a 0 antes de que el error volviera a
+            // ocurrir, así que `playbackErrorRetryCount < maxPlaybackErrorRetries`
+            // nunca llegaba a ser false — reintento infinito, nunca se pausaba ni se
+            // avisaba al usuario (nunca se ve el log "se agotaron los reintentos").
+            // Ahora el reset se demora: solo cuenta como "recuperado de verdad" si
+            // sigue reproduciendo, sin un error nuevo, más tiempo del que dura un
+            // ciclo de reintento (playbackErrorRetryDelayMs). Si el error vuelve
+            // antes de eso, handlePlayerErrorWithRetry cancela este job y el contador
+            // sigue subiendo como corresponde.
+            retryCountResetJob?.cancel()
+            retryCountResetJob =
+                coroutineScope.launch {
+                    delay(playbackErrorRetryDelayMs * 2)
+                    playbackErrorRetryCount = 0
+                }
             startProgressUpdate()
             nowPlayingState.value.songEntity?.let { updateDiscordRpc(it) }
         } else {
@@ -2435,6 +2458,11 @@ internal class MediaServiceHandlerImpl(
      * antes de rendirse.
      */
     private fun handlePlayerErrorWithRetry(error: PlayerError) {
+        // AUDIT FIX: cancelar el reset diferido de onIsPlayingChanged. Si no lo
+        // hacemos, un reset programado por un isPlaying=true transitorio del
+        // intento anterior puede disparar *después* de que ya incrementamos el
+        // contador acá, pisándolo a 0 igual que antes.
+        retryCountResetJob?.cancel()
         if (playbackErrorRetryCount < maxPlaybackErrorRetries) {
             playbackErrorRetryCount++
             Logger.w(

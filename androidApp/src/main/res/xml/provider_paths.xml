@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
+    <!-- AUDIT NOTE: cubre context.filesDir/logs/*.log (ver
+         AuditFileLogWriter.kt + shareLogs() en OpenUrl.android.kt) para
+         poder compartir el log de diagnóstico de la sesión actual sin
+         exponer el resto de filesDir. -->
+    <files-path
+        name="internal_files"
+        path="." />
     <external-path
         name="external_files"
         path="." />

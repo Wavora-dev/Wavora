@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="liked">Me gusta</string>
+    <string name="like">Me gusta</string>
+    <string name="radio">Radio</string>
+    <string name="keep_alive_channel_name">Reproduciendo ahora</string>
+    <string name="repeat_one">Repetir una vez</string>
+    <string name="repeat_all">Repetir Todas</string>
+    <string name="repeat_off">No Repetir</string>
+    <string name="shuffle">Aleatorio</string>
+    <string name="home">Inicio</string>
+    <string name="search">Buscar</string>
+    <string name="library">Biblioteca</string>
+    <string name="available_online">Disponible en línea</string>
+    <string name="songs">Canciones</string>
+    <string name="favorites">Favoritos</string>
+    <string name="playlists">Listas de reproducción</string>
+    <string name="track">pista(s)</string>
+    <string name="download">Descargar</string>
+    <string name="view_count">%1$s vistas</string>
+    <string name="song">Canción</string>
+    <plurals name="n_song">
+        <item quantity="one">%d canción</item>
+        <item quantity="other">%d canciones</item>
+    </plurals>
+</resources>

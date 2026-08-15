@@ -32,6 +32,13 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.isSuccess
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 import kotlin.time.Clock
@@ -191,6 +198,32 @@ class WavoraLyricsProvider(
         cache.keys.filter { it.startsWith(prefix) }.forEach { cache.remove(it) }
     }
 
+    // ---- Concurrent-request de-duplication (in-flight coalescing) ----
+    // AUDIT FIX: getLyrics() is called independently from several UI
+    // surfaces for the *same* currently-playing song at nearly the same
+    // instant (MiniPlayer, NowPlayingScreen, notification, precache...).
+    // Before this fix, each of those calls raced independently through
+    // the cache-miss path below, and every one that landed on "pending
+    // import" fired its own registerTrackBestEffort() -> POST /v1/lyrics.
+    // Real logs showed 7 of these landing within ~2.3s for the same
+    // videoId, all failing on the backend with "Already inserting
+    // lyrics... please wait" - pure waste, since only the first request
+    // could ever succeed anyway, and it also multiplies KV reads/writes
+    // on the backend for no benefit (see the backend's cache.ts audit
+    // notes on KV quota exhaustion).
+    //
+    // This coalesces concurrent calls for the same cache key into a
+    // single in-flight request: the first caller does the real work,
+    // every other caller in the same window just awaits that same
+    // Deferred instead of starting its own. Uses a dedicated
+    // SupervisorJob-backed scope - not the calling coroutine's own scope
+    // - so one caller cancelling its call site (e.g. a screen being
+    // navigated away from) can never cancel the in-flight request out
+    // from under the other callers still waiting on it.
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val inFlightMutex = Mutex()
+    private val inFlightGetLyrics = HashMap<String, Deferred<Result<BackendLyricsRow?>>>()
+
     private fun HttpRequestBuilder.defaultHeaders() {
         headers {
             header(HttpHeaders.Accept, "application/json")
@@ -240,14 +273,41 @@ class WavoraLyricsProvider(
         videoId: String,
         language: String = "und",
         trackMetadata: TrackMetadata? = null,
+    ): Result<BackendLyricsRow?> {
+        val cacheKey = "lyrics:$videoId:$language"
+        when (val cached = cacheLookup<BackendLyricsRow?>(cacheKey)) {
+            is CacheLookup.Hit -> return Result.success(cached.value)
+            CacheLookup.Miss -> Unit
+        }
+
+        // AUDIT FIX: join an in-flight request for this exact videoId+
+        // language instead of starting a new one - see the field doc
+        // above `inFlightGetLyrics` for why this matters (duplicate
+        // registerTrackBestEffort/POST storms).
+        val deferred =
+            inFlightMutex.withLock {
+                inFlightGetLyrics.getOrPut(cacheKey) {
+                    ioScope.async { fetchLyrics(videoId, language, trackMetadata, cacheKey) }
+                }
+            }
+        return try {
+            deferred.await()
+        } finally {
+            inFlightMutex.withLock {
+                // Only remove our own entry - a newer request may have
+                // already replaced it if this one took long enough.
+                if (inFlightGetLyrics[cacheKey] === deferred) inFlightGetLyrics.remove(cacheKey)
+            }
+        }
+    }
+
+    private suspend fun fetchLyrics(
+        videoId: String,
+        language: String,
+        trackMetadata: TrackMetadata?,
+        cacheKey: String,
     ): Result<BackendLyricsRow?> =
         runCatching {
-            val cacheKey = "lyrics:$videoId:$language"
-            when (val cached = cacheLookup<BackendLyricsRow?>(cacheKey)) {
-                is CacheLookup.Hit -> return@runCatching cached.value
-                CacheLookup.Miss -> Unit
-            }
-
             val response =
                 httpClient.get("$v1/lyrics/$videoId") {
                     defaultHeaders()

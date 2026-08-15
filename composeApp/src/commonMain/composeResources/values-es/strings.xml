@@ -306,6 +306,8 @@
     <string name="audio_quality">Calidad de audio</string>
     <string name="play_video_for_video_track_instead_of_audio_only">Reproducir vídeo para pista de vídeo en lugar de sólo audio</string>
     <string name="such_as_music_video_lyrics_video_podcasts_and_more">Como vídeos musicales, letras de canciones, podcasts, y más</string>
+    <string name="ignore_audio_focus_loss">Seguir sonando cuando otra app reproduce audio</string>
+    <string name="ignore_audio_focus_loss_subtitle">Wavora no se va a pausar cuando Instagram, un juego u otra app reproduzcan sonido. El audio se puede superponer.</string>
     <string name="video_quality">Calidad de vídeo</string>
     <plurals name="n_song">
         <item quantity="one">%d canción</item>
@@ -436,6 +438,11 @@
     <string name="if_you_enjoy_using_wavora_star_wavora_on_github_or_leave_a_review_on">Si te gusta usar Wavora, da una estrella a Wavora en gituhb o deja una reseña</string>
     <string name="if_you_love_my_work_consider">"Si amas mi trabajo, considera "</string>
     <string name="buying_me_a_coffee">apoyando la app en Patreon.</string>
+    <string name="support_wavora_button">Apoyar a Wavora</string>
+    <string name="wavora_free_forever_message">Wavora es y siempre será gratis.\n\nSi la estuviste disfrutando, considerá apoyar la app en Patreon — ayuda a que el desarrollo siga y a que lleguen nuevas funciones.</string>
+    <string name="share_diagnostic_logs">Compartir logs de diagnóstico</string>
+    <string name="share_diagnostic_logs_subtitle">Envía el log de esta sesión para poder investigar un problema</string>
+    <string name="share_diagnostic_logs_failed">Todavía no hay ningún log para compartir</string>
     <string name="fade_audio_effect">Efecto de desvanecimiento de audio</string>
     <string name="disabled">Desactivar</string>
     <string name="fade_audio_effect_duration">Duración del efecto de fundido (ms) (Establecer a 0 para desactivar)</string>

@@ -8,6 +8,7 @@
     <string name="repeat_off">Repeat Off</string>
     <string name="shuffle">Shuffle</string>
     <string name="notification_channel_name" translatable="false">Wavora Playback Notification</string>
+    <string name="keep_alive_channel_name">Now playing</string>
     <string name="home">Home</string>
     <string name="search">Search</string>
     <string name="library">Library</string>

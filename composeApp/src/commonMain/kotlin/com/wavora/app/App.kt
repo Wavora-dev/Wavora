@@ -113,6 +113,7 @@ import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.cancel
 import wavora.composeapp.generated.resources.do_not_show_again
 import wavora.composeapp.generated.resources.download
+import wavora.composeapp.generated.resources.enjoying_wavora
 import wavora.composeapp.generated.resources.good_night
 import wavora.composeapp.generated.resources.later
 import wavora.composeapp.generated.resources.notification
@@ -120,12 +121,14 @@ import wavora.composeapp.generated.resources.notification_primer_allow
 import wavora.composeapp.generated.resources.notification_primer_description
 import wavora.composeapp.generated.resources.notification_primer_title
 import wavora.composeapp.generated.resources.sleep_timer_off
+import wavora.composeapp.generated.resources.support_wavora_button
 import wavora.composeapp.generated.resources.this_app_needs_to_access_your_notification
 import wavora.composeapp.generated.resources.this_link_is_not_supported
 import wavora.composeapp.generated.resources.unknown
 import wavora.composeapp.generated.resources.update_available
 import wavora.composeapp.generated.resources.update_message
 import wavora.composeapp.generated.resources.update_launch_failed
+import wavora.composeapp.generated.resources.wavora_free_forever_message
 import wavora.composeapp.generated.resources.yes
 import kotlin.time.ExperimentalTime
 import com.wavora.app.ui.theme.LocalAppTypography
@@ -980,7 +983,7 @@ fun App(
                                 },
                             ) {
                                 Text(
-                                    "💜 Support Wavora",
+                                    "💜 " + stringResource(Res.string.support_wavora_button),
                                     style = LocalAppTypography.current.bodySmall.copy(
                                         color = Color(0xFFA259FF),
                                         fontWeight = FontWeight.Bold,
@@ -991,21 +994,21 @@ fun App(
                         dismissButton = {
                             TextButton(onClick = { shouldShowCafecitoDialog = false }) {
                                 Text(
-                                    "Maybe later",
+                                    stringResource(Res.string.later),
                                     style = LocalAppTypography.current.bodySmall.copy(color = Color(0xFF6B6B7A)),
                                 )
                             }
                         },
                         title = {
                             Text(
-                                "Enjoying Wavora?",
+                                stringResource(Res.string.enjoying_wavora),
                                 style = LocalAppTypography.current.labelSmall.copy(fontWeight = FontWeight.Bold),
                             )
                         },
                         text = {
                             Column {
                                 Text(
-                                    "Wavora is free and always will be.\n\nIf you've been enjoying it, consider supporting the app on Patreon — it helps keep development going and new features coming.",
+                                    stringResource(Res.string.wavora_free_forever_message),
                                     style = LocalAppTypography.current.bodySmall,
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))

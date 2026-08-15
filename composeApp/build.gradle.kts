@@ -130,6 +130,20 @@ kotlin {
 
             api(projects.media3)
             api(projects.media3Ui)
+
+            // Google Cast — botón de Cast (Fase 4). CastPlayerManager/CastPlayer
+            // en sí viven en :media3; esto es solo lo que necesita el botón de UI.
+            implementation(libs.play.services.cast.framework)
+            implementation(libs.androidx.mediarouter)
+
+            // AUDIT FIX: mismo motivo que el kermit.logging de jvmMain más
+            // abajo — kermit está declarado `implementation` (no `api`) en
+            // core/common, así que no llega transitivamente acá. Hace falta
+            // directo porque AuditFileLogWriter.kt (movido a este source set
+            // desde androidApp para poder ser referenciado por
+            // OpenUrl.android.kt, que vive en composeApp) usa
+            // co.touchlab.kermit.LogWriter/Severity directamente.
+            implementation(libs.kermit.logging)
         }
         commonMain.dependencies {
             implementation(libs.runtime)

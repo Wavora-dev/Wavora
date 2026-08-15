@@ -60,6 +60,7 @@ import com.wavora.domain.repository.SearchRepository
 import com.wavora.domain.repository.SongRepository
 import com.wavora.domain.repository.StreamRepository
 import com.wavora.logger.Logger
+import com.wavora.media3.cast.CastPlayerManager
 import com.wavora.media3.exoplayer.CrossfadeExoPlayerAdapter
 import com.wavora.media3.repository.CacheRepositoryImpl
 import com.wavora.media3.service.SimpleMediaService
@@ -178,6 +179,11 @@ private val mediaServiceModule =
             provideCoilBitmapLoader(androidContext(), get(named(SERVICE_SCOPE)))
         }
 
+        // Google Cast — ver CastPlayerManager para el alcance exacto de esta fase.
+        single<CastPlayerManager> {
+            CastPlayerManager(androidContext())
+        }
+
         single<MediaPlayerInterface>(createdAtStart = true) {
             CrossfadeExoPlayerAdapter(
                 context = androidContext(),
@@ -186,6 +192,7 @@ private val mediaServiceModule =
                 mediaSourceFactory = get(),
                 audioAttributes = get(),
                 streamRepository = get(),
+                castPlayerManager = get(),
             )
         }
 

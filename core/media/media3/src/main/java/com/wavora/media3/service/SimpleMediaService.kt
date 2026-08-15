@@ -30,6 +30,7 @@ import com.wavora.domain.manager.DataStoreManager
 import com.wavora.domain.mediaservice.handler.MediaPlayerHandler
 import com.wavora.domain.mediaservice.player.MediaPlayerInterface
 import com.wavora.logger.Logger
+import com.wavora.media3.cast.CastPlayerManager
 import com.wavora.media3.exoplayer.CrossfadeExoPlayerAdapter
 import com.wavora.media3.R
 import com.wavora.media3.extension.toCommandButton
@@ -56,6 +57,7 @@ internal class SimpleMediaService :
         (mediaPlayerAdapter as CrossfadeExoPlayerAdapter).forwardingPlayer
     }
     private val coilBitmapLoader: CoilBitmapLoader by inject<CoilBitmapLoader>()
+    private val castPlayerManager: CastPlayerManager by inject<CastPlayerManager>()
 
     private var mediaSession: MediaLibrarySession? = null
 
@@ -97,6 +99,10 @@ internal class SimpleMediaService :
         super.onCreate()
         Logger.w("Service", "Simple Media Service Created")
 
+        // Google Cast — fase 3: solo inicializa CastContext/CastPlayer y loggea
+        // detección de sesión. Todavía no reemplaza nada del reproductor real.
+        castPlayerManager.initialize()
+
         setMediaNotificationProvider(
             DefaultMediaNotificationProvider(
                 this,
@@ -104,7 +110,7 @@ internal class SimpleMediaService :
                 MEDIA_NOTIFICATION.NOTIFICATION_CHANNEL_ID,
                 R.string.notification_channel_name,
             ).apply {
-                setSmallIcon(R.drawable.mono)
+                setSmallIcon(R.drawable.ic_notification_w)
             },
         )
 
@@ -144,7 +150,7 @@ internal class SimpleMediaService :
                 createNotificationChannel(
                     NotificationChannel(
                         "media_playback_channel",
-                        "Now playing",
+                        getString(R.string.keep_alive_channel_name),
                         NotificationManager.IMPORTANCE_LOW,
                     ).apply {
                         setSound(null, null)
@@ -201,7 +207,7 @@ internal class SimpleMediaService :
                     ).setMediaDescriptionAdapter(DefaultMediaDescriptionAdapter(mediaSession?.sessionActivity))
                     .build()
             playerNotificationManager.setPlayer(player)
-            playerNotificationManager.setSmallIcon(R.drawable.mono)
+            playerNotificationManager.setSmallIcon(R.drawable.ic_notification_w)
             mediaSession?.platformToken?.let { playerNotificationManager.setMediaSessionToken(it) }
             }
         }
@@ -260,6 +266,7 @@ internal class SimpleMediaService :
     override fun onDestroy() {
         super.onDestroy()
         Logger.w("Service", "Simple Media Service Destroyed")
+        castPlayerManager.release()
         if (simpleMediaServiceHandler.shouldReleaseOnTaskRemoved()) {
             release()
         }

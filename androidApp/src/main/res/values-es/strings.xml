@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="followed_artists_channel_name">Actualizaciones de artistas seguidos</string>
+    <string name="followed_artists_channel_description">Este canal envía notificaciones cuando los artistas que seguís sacan música nueva</string>
+</resources>

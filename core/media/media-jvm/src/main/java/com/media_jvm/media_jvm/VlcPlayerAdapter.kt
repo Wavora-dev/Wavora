@@ -1228,7 +1228,28 @@ class VlcPlayerAdapter(
                     // never end up as currentPlayer while still muted at the native VLC
                     // level. Does not touch triggerCrossfadeTransition() or any other part
                     // of the crossfade algorithm.
+                    //
+                    // AUDIT FOLLOW-UP (mute reportado en 2.1.1 pese a este fix ya estar
+                    // presente): esta línea sola no alcanza. El listener de preroll (más
+                    // abajo, "PREROLL_RAW_MUTE_REASSERTED") puede volver a mutear este
+                    // MISMO player si VLC dispara otro evento playing() nativo después de
+                    // esto — su guard chequea `!precachedPlayer.preRollIntentionallyUnmuted`,
+                    // pero ese flag solo lo seteaba triggerCrossfadeTransition(), nunca este
+                    // camino manual. No tengo certeza del 95%+ de que ESTE sea el mecanismo
+                    // exacto del bug reportado (no hay un log real que lo capture en el
+                    // momento), así que además de este fix defensivo dejo instrumentación
+                    // (ver logs "MANUAL_UNMUTE_FORCED" y el currentPlayerIdAtReassert
+                    // agregado en PREROLL_RAW_MUTE_REASSERTED) para confirmar o descartar
+                    // esto la próxima vez que se repita.
+                    val wasMutedBeforeForce = runCatching { player.mediaPlayer.audio().isMute }.getOrNull()
                     player.mediaPlayer.audio().isMute = false
+                    player.preRollIntentionallyUnmuted = true
+                    CrossfadeAudit.log(
+                        "MANUAL_UNMUTE_FORCED",
+                        playerId = player.id,
+                        details = "wasMuted=$wasMutedBeforeForce isPrimed=${player.isPrimed} " +
+                            "wasAlreadyIntentional=${player.preRollIntentionallyUnmuted}",
+                    )
 
                     if (cachedPrecache != null) {
                         if (shouldPlay) {
@@ -1999,6 +2020,22 @@ class VlcPlayerAdapter(
                         setCrossfading(false)
                         seekTo(nextIndex, 0)
                     }
+                } finally {
+                    // AUDIT FIX (causa raíz confirmada del freeze de AWT-EventQueue-0 en
+                    // Desktop): si este job se cancelaba (CancellationException) ANTES de
+                    // llegar a performCrossfade() — durante la fase de preroll/seek de
+                    // arriba — este catch la ignoraba a propósito (asumiendo que quien
+                    // canceló el job también resetearía isCrossfading), y el flag quedaba
+                    // pegado en `true` para siempre. Mientras isCrossfading siga true,
+                    // LyricsView.kt (y su equivalente en NowPlayingScreen.kt) corren un
+                    // `while (isActive) { ...; delay(8) }` — ~125 veces por segundo — sin
+                    // parar nunca, en el hilo de Compose/AWT. Coincide exacto con los logs:
+                    // el CPU de AWT-EventQueue-0 salta a ~95-98% justo en un crossfade y
+                    // nunca vuelve a bajar por el resto de la sesión. setCrossfading ya es
+                    // idempotente (no-op si el valor no cambió), así que este finally es
+                    // seguro también en el camino exitoso, donde finalizeCrossfade ya lo
+                    // resetea de todas formas.
+                    setCrossfading(false)
                 }
             }
     }
@@ -2159,7 +2196,20 @@ class VlcPlayerAdapter(
         // isMute=false (por si el estado interrumpido lo dejó muteado). Si igual sigue
         // sin reproducir, seguimos con el swap de todas formas (no se cambia nada más
         // del algoritmo) pero queda logueado para diagnóstico.
-        if (nextIsPlaying != true) {
+        //
+        // AUDIT FIX (microcorte en cada crossfade): el "volume kick" de más abajo
+        // (setVolume(0) -> delay(120ms) -> setVolume(target)) corría SIEMPRE, sin
+        // importar si este recovery se disparó o no. Confirmado con logs reales:
+        // el gap entre CROSSFADE_SWAP y CROSSFADE_SWAP_COMPLETE era de ~120-127ms
+        // en el 100% de las transiciones, incluso cuando nextIsPlaying ya era true
+        // desde el vamos (o sea, sin ningún problema que recuperar). Eso es
+        // exactamente el "freeze de unos cientos de milisegundos en prácticamente
+        // todas las canciones" reportado — no era buffering ni contención de
+        // decoder, era un mute real de 120ms auto-infligido en cada canción.
+        // `recoveryWasNeeded` deja el kick reservado para el único caso donde de
+        // verdad hace falta: cuando el player nuevo efectivamente venía trabado.
+        val recoveryWasNeeded = nextIsPlaying != true
+        if (recoveryWasNeeded) {
             CrossfadeAudit.log(
                 "CROSSFADE_NEXT_NOT_PLAYING_RECOVERY_ATTEMPT",
                 playerId = nextPlayer.id,
@@ -2218,18 +2268,34 @@ class VlcPlayerAdapter(
         // setVolume(target) — lo que hacíamos antes — puede no generar un cambio
         // real si el volumen ya estaba cerca de ese valor, y sospechamos que hace
         // falta un cambio de volumen genuino (una ida y vuelta) para forzar una
-        // resincronización a nivel nativo/Windows. Esto reproduce exactamente esa
-        // secuencia automáticamente, en vez de depender de que el usuario la haga
-        // a mano.
-        CrossfadeAudit.log(
-            "CROSSFADE_VOLUME_KICK",
-            playerId = currentPlayer?.id,
-            role = "new-current",
-            details = "target=${(internalVolume * 100).toInt()}",
-        )
-        currentPlayer?.setVolume(0)
-        delay(120L)
-        currentPlayer?.setVolume((internalVolume * 100).toInt())
+        // resincronización a nivel nativo/Windows. Esto reproduce esa secuencia
+        // automáticamente, en vez de depender de que el usuario la haga a mano.
+        //
+        // AUDIT FIX: solo tiene sentido correrlo si `recoveryWasNeeded` — es decir,
+        // si el player nuevo realmente vino trabado y pasó por el recovery de
+        // arriba. Si ya venía reproduciendo bien (el caso normal, ~100% de las
+        // transiciones según los logs), este kick era puro ruido: 120ms de mute
+        // real y audible en cada canción, sin ningún beneficio. Gatearlo acá
+        // elimina el microcorte reportado sin tocar el mecanismo de recovery en
+        // sí, que sigue intacto para el caso raro donde de verdad hace falta.
+        if (recoveryWasNeeded) {
+            CrossfadeAudit.log(
+                "CROSSFADE_VOLUME_KICK",
+                playerId = currentPlayer?.id,
+                role = "new-current",
+                details = "target=${(internalVolume * 100).toInt()}",
+            )
+            currentPlayer?.setVolume(0)
+            delay(120L)
+            currentPlayer?.setVolume((internalVolume * 100).toInt())
+        } else {
+            CrossfadeAudit.log(
+                "CROSSFADE_VOLUME_KICK_SKIPPED",
+                playerId = currentPlayer?.id,
+                role = "new-current",
+                details = "nextIsPlaying was already true - no mute glitch to recover from",
+            )
+        }
 
         // Reset state
         setCrossfading(false)
@@ -2574,6 +2640,7 @@ class VlcPlayerAdapter(
                                                                 "PREROLL_RAW_MUTE_REASSERTED",
                                                                 playerId = precachedPlayer.id,
                                                                 role = "next-precached",
+                                                                details = "currentPlayerId=${currentPlayer?.id}",
                                                             )
                                                         }
                                                     }
@@ -2651,7 +2718,7 @@ class VlcPlayerAdapter(
                                                                 "PREROLL_RAW_MUTE_REASSERTED",
                                                                 playerId = precachedPlayer.id,
                                                                 role = "next-precached",
-                                                                details = "sample=$n",
+                                                                details = "sample=$n currentPlayerId=${currentPlayer?.id}",
                                                             )
                                                         }
                                                         when {

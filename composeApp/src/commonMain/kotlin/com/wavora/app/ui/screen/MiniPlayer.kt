@@ -164,7 +164,22 @@ fun MiniPlayer(
 
     LaunchedEffect(layer, isLiquidGlassEnabled) {
         val buffer = IntArray(25)
-        while (isActive && isLiquidGlassEnabled == DataStoreManager.TRUE) {
+        // AUDIT FIX: en dispositivos con renderizado forzado por software
+        // (confirmado con logs reales: "Software rendering doesn't support
+        // hardware bitmaps"), readPixels() sobre un GraphicsLayer falla
+        // SIEMPRE - el 100% de las veces, sin excepción, en toda la sesión
+        // registrada. Antes, el catch solo logueaba el error y el loop
+        // seguía reintentando cada 1 segundo indefinidamente mientras el
+        // MiniPlayer esté visible - trabajo desperdiciado en el hilo
+        // principal (toImageBitmap + toResizedBitmap + readPixels corren en
+        // Dispatchers.Main) sostenido durante toda la sesión, en un
+        // dispositivo que ya viene limitado de recursos. No hay evidencia de
+        // que esto cause directamente el cuelgue de reproducción reportado,
+        // pero es carga de UI thread completamente inútil que vale la pena
+        // eliminar - si falla una vez por esta razón puntual, no tiene
+        // sentido seguir intentando en esta sesión.
+        var hardwareBitmapUnsupported = false
+        while (isActive && isLiquidGlassEnabled == DataStoreManager.TRUE && !hardwareBitmapUnsupported) {
             try {
                 withContext(Dispatchers.Main) {
                     val imageBitmap = layer.toImageBitmap()
@@ -173,6 +188,10 @@ fun MiniPlayer(
                 }
             } catch (e: Exception) {
                 Logger.e(TAG, "Error getting pixels from layer: ${e.message}")
+                if (e.message?.contains("hardware bitmap", ignoreCase = true) == true) {
+                    hardwareBitmapUnsupported = true
+                    continue
+                }
             }
             val averageLuminance =
                 (0 until 25).sumOf { index ->

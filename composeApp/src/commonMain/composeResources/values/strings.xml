@@ -299,6 +299,8 @@
     <string name="audio_quality">Audio quality</string>
     <string name="play_video_for_video_track_instead_of_audio_only">Play video for video track instead of audio only</string>
     <string name="such_as_music_video_lyrics_video_podcasts_and_more">Such as Music Video, Lyrics Video, Podcasts, and more</string>
+    <string name="ignore_audio_focus_loss">Keep playing when other apps play sound</string>
+    <string name="ignore_audio_focus_loss_subtitle">Wavora won\'t pause when Instagram, a game, or another app plays audio. Sound may overlap.</string>
     <string name="video_quality">Video Quality</string>
     <plurals name="n_song">
         <item quantity="one">%d song</item>
@@ -431,6 +433,15 @@
     <string name="if_you_enjoy_using_wavora_star_wavora_on_github_or_leave_a_review_on">If you enjoy using Wavora, star Wavora on GitHub or leave a review on</string>
     <string name="if_you_love_my_work_consider">"If you love my work, consider "</string>
     <string name="buying_me_a_coffee">supporting the app on Patreon.</string>
+    <!-- AUDIT FIX: these two were the only hardcoded-English strings in the
+         Cafecito donation dialog (App.kt) - the dialog's title and dismiss
+         button already reused enjoying_wavora/later above, but the button
+         label and body text had no resource at all. -->
+    <string name="support_wavora_button">Support Wavora</string>
+    <string name="wavora_free_forever_message">Wavora is free and always will be.\n\nIf you\'ve been enjoying it, consider supporting the app on Patreon — it helps keep development going and new features coming.</string>
+    <string name="share_diagnostic_logs">Share diagnostic logs</string>
+    <string name="share_diagnostic_logs_subtitle">Send this session\'s log file so a bug can be investigated</string>
+    <string name="share_diagnostic_logs_failed">No log available to share yet</string>
     <string name="fade_audio_effect">Fade audio effect</string>
     <string name="disabled">Disable</string>
     <string name="fade_audio_effect_duration">Fade audio effect duration (ms) (Set to 0 for disable)</string>

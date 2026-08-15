@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="followed_artists_channel_name">Update Followed Artists</string>
+    <string name="followed_artists_channel_description">This channel sends notification when followed artists release new music</string>
+</resources>
