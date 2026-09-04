@@ -92,6 +92,19 @@ class NowPlayingViewModel(
     private var likeStatusJob: Job? = null
     private var songInfoJob: Job? = null
 
+    // AUDIT FIX (letras duplicadas): getWavoraLyrics/getYouTubeCaption/getLrclibLyrics/
+    // getBetterLyrics usan collect/collectLatest sobre flows que pueden emitir más de un
+    // Resource.Success para el mismo videoId (ej. una emisión de caché seguida de una
+    // más fresca), y cada emisión exitosa dispara updateLyrics() -> insertWavoraLyrics()
+    // de nuevo si "ayudar a construir la base de datos de letras" está activo. Esto
+    // generaba envíos duplicados al backend para la misma canción en la misma sesión
+    // (visible en logs como "Insert Lyrics Error: Already inserting lyrics..." — el
+    // guard de LyricsManager ya lo bloqueaba del lado del cliente sin romper nada, pero
+    // igual valía la pena no ni siquiera intentar la segunda llamada). Este set evita
+    // reintentar el auto-envío más de una vez por videoId mientras dure la sesión de
+    // este ViewModel.
+    private val autoSubmittedLyricsVideoIds = mutableSetOf<String>()
+
     init {
         viewModelScope.launch {
             dataStoreManager.helpBuildLyricsDatabase.collectLatest {
@@ -583,7 +596,7 @@ class NowPlayingViewModel(
             viewModelScope.launch {
                 lyricsCanvasRepository.insertLyrics(LyricsEntity(videoId = videoId, error = false, lines = lyrics.lines, syncType = lyrics.syncType))
             }
-            if (shouldSend && track != null) {
+            if (shouldSend && track != null && autoSubmittedLyricsVideoIds.add(videoId)) {
                 viewModelScope.launch { lyricsCanvasRepository.insertWavoraLyrics(dataStoreManager, track, duration, lyrics).collect {} }
             }
         }

@@ -17,6 +17,11 @@
   [![Forks](https://img.shields.io/github/forks/Wavora-dev/Wavora?style=flat-square)](https://github.com/Wavora-dev/Wavora/network/members)
   [![Issues](https://img.shields.io/github/issues/Wavora-dev/Wavora?style=flat-square)](https://github.com/Wavora-dev/Wavora/issues)
 
+  [![Descargas Android](https://img.shields.io/endpoint?url=https://wavora-badges.wavora-lyrics.workers.dev/badge/android&style=flat-square)](https://github.com/Wavora-dev/Wavora/releases)
+  [![Descargas Windows](https://img.shields.io/endpoint?url=https://wavora-badges.wavora-lyrics.workers.dev/badge/windows&style=flat-square)](https://github.com/Wavora-dev/Wavora/releases)
+  [![Descargas Android TV](https://img.shields.io/endpoint?url=https://wavora-badges.wavora-lyrics.workers.dev/badge/androidtv&style=flat-square)](https://github.com/Wavora-dev/Wavora/releases)
+  [![Descargas totales](https://img.shields.io/endpoint?url=https://wavora-badges.wavora-lyrics.workers.dev/badge/total&style=flat-square)](https://github.com/Wavora-dev/Wavora/releases)
+
   [Releases](https://github.com/Wavora-dev/Wavora/releases) · [Report a bug](https://github.com/Wavora-dev/Wavora/issues) · [Español ↓](#-wavora-en-español)
 
 </div>

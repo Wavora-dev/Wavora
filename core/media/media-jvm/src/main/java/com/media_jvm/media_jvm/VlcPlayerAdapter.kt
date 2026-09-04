@@ -29,8 +29,11 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.yield
 import uk.co.caprica.vlcj.factory.MediaPlayerFactory
 import uk.co.caprica.vlcj.factory.discovery.NativeDiscovery
 import uk.co.caprica.vlcj.player.base.MediaPlayer
@@ -56,6 +59,29 @@ import kotlin.math.ln
 import javax.swing.JPanel
 
 private const val TAG = "VlcPlayerAdapter"
+
+// AUDIT FIX (02/09): tiempo máximo para esperar la confirmación nativa del
+// seek a 0 del player precacheado antes de asumir que ya se aplicó y seguir
+// igual (ver comentario junto a seekAppliedSignal en triggerCrossfadeTransition).
+private const val SEEK_CONFIRM_TIMEOUT_MS = 2000L
+
+// AUDIT FIX (02/09): cota dura para todo el job de crossfade, de punta a
+// punta. Es una red de contención secundaria: el fix real es el yield() que
+// rompe la reentrancia nativa detectada, pero esto asegura que, aunque
+// aparezca otra causa de cuelgue en el futuro, nunca se vuelva a repetir un
+// silencio en cascada de varios minutos - como máximo el fallback de abajo
+// entra a los pocos segundos y salta al siguiente track sin crossfade.
+private const val CROSSFADE_WATCHDOG_TIMEOUT_MS = 6000L
+
+// AUDIT FIX: withTimeout() (a diferencia de let/run/apply) NO es inline, así
+// que un "return@launch" de adentro suyo no compila ("'return' is prohibited
+// here" - lo vimos en el build real de Windows). Para poder seguir abortando
+// el resto del crossfade desde dentro del bloque withTimeout sin tocar el
+// resto de la función, usamos esta excepción en vez de un return con label:
+// al ser un CancellationException, cae directo al finally { setCrossfading(false) }
+// sin pasar por el catch(e: Exception) genérico (que la ignora explícitamente
+// vía "if (e !is CancellationException)"), igual que un return@launch normal.
+private class CrossfadeAbortedException(message: String) : CancellationException(message)
 
 /**
  * Structured, single-purpose logger for the Windows crossfade audit
@@ -1730,6 +1756,9 @@ class VlcPlayerAdapter(
         crossfadeJob =
             coroutineScope.launch {
                 try {
+                    // AUDIT FIX (02/09): watchdog de punta a punta. Ver comentario en la
+                    // constante CROSSFADE_WATCHDOG_TIMEOUT_MS.
+                    withTimeout(CROSSFADE_WATCHDOG_TIMEOUT_MS) {
                     setCrossfading(true)
                     val nextMediaItem = playlist[nextIndex]
                     val nextVideoId = nextMediaItem.mediaId
@@ -1889,7 +1918,36 @@ class VlcPlayerAdapter(
                             nextPlayer.mediaPlayer.events().addMediaPlayerEventListener(seekConfirmListener)
                             nextPlayer.setEventListener(null)
                             nextPlayer.seekTo(0)
-                            seekAppliedSignal.await()
+                            // AUDIT FIX (causa raíz confirmada del corte prematuro + mute
+                            // en cascada del 02/09): cuando este player ya está pre-rolleado
+                            // y "caliente", libVLC puede invocar timeChanged() de forma
+                            // SÍNCRONA, en este mismo hilo, todavía dentro de la llamada
+                            // nativa de setTime() de arriba (confirmado: el log de
+                            // PREROLL_SEEK_CONFIRMED mostró thread=VLC-Player-Thread en vez
+                            // de thread=media-player-events). En ese caso await() retorna
+                            // al instante sin ceder el hilo, y la línea de abajo
+                            // (removeMediaPlayerEventListener) intenta tomar el lock interno
+                            // de eventos de libVLC que este mismo hilo ya sostiene un nivel
+                            // más arriba en la pila -> auto-deadlock. Como el hilo de VLC es
+                            // único y serializa TODAS las operaciones del player (VlcModule),
+                            // ese deadlock también congela cualquier otra corrutina en cola
+                            // (incluida la que ignora el finished() nativo), lo que explica
+                            // por qué la canción se corta sin fundido y las siguientes
+                            // quedan mudas hasta que el usuario navega manualmente.
+                            // El withTimeoutOrNull es red de contención por si la señal de
+                            // confirmación real nunca llega (falla real de seek); el yield()
+                            // de abajo es el fix real: fuerza un punto de redespacho
+                            // genuino, desenrollando por completo la pila nativa antes de
+                            // volver a llamar a mediaPlayer, así remove/isMute ya corren
+                            // afuera de cualquier callback reentrante.
+                            withTimeoutOrNull(SEEK_CONFIRM_TIMEOUT_MS) { seekAppliedSignal.await() }
+                                ?: CrossfadeAudit.log(
+                                    "PREROLL_SEEK_CONFIRM_TIMEOUT",
+                                    playerId = nextPlayer.id,
+                                    role = "next",
+                                    details = "no confirmation after ${SEEK_CONFIRM_TIMEOUT_MS}ms, proceeding anyway",
+                                )
+                            yield()
                             nextPlayer.mediaPlayer.events().removeMediaPlayerEventListener(seekConfirmListener)
 
                             val timeRightBeforeUnmute = nextPlayer.time
@@ -1952,7 +2010,7 @@ class VlcPlayerAdapter(
                     if (nextPlayer == null) {
                         setCrossfading(false)
                         seekTo(nextIndex, 0)
-                        return@launch
+                        throw CrossfadeAbortedException("nextPlayer unavailable, aborted inside crossfade watchdog")
                     }
 
                     // Capture current index BEFORE advancing localCurrentMediaItemIndex
@@ -2014,6 +2072,19 @@ class VlcPlayerAdapter(
                     )
 
                     performCrossfade(nextIndex, nextPlayer, effectiveCrossfadeDurationMs)
+                    } // fin withTimeout(CROSSFADE_WATCHDOG_TIMEOUT_MS)
+                } catch (e: TimeoutCancellationException) {
+                    // Red de contención: el crossfade no terminó dentro de la cota. Forzar
+                    // avance real a la siguiente pista en vez de dejar la app en silencio
+                    // (que es exactamente lo que pasó el 02/09 sin este catch).
+                    Logger.e(TAG, "Crossfade watchdog timeout - forcing recovery to track $nextIndex", e)
+                    CrossfadeAudit.log(
+                        "CROSSFADE_WATCHDOG_TIMEOUT",
+                        playerId = currentPlayer?.id,
+                        details = "nextIndex=$nextIndex",
+                    )
+                    setCrossfading(false)
+                    seekTo(nextIndex, 0)
                 } catch (e: Exception) {
                     if (e !is CancellationException) {
                         Logger.e(TAG, "Crossfade error: ${e.message}", e)

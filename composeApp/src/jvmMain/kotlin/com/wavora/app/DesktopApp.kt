@@ -268,6 +268,26 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
             com.wavora.app.diagnostics.StartupTiming.begin("LaunchedEffect total (splash -> appReady)")
             val ready =
                 withContext(Dispatchers.Default) {
+                    // AUDIT FIX (crash "Unable to rename ...settings.preferences_pb.tmp":
+                    // reproducido por el usuario UNA sola vez, justo en el primer arranque
+                    // después de que el instalador de MSIX pisara 2.1.2 -> 2.2.0, y NUNCA en
+                    // un arranque normal - el segundo intento manual anduvo bien sin tocar
+                    // nada). Encaja con una condición transitoria propia de Windows: el
+                    // proceso de la versión vieja vive en OTRA carpeta versionada de
+                    // WindowsApps, pero comparte el mismo ~/.wavora/settings.preferences_pb
+                    // con la nueva, y puede seguir soltando su handle del archivo justo
+                    // cuando la nueva versión se autolanza tras instalarse. A diferencia de
+                    // Linux/macOS, Windows no permite renombrar un archivo mientras otro
+                    // proceso lo tiene abierto - de ahí el IOException. En vez de crashear
+                    // de una, reintentamos el arranque completo hasta 2 veces con una
+                    // pequeña espera: si el handle viejo se libera en ese lapso (que es
+                    // justo lo que pasó acá), la app arranca normal sin que el usuario note
+                    // nada. Cualquier otro error (no esta condición puntual, o ya sin
+                    // reintentos) se comporta exactamente igual que antes: se loguea y se
+                    // relanza para terminar en CrashDialog.
+                    var lastError: Throwable? = null
+                    var result: AppReady? = null
+                    for (attempt in 1..STARTUP_RETRY_MAX_ATTEMPTS) {
                     try {
                         // Initialize Koin ONCE before application starts
                         com.wavora.app.diagnostics.StartupTiming.begin("startKoin + loadAllModules")
@@ -339,16 +359,37 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
                             sharedViewModel.setIntent(intent)
                         }
 
-                        AppReady(mediaPlayerHandler, sharedViewModel)
+                        result = AppReady(mediaPlayerHandler, sharedViewModel)
+                        break
                     } catch (e: Throwable) {
-                        // No tragamos el error silenciosamente: antes, cualquier excepción acá
-                        // tumbaba `main()` de entrada (y CrashDialog la mostraba). Ahora corre en
-                        // un coroutine — la logueamos explícitamente y la relanzamos para que siga
-                        // teniendo el mismo destino (CrashDialog / crash visible) en vez de dejar
-                        // el splash colgado para siempre en silencio.
-                        Logger.e(TAG, "Fallo durante la inicialización de la app: ${e.message}", e)
-                        throw e
+                        lastError = e
+                        // Deshacemos el Koin a medio inicializar antes de reintentar: si no,
+                        // el segundo startKoin{} de arriba tira "A Koin Application has
+                        // already been started" en vez de darle una segunda oportunidad real.
+                        runCatching { org.koin.core.context.stopKoin() }
+                        val isTransientDataStoreRace =
+                            e is java.io.IOException &&
+                                e.message?.contains("multiple instances of DataStore", ignoreCase = true) == true
+                        if (isTransientDataStoreRace && attempt < STARTUP_RETRY_MAX_ATTEMPTS) {
+                            Logger.w(
+                                TAG,
+                                "Arranque intento $attempt falló por una carrera transitoria de " +
+                                    "DataStore (probable proceso viejo de un update de MSIX " +
+                                    "todavía cerrando) - reintentando en ${STARTUP_RETRY_DELAY_MS}ms: ${e.message}",
+                            )
+                            kotlinx.coroutines.delay(STARTUP_RETRY_DELAY_MS)
+                        } else {
+                            // No es el caso conocido de arriba, o ya se acabaron los
+                            // reintentos - mismo comportamiento que había antes de este fix:
+                            // no tragamos el error silenciosamente, lo logueamos y lo
+                            // relanzamos para que termine en CrashDialog en vez de dejar el
+                            // splash colgado para siempre en silencio.
+                            Logger.e(TAG, "Fallo durante la inicialización de la app: ${e.message}", e)
+                            throw e
+                        }
                     }
+                    }
+                    result ?: throw (lastError ?: IllegalStateException("Startup terminó sin resultado y sin error"))
                 }
             com.wavora.app.diagnostics.StartupTiming.end("LaunchedEffect total (splash -> appReady)")
             appReady = ready
@@ -383,6 +424,11 @@ private val SPLASH_WINDOW_SIZE = 528.dp
 // (segundos, según los propios StartupTiming agregados arriba) — solo se
 // activa si algo realmente se colgó.
 private const val SPLASH_FORCE_CLOSE_TIMEOUT_MS = 30_000L
+
+// AUDIT FIX (carrera transitoria de DataStore post-update MSIX): ver comentario
+// junto al retry loop en LaunchedEffect, más arriba en este archivo.
+private const val STARTUP_RETRY_MAX_ATTEMPTS = 3
+private const val STARTUP_RETRY_DELAY_MS = 1500L
 
 /**
  * Calcula la posición para que una ventana de [windowSize] quede centrada en

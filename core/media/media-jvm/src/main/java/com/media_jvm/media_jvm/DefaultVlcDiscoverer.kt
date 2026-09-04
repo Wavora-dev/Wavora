@@ -1,5 +1,8 @@
 package com.wavora.media_jvm
 
+import com.sun.jna.Library
+import com.sun.jna.Native
+import com.sun.jna.WString
 import com.wavora.logger.Logger
 import uk.co.caprica.vlcj.binding.lib.LibC
 import uk.co.caprica.vlcj.factory.discovery.strategy.NativeDiscoveryStrategy
@@ -40,6 +43,31 @@ class DefaultVlcDiscoverer : NativeDiscoveryStrategy {
         // we have to do it ourselves — otherwise libvlc_new() returns NULL
         // with the bundled VLC because libvlc cannot locate the plugins
         // subdirectory next to libvlc.so.
+        //
+        // AUDIT FIX (log noise en cada arranque de Windows): LibC.INSTANCE
+        // mapea a msvcrt/ucrtbase en Windows, que no exporta un símbolo
+        // "setenv" (es una función POSIX; el equivalente de Win32 es
+        // SetEnvironmentVariable). Esto tiraba UnsatisfiedLinkError en el
+        // 100% de los arranques en Windows — no rompía la reproducción
+        // porque el propio libvlc.dll de Windows, si no encuentra
+        // VLC_PLUGIN_PATH seteada, cae a buscar una carpeta "plugins" junto
+        // a sí mismo, que es justo donde el layout empaquetado ya la deja.
+        // O sea: el fallback funcionaba "de casualidad", no porque el env
+        // var se haya seteado. Para dejar de depender de esa casualidad (y
+        // de paso limpiar el log), en Windows usamos la API real de Win32
+        // en vez de la de libc. Es puramente aditivo: si por lo que sea
+        // fallara, cae exactamente al mismo camino/try-catch que ya existía
+        // antes de este fix, con el mismo resultado que había hoy.
+        if (isWindows()) {
+            try {
+                val ok = Kernel32Lib.INSTANCE.SetEnvironmentVariableW(WString("VLC_PLUGIN_PATH"), WString(path))
+                Logger.i(tag, "VLC plugin path set to $path via Win32 SetEnvironmentVariableW (ok=$ok)")
+                if (ok) return true
+                Logger.w(tag, "Win32 SetEnvironmentVariableW returned false, falling back to libc setenv attempt")
+            } catch (t: Throwable) {
+                Logger.w(tag, "Win32 SetEnvironmentVariableW unavailable, falling back to libc setenv attempt: $t")
+            }
+        }
         return try {
             val ok = LibC.INSTANCE.setenv("VLC_PLUGIN_PATH", path, 1) == 0
             Logger.i(tag, "VLC plugin path set to $path (setenv ok=$ok)")
@@ -47,6 +75,22 @@ class DefaultVlcDiscoverer : NativeDiscoveryStrategy {
         } catch (t: Throwable) {
             Logger.e(tag, "Failed to set VLC_PLUGIN_PATH env var to $path: $t")
             false
+        }
+    }
+
+    private fun isWindows(): Boolean = System.getProperty("os.name", "").lowercase().contains("win")
+
+    /**
+     * Minimal JNA binding for the one Win32 function we need. Deliberately
+     * NOT using com.sun.jna.platform.win32.Kernel32 (jna-platform) to avoid
+     * adding a dependency that this module may not already resolve — this
+     * only needs plain com.sun.jna, which vlcj/LibC already requires here.
+     */
+    private interface Kernel32Lib : Library {
+        fun SetEnvironmentVariableW(name: WString, value: WString): Boolean
+
+        companion object {
+            val INSTANCE: Kernel32Lib = Native.load("kernel32", Kernel32Lib::class.java)
         }
     }
 

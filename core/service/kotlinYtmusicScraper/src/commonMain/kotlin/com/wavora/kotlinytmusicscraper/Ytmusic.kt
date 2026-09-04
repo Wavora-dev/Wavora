@@ -1255,9 +1255,19 @@ class Ytmusic {
 
         // Remote config (TIDAL credentials) hosted on GitHub raw, fetched on each app launch.
         // Credentials are NOT hard-coded in source — they live only in this remote file,
-        // kept in a separate repo (wavora-files) so the main repo stays credential-free.
+        // AUDIT FIX (Tidal 400 en el 100% de las canciones, sesiones 30/08 y 02/09):
+        // esta URL apuntaba a un repo "wavora-files" separado que NUNCA existió bajo
+        // el org Wavora-dev (confirmado en vivo: github.com/Wavora-dev/wavora-files
+        // da 404, y github.com/Wavora-dev solo lista un repo público: "Wavora"). El
+        // diseño original (ver el comentario de arriba) quería mantener este archivo
+        // fuera del repo principal para que las credenciales de Tidal no queden
+        // públicas en el código fuente open-source. Repuntamos al único repo real que
+        // existe hoy; si en el futuro se crea el repo separado, hay que volver a
+        // cambiar esta constante. Mientras tanto, hay que subir remote-config.json a
+        // la raíz de Wavora-dev/Wavora, rama main, con el mismo contenido esperado:
+        // {"tidalClientId": "...", "tidalClientSecret": "..."} (ver RemoteConfig.kt).
         const val TIDAL_REMOTE_CONFIG_URL =
-            "https://raw.githubusercontent.com/wavora-dev/wavora-files/refs/heads/main/remote-config.json"
+            "https://raw.githubusercontent.com/Wavora-dev/Wavora/refs/heads/main/remote-config.json"
     }
 }
 
