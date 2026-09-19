@@ -230,6 +230,12 @@ kotlin {
             implementation(libs.sentry.jvm)
             implementation(libs.native.tray)
             implementation(projects.mediaJvmUi)
+            // AUDIT NOTE: agregado para poder pasarle la API key/secret de
+            // Last.fm (BuildKonfig, arriba en este mismo archivo) a
+            // LastFmApi.configure(...) desde DesktopApp.kt - core/data ya
+            // depende de lyricsService pero como "implementation", no queda
+            // visible acá salvo que lo agreguemos también.
+            implementation(projects.lyricsService)
             // Conveyor's official Control API (see AppUpdate.jvm.kt) — lets
             // us genuinely ask "is Conveyor's own update mechanism usable
             // right now, and does it see a newer version at the configured
@@ -704,6 +710,34 @@ buildkonfig {
         } else {
             buildConfigField(STRING, "sentryDsn", "")
         }
+
+        // Last.fm requiere una API key + shared secret propios de la app
+        // (gratis en last.fm/api/account/create) - son credenciales DE
+        // WAVORA, no de cada usuario, por eso se hornean en el build igual
+        // que el DSN de Sentry de arriba, y no algo que el usuario final
+        // configure. Sin esto, LastFmApi.isConfigured queda en false y la
+        // sección de Last.fm en Ajustes muestra "no configurado" sin romper
+        // nada (ver LastFmApi.kt en lyricsService).
+        val lastFmApiKey =
+            System.getenv("LASTFM_API_KEY")
+                ?: try {
+                    val properties = Properties()
+                    properties.load(rootProject.file("local.properties").inputStream())
+                    properties.getProperty("LASTFM_API_KEY")
+                } catch (e: Exception) {
+                    null
+                }
+        val lastFmApiSecret =
+            System.getenv("LASTFM_API_SECRET")
+                ?: try {
+                    val properties = Properties()
+                    properties.load(rootProject.file("local.properties").inputStream())
+                    properties.getProperty("LASTFM_API_SECRET")
+                } catch (e: Exception) {
+                    null
+                }
+        buildConfigField(STRING, "lastFmApiKey", lastFmApiKey ?: "")
+        buildConfigField(STRING, "lastFmApiSecret", lastFmApiSecret ?: "")
     }
 }
 

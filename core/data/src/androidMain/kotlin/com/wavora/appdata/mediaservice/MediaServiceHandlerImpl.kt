@@ -1320,7 +1320,18 @@ internal class MediaServiceHandlerImpl(
                                             ),
                                     )
                                 }
-                                if (runBlocking { dataStoreManager.endlessQueue.first() } == TRUE) {
+                                // AUDIT FIX (paridad con Desktop, radio "contaminada" al
+                                // terminar el Mix local / una playlist local): antes,
+                                // cualquier cola local que se quedaba sin canciones con
+                                // "Cola infinita" activado saltaba a una radio de YouTube
+                                // sembrada con la última canción sonada, sin que el
+                                // usuario lo pidiera. Cola infinita sigue funcionando
+                                // para radios/playlists de YouTube reales, pero no debe
+                                // inventar una radio nueva cuando lo que terminó fue algo
+                                // local (ver JvmMediaPlayerHandlerImpl.loadMore).
+                                if (runBlocking { dataStoreManager.endlessQueue.first() } == TRUE &&
+                                    queueData.value.data.playlistType != PlaylistType.LOCAL_PLAYLIST
+                                ) {
                                     Logger.w(TAG, "loadMore: Endless Queue")
                                     val lastTrack =
                                         queueData.value.data.listTracks
@@ -1347,7 +1358,9 @@ internal class MediaServiceHandlerImpl(
                         }
                 }
             }
-        } else if (runBlocking { dataStoreManager.endlessQueue.first() } == TRUE) {
+        } else if (runBlocking { dataStoreManager.endlessQueue.first() } == TRUE &&
+            queueData.value.data.playlistType != PlaylistType.LOCAL_PLAYLIST
+        ) {
             Logger.w(TAG, "loadMore: Endless Queue")
             val lastTrack =
                 queueData.value.data.listTracks
@@ -2341,6 +2354,7 @@ internal class MediaServiceHandlerImpl(
         val currentState = simpleMediaState.value
         if (currentState is SimpleMediaState.Progress && lastPlayed != null && lastPlayed.durationSeconds > 0) {
             mayBeTrackingListeningLocal(lastPlayed, currentState.progress)
+            maybeScrobbleToExternalServices(lastPlayed, currentState.progress)
         }
         Logger.w(TAG, "Smooth Switching Transition Current Position: ${player.currentPosition}")
         mayBeNormalizeVolume()
@@ -2409,6 +2423,42 @@ internal class MediaServiceHandlerImpl(
                 ).collect {
                     Logger.d(TAG, "Inserted playback event for ${song.title}: $it")
                 }
+        }
+    }
+
+    /**
+     * Scrobbling a Last.fm/ListenBrainz - mismo criterio y mismo umbral que
+     * en Desktop (ver JvmMediaPlayerHandlerImpl.maybeScrobbleToExternalServices):
+     * track de al menos 30s, escuchado al menos la mitad o 4 minutos.
+     *
+     * BUGFIX: `coroutineScope` acá es el SERVICE_SCOPE, que en Android corre
+     * sobre Dispatchers.Main (mismo hilo que usa ExoPlayer para su playback
+     * looper). ScrobbleManager.maybeScrobble termina pegándole a la red
+     * (Last.fm/ListenBrainz) y leyendo DataStore - todo eso ahora se fuerza
+     * a Dispatchers.IO para que nunca compita con el hilo de reproducción,
+     * sin importar qué tan "suspend-friendly" sea el cliente HTTP interno.
+     */
+    private fun maybeScrobbleToExternalServices(
+        song: SongEntity,
+        currentPositionMillis: Long,
+    ) {
+        coroutineScope.launch {
+            if (song.durationSeconds < 30) return@launch
+            val percent = currentPositionMillis / (song.durationSeconds * 1000f)
+            val listenedSeconds = currentPositionMillis / 1000
+            val eligible = percent >= 0.5f || listenedSeconds >= 240
+            if (!eligible) return@launch
+
+            val startedAtEpochSeconds = (System.currentTimeMillis() / 1000) - listenedSeconds
+            withContext(Dispatchers.IO) {
+                org.app.lyrics.scrobbler.ScrobbleManager.maybeScrobble(
+                    dataStoreManager = dataStoreManager,
+                    artist = song.artistName?.joinToString(", ") ?: "",
+                    title = song.title,
+                    album = song.albumName,
+                    startedAtEpochSeconds = startedAtEpochSeconds,
+                )
+            }
         }
     }
 

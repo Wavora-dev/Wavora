@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -53,6 +54,7 @@ import com.wavora.domain.utils.LocalResource
 import com.wavora.logger.Logger
 import com.wavora.app.extension.angledGradientBackground
 import com.wavora.app.extension.isScrollingUp
+import com.wavora.app.expect.ui.VerticalGridScrollBar
 import com.wavora.app.ui.navigation.destination.list.AlbumDestination
 import com.wavora.app.ui.navigation.destination.list.LocalPlaylistDestination
 import com.wavora.app.ui.navigation.destination.list.PlaylistDestination
@@ -116,12 +118,20 @@ internal inline fun <reified T> GridLibraryPlaylist(
         Crossfade(targetState = data) { data ->
             val list = (data as? LocalResource.Success)?.data ?: emptyList()
             if ((data is LocalResource.Success && list.isNotEmpty()) || createNewPlaylist != null) {
-                LazyVerticalGrid(
-                    columns = GridCells.FixedSize(size = 132.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    contentPadding = contentPadding,
-                    state = state,
-                ) {
+                // AUDIT FIX (auditoría visual de scroll - Biblioteca): mismo fix que
+                // ya tenían los chips de género en HomeScreen - en Desktop, una
+                // grilla larga sin scrollbar no da ninguna señal de que hay más
+                // contenido debajo. El Box envuelve la grilla solo para poder
+                // superponerle la scrollbar a la derecha; en Android/iOS no
+                // renderiza nada (VerticalGridScrollBar es no-op ahí).
+                Box(modifier = Modifier.fillMaxSize()) {
+                    LazyVerticalGrid(
+                        modifier = Modifier.fillMaxSize(),
+                        columns = GridCells.FixedSize(size = 132.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        contentPadding = contentPadding,
+                        state = state,
+                    ) {
                     if (createNewPlaylist != null) {
                         item {
                             Box(
@@ -253,6 +263,15 @@ internal inline fun <reified T> GridLibraryPlaylist(
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         EndOfPage()
                     }
+                }
+                    VerticalGridScrollBar(
+                        modifier =
+                            Modifier
+                                .align(Alignment.CenterEnd)
+                                .fillMaxHeight()
+                                .padding(vertical = contentPadding.calculateTopPadding().coerceAtMost(8.dp)),
+                        scrollState = state,
+                    )
                 }
             } else if (data is LocalResource.Loading) {
                 CenterLoadingBox(

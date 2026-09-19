@@ -17,10 +17,10 @@
   [![Forks](https://img.shields.io/github/forks/Wavora-dev/Wavora?style=flat-square)](https://github.com/Wavora-dev/Wavora/network/members)
   [![Issues](https://img.shields.io/github/issues/Wavora-dev/Wavora?style=flat-square)](https://github.com/Wavora-dev/Wavora/issues)
 
-  [![Descargas Android](https://img.shields.io/endpoint?url=https://wavora-badges.wavora-lyrics.workers.dev/badge/android&style=flat-square)](https://github.com/Wavora-dev/Wavora/releases)
-  [![Descargas Windows](https://img.shields.io/endpoint?url=https://wavora-badges.wavora-lyrics.workers.dev/badge/windows&style=flat-square)](https://github.com/Wavora-dev/Wavora/releases)
-  [![Descargas Android TV](https://img.shields.io/endpoint?url=https://wavora-badges.wavora-lyrics.workers.dev/badge/androidtv&style=flat-square)](https://github.com/Wavora-dev/Wavora/releases)
-  [![Descargas totales](https://img.shields.io/endpoint?url=https://wavora-badges.wavora-lyrics.workers.dev/badge/total&style=flat-square)](https://github.com/Wavora-dev/Wavora/releases)
+  [![Android Downloads](https://img.shields.io/endpoint?url=https://wavora-badges.wavora-lyrics.workers.dev/badge/android&style=flat-square)](https://github.com/Wavora-dev/Wavora/releases)
+  [![Windows Downloads](https://img.shields.io/endpoint?url=https://wavora-badges.wavora-lyrics.workers.dev/badge/windows&style=flat-square)](https://github.com/Wavora-dev/Wavora/releases)
+  [![Android TV Downloads](https://img.shields.io/endpoint?url=https://wavora-badges.wavora-lyrics.workers.dev/badge/androidtv&style=flat-square)](https://github.com/Wavora-dev/Wavora/releases)
+  [![Total Downloads](https://img.shields.io/endpoint?url=https://wavora-badges.wavora-lyrics.workers.dev/badge/total&style=flat-square)](https://github.com/Wavora-dev/Wavora/releases)
 
   [Releases](https://github.com/Wavora-dev/Wavora/releases) · [Report a bug](https://github.com/Wavora-dev/Wavora/issues) · [Español ↓](#-wavora-en-español)
 
@@ -67,6 +67,8 @@ Wavora's goal isn't to be "yet another YouTube Music wrapper." It exists to push
 - **Android**: optional toggle to keep playing through other apps' audio (ignores transient/permanent audio focus loss) — for when Instagram, a game, or any other app grabs the system's audio focus and you don't want Wavora to pause
 - **Android**: **Google Cast (Chromecast)** support — cast to any TV or Cast-ready speaker, with automatic switching between local and remote playback and crossfade disabled while casting
 - Loudness normalization across tracks
+- **Desktop**: built-in 10-band graphic equalizer (60 Hz–16 kHz) with preamp, 9 curated presets (Bass/Vocal/Treble Boost, V-Shape, Podcast, Rock, Pop, Electronic, Acoustic), two user-editable "Custom" slots, and a reset-to-default button — all persisted across restarts
+- **Android**: built-in graphic equalizer using the device's own native audio-effect engine — bands, presets, and preamp behavior are whatever the phone's manufacturer/chipset expose (via `android.media.audiofx.Equalizer`), applied to the global audio output mix so it keeps working seamlessly through crossfade transitions between two simultaneous players; same two user-editable "Custom" slots and reset-to-default button as Desktop, persisted across restarts
 - Selectable audio/video quality tiers
 - Offline downloads for songs, videos, full albums, and full playlists, with an "audio-only for video tracks" toggle
 - Playback state (track, queue, shuffle/repeat) is restored across app restarts
@@ -93,8 +95,11 @@ Wavora's goal isn't to be "yet another YouTube Music wrapper." It exists to push
 - Search songs, albums, artists, playlists, videos, and podcasts, filterable by type
 - Search history shown as quick-tap chips
 - Real-time YouTube Music search suggestions
+- **Customizable genre quick-filter chips** on the home feed — 10 defaults (Pop, Rock, Reggaeton, Hip-Hop/Rap, Cumbia, Trap, Rock Nacional, Electronic, Indie, Salsa) pulled live from the user's own YouTube Music account (never hardcoded), plus "All"; add or remove any genre your account actually has from a picker
 - Moods & genres browser, personalized recommendations on the home feed
 - YouTube-style radio ("start radio" from any track)
+- **Mix by genre** — a "Mix" button on every genre/mood screen that pulls real tracks from several of the curated playlists YouTube Music shows for that category, fetched in parallel, shuffled together, and queued up as a single ready-to-play mix (Android & Desktop)
+- **Local Mix** — a locally-generated, no-network mix built from your own listening history, refreshed with a weighted shuffle each time you regenerate it (see "How Local Mix works" below)
 
 ### 🤖 AI
 - AI-powered lyrics translation (OpenAI, Gemini, or self-hosted/custom model endpoint), configurable per-provider with your own API key
@@ -104,6 +109,7 @@ Wavora's goal isn't to be "yet another YouTube Music wrapper." It exists to push
 - **YouTube / Google account** login (cookie-based, no OAuth app registration needed), with multi-account support and listening-history upload for better recommendations — on Android via the system WebView, on Windows via a lazily-loaded embedded Chromium browser that's disposed right after a successful login
 - **Discord Rich Presence** — shows the current track, artist, and elapsed time in your Discord status via a direct WebSocket gateway connection (uses your own user token, not a bot)
 - **Spotify integration** — `sp_dc` cookie login for synced lyrics and animated Spotify Canvas backgrounds on the Now Playing screen
+- **Scrobbling** to Last.fm and/or ListenBrainz (Android & Desktop), with standard scrobble-eligibility thresholds (30s minimum, 50% listened or 4 minutes, whichever comes first) and a direct link to create a Last.fm account if you don't have one
 
 ### 🎨 UI & Personalization
 - Material 3 (Expressive) design system with full light/dark theming that follows the OS
@@ -141,6 +147,20 @@ Wavora's goal isn't to be "yet another YouTube Music wrapper." It exists to push
 - Manual and automatic update checks with a toggle for the auto-check-on-launch behavior
 - Optional Android "keep background service alive" setting to reduce playback interruptions from battery optimization
 - Per-feature toggles for crossfade, SponsorBlock, normalization, silence-skip, quality tiers, and more, all under Settings
+
+### How Local Mix works
+Local Mix looks at your own local play-history analytics (already used for the
+Library "most played" view) over the last 60 days, weighted by how many times
+you played each song (using a square-root weighting so your single
+most-replayed track doesn't crowd out everything else), and picks 25 of them
+with a random weighted draw — so a full regeneration can shuffle in different
+songs each time rather than always returning the identical list. There's no
+fixed "listen to N songs and it unlocks" threshold; it just needs at least 10
+songs in your recent play history to work well, and falls back to your
+all-time history if the last 60 days don't have enough. It's entirely local
+(no network call, no server), so it keeps working offline and **persists
+across app updates** — it's built from the same on-device Room database used
+for Library, which app updates don't wipe.
 
 ## What's new compared to SimpMusic
 
@@ -381,6 +401,9 @@ Real, code-verified optimizations, not aspirational claims:
 - **Reduced unnecessary recomposition** — the shared `PlayerSession` adapter applies targeted `distinctUntilChanged()` filtering so unrelated `ControlState` changes (e.g. a volume drag) don't force a shuffle/repeat recomputation, and `TimeLine` fields that rarely change are isolated from the 10×/second position tick with `derivedStateOf` in the Now Playing screens.
 - **Fixed a Koin-singleton ViewModel leak** that caused a cumulative out-of-memory condition after repeated app open/close cycles in production, via an explicit `forceClear()` lifecycle hook.
 - **Throttled background integrations** — Discord Rich Presence updates are rate-limited instead of firing on every state tick.
+- **Scrobbling moved off the playback thread** — on Android, `maybeScrobble()` used to run on the same `Dispatchers.Main` scope ExoPlayer's playback looper uses; on Desktop it ran on VLC's own single-threaded player scope. Both now force the Last.fm/ListenBrainz network call onto `Dispatchers.IO`, so a slow scrobble request can no longer contend with the thread actually driving playback.
+- **Sentry breadcrumb batching** — the crossfade audit log's highest-frequency internal events (buffering-progress and periodic playback-position heartbeats, which could otherwise fire hundreds of times per track) are no longer forwarded to Sentry as breadcrumbs, so the events that actually matter for diagnosing a broken crossfade don't get pushed out of the trail.
+- **Local Mix parity fix on Android** — the "endless queue" auto-radio feature used to ignore what kind of queue it was extending, so a Local Mix or local playlist running out on Android could get silently replaced by an unrelated YouTube radio. Android now shares Desktop's guard: endless queue only kicks in for actual YouTube-sourced queues, never local ones.
 
 ## Accessibility
 
@@ -460,6 +483,8 @@ El objetivo de Wavora no es ser "otro wrapper más de YouTube Music". Existe par
 - **Android**: interruptor opcional para seguir sonando aunque otra app reproduzca audio (ignora la pérdida de audio focus transitoria o permanente) — para cuando Instagram, un juego u otra app le pide el audio focus al sistema y no querés que Wavora se pause
 - **Android**: soporte de **Google Cast (Chromecast)** — transmití a cualquier TV o parlante compatible, con cambio automático entre reproducción local y remota, y crossfade desactivado mientras transmitís
 - Normalización de volumen entre canciones
+- **Escritorio**: ecualizador gráfico de 10 bandas (60 Hz–16 kHz) con preamplificación, 9 presets propios (Bass/Vocal/Treble Boost, V-Shape, Podcast, Rock, Pop, Electronic, Acoustic), dos ranuras "Custom" editables por el usuario, y un botón de restablecer — todo persistido entre reinicios
+- **Android**: ecualizador gráfico integrado que usa el motor de efectos de audio nativo del propio dispositivo — bandas, presets y comportamiento del preamp son los que exponga el fabricante/chip de audio del teléfono (vía `android.media.audiofx.Equalizer`), aplicado a la mezcla de salida de audio global para que siga funcionando sin cortes durante las transiciones de crossfade con dos reproductores simultáneos; mismas dos ranuras "Custom" editables y botón de restablecer que en Escritorio, persistido entre reinicios
 - Niveles de calidad de audio/video seleccionables
 - Descargas offline de canciones, videos, álbumes completos y playlists completas, con un interruptor de "solo audio en pistas con video"
 - El estado de reproducción (canción, cola, aleatorio/repetir) se restaura entre reinicios de la app
@@ -486,8 +511,11 @@ El objetivo de Wavora no es ser "otro wrapper más de YouTube Music". Existe par
 - Buscá canciones, álbumes, artistas, playlists, videos y podcasts, filtrable por tipo
 - Historial de búsqueda mostrado como chips de acceso rápido
 - Sugerencias de búsqueda de YouTube Music en tiempo real
+- **Chips de género rápidos personalizables** en la pantalla principal — 10 por defecto (Pop, Rock, Reggaetón, Hip-Hop/Rap, Cumbia, Trap, Rock Nacional, Electrónica, Indie, Salsa) traídos en vivo de la propia cuenta de YouTube Music del usuario (nunca fijos a mano), más "Todo"; se puede agregar o quitar cualquier género que tu cuenta realmente tenga desde un selector
 - Explorador de estados de ánimo y géneros, recomendaciones personalizadas en la pantalla principal
 - Radio estilo YouTube ("iniciar radio" desde cualquier canción)
+- **Mix por género** — un botón "Mix" en cada pantalla de género/estado de ánimo que trae canciones reales de varias de las playlists curadas que YouTube Music muestra para esa categoría, pedidas en paralelo, mezcladas entre sí, y armadas en una sola cola lista para reproducir (Android y Escritorio)
+- **Mix local** — un mix armado 100% en el dispositivo (sin red) a partir de tu propio historial de reproducción, que se mezcla con peso distinto cada vez que lo regenerás (ver "Cómo funciona el Mix local" más abajo)
 
 ### 🤖 IA
 - Traducción de letras impulsada por IA (OpenAI, Gemini, o un endpoint de modelo propio/autoalojado), configurable por proveedor con tu propia API key
@@ -497,6 +525,7 @@ El objetivo de Wavora no es ser "otro wrapper más de YouTube Music". Existe par
 - Inicio de sesión con cuenta de **YouTube/Google** (basado en cookies, sin necesidad de registrar una app OAuth), con soporte multicuenta y subida del historial de escucha para mejores recomendaciones — en Android vía el WebView del sistema, en Windows vía un navegador Chromium embebido que se carga solo cuando hace falta y se libera apenas el login es exitoso
 - **Discord Rich Presence** — mostrá la canción actual, el artista y el tiempo transcurrido en tu estado de Discord vía una conexión directa por WebSocket al Gateway (usa tu propio token de usuario, no un bot)
 - **Integración con Spotify** — inicio de sesión con cookie `sp_dc` para letras sincronizadas y fondos animados de Spotify Canvas en la pantalla de reproducción
+- **Scrobbling** a Last.fm y/o ListenBrainz (Android y Escritorio), con el umbral estándar de la industria (mínimo 30s, 50% escuchado o 4 minutos, lo que pase antes) y un link directo para crear cuenta de Last.fm si no tenés una
 
 ### 🎨 UI y personalización
 - Sistema de diseño Material 3 (Expressive) con theming completo claro/oscuro que sigue al sistema operativo
@@ -534,6 +563,21 @@ El objetivo de Wavora no es ser "otro wrapper más de YouTube Music". Existe par
 - Chequeo manual y automático de actualizaciones, con interruptor para el comportamiento de auto-chequeo al iniciar
 - Ajuste opcional en Android para "mantener el servicio en segundo plano activo" y reducir interrupciones de reproducción por la optimización de batería del sistema
 - Interruptores por función para crossfade, SponsorBlock, normalización, salteo de silencios, niveles de calidad, y más, todo dentro de Ajustes
+
+### Cómo funciona el Mix local
+El Mix local mira tu propio historial local de reproducción (el mismo que ya
+se usa para la vista "más reproducidas" de Biblioteca) de los últimos 60
+días, ponderado por cuántas veces escuchaste cada canción (con un peso de
+raíz cuadrada para que tu canción más repetida no acapare todo el mix), y
+elige 25 con un sorteo aleatorio ponderado — así una regeneración completa
+puede traer canciones distintas cada vez en vez de devolver siempre la misma
+lista. No hay un umbral fijo de "escuchá N canciones y se desbloquea"; solo
+necesita al menos 10 canciones en tu historial reciente para funcionar bien,
+y si los últimos 60 días no alcanzan, cae al historial de siempre. Es 100%
+local (sin ningún pedido de red, sin servidor), así que sigue funcionando
+sin conexión y **persiste entre actualizaciones de la app** — se arma desde
+la misma base de datos Room en el dispositivo que ya usa Biblioteca, que las
+actualizaciones de la app no borran.
 
 ## Novedades respecto a SimpMusic
 
@@ -632,6 +676,9 @@ Optimizaciones reales, verificadas en el código, no promesas:
 - **Menos recomposiciones innecesarias** — el adaptador compartido `PlayerSession` aplica filtrado dirigido con `distinctUntilChanged()` para que cambios de `ControlState` no relacionados (por ejemplo, arrastrar el volumen) no fuercen un recálculo de shuffle/repeat, y los campos de `TimeLine` que casi no cambian se aíslan del tick de posición (10 veces por segundo) con `derivedStateOf` en las pantallas de reproducción.
 - **Fuga de ViewModels singleton de Koin corregida** — causaba una condición acumulativa de falta de memoria tras ciclos repetidos de apertura/cierre de la app en producción, resuelta con un hook de ciclo de vida explícito `forceClear()`.
 - **Integraciones en segundo plano limitadas** — las actualizaciones de Discord Rich Presence tienen un límite de frecuencia en vez de dispararse en cada tick de estado.
+- **Scrobbling movido fuera del hilo de reproducción** — en Android, `maybeScrobble()` corría sobre el mismo scope `Dispatchers.Main` que usa el playback looper de ExoPlayer; en Escritorio corría sobre el scope de un único hilo dedicado a VLC. En ambos casos ahora la llamada de red a Last.fm/ListenBrainz se fuerza a `Dispatchers.IO`, así que un scrobble lento ya no puede competir con el hilo que efectivamente maneja la reproducción.
+- **Batching de breadcrumbs de Sentry** — los eventos internos de mayor frecuencia del log de auditoría de crossfade (progreso de buffering y heartbeats periódicos de posición, que podían dispararse cientos de veces por canción) ya no se mandan como breadcrumb a Sentry, para que los eventos que sí importan para diagnosticar un crossfade roto no queden desplazados del trail.
+- **Corrección de paridad del Mix Local en Android** — la función de "cola infinita" (radio automática) no distinguía qué tipo de cola estaba extendiendo, así que un Mix Local o una playlist local que se quedaba sin canciones en Android podía terminar reemplazada, sin pedirlo, por una radio de YouTube sin relación. Android ahora comparte el mismo resguardo que ya tenía Escritorio: la cola infinita solo actúa sobre colas realmente provenientes de YouTube, nunca sobre locales.
 
 ## Accesibilidad
 

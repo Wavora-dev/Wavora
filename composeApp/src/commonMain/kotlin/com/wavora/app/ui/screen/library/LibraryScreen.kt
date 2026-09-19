@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -73,6 +75,7 @@ import com.wavora.app.ui.component.LibraryItem
 import com.wavora.app.ui.component.LibraryItemState
 import com.wavora.app.ui.component.LibraryItemType
 import com.wavora.app.ui.component.LibraryTilingBox
+import com.wavora.app.expect.ui.VerticalScrollBar
 import com.wavora.app.ui.navigation.destination.home.AnalyticsDestination
 import com.wavora.app.ui.theme.transparent
 import com.wavora.app.ui.theme.typo
@@ -215,48 +218,61 @@ fun LibraryScreen(
                             }
                         }
                 }
-                LazyColumn(
-                    contentPadding =
-                        innerPadding.copy(
-                            top = topAppBarHeight,
-                        ),
-                    state = state,
-                ) {
-                    item {
-                        LibraryTilingBox(navController)
-                    }
+                // AUDIT FIX (auditoría visual de scroll - Biblioteca): mismo fix
+                // que ya tenían los chips de género en HomeScreen - scrollbar real
+                // en Desktop para la lista principal de Biblioteca.
+                Box(modifier = Modifier.fillMaxSize()) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding =
+                            innerPadding.copy(
+                                top = topAppBarHeight,
+                            ),
+                        state = state,
+                    ) {
+                        item {
+                            LibraryTilingBox(navController)
+                        }
 
-                    if (!listCanvasSong.data.isNullOrEmpty()) {
+                        if (!listCanvasSong.data.isNullOrEmpty()) {
+                            item {
+                                LibraryItem(
+                                    state =
+                                        LibraryItemState(
+                                            type = LibraryItemType.CanvasSong,
+                                            data = listCanvasSong.data ?: emptyList(),
+                                            isLoading = listCanvasSong is LocalResource.Loading,
+                                        ),
+                                    navController = navController,
+                                )
+                            }
+                        }
+
                         item {
                             LibraryItem(
                                 state =
                                     LibraryItemState(
-                                        type = LibraryItemType.CanvasSong,
-                                        data = listCanvasSong.data ?: emptyList(),
-                                        isLoading = listCanvasSong is LocalResource.Loading,
+                                        type =
+                                            LibraryItemType.RecentlyAdded(
+                                                playingVideoId = nowPlaying,
+                                            ),
+                                        data = recentlyAdded.data ?: emptyList(),
+                                        isLoading = recentlyAdded is LocalResource.Loading,
                                     ),
                                 navController = navController,
                             )
                         }
+                        item {
+                            EndOfPage()
+                        }
                     }
-
-                    item {
-                        LibraryItem(
-                            state =
-                                LibraryItemState(
-                                    type =
-                                        LibraryItemType.RecentlyAdded(
-                                            playingVideoId = nowPlaying,
-                                        ),
-                                    data = recentlyAdded.data ?: emptyList(),
-                                    isLoading = recentlyAdded is LocalResource.Loading,
-                                ),
-                            navController = navController,
-                        )
-                    }
-                    item {
-                        EndOfPage()
-                    }
+                    VerticalScrollBar(
+                        modifier =
+                            Modifier
+                                .align(Alignment.CenterEnd)
+                                .fillMaxHeight(),
+                        scrollState = state,
+                    )
                 }
             }
 
@@ -500,7 +516,16 @@ fun LibraryScreen(
                     .background(Color.Transparent),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            LibraryChipType.entries.forEach { type ->
+            // AUDIT FIX (revisión de Biblioteca): CHART ("Gráficos Wavora") apunta a
+            // chart.wavora.org, que todavía no existe (el repositorio ya devuelve
+            // una lista vacía a propósito, ver PlaylistRepositoryImpl.getChartPlaylist)
+            // - se oculta hasta que se decida construir esa web. FAVORITE_PODCAST se
+            // saca directamente a pedido. El enum se deja intacto (no se borran los
+            // valores) para no romper nada que los referencie y por si se retoma
+            // Charts más adelante.
+            LibraryChipType.entries
+                .filter { it != LibraryChipType.CHART && it != LibraryChipType.FAVORITE_PODCAST }
+                .forEach { type ->
                 if ((type == LibraryChipType.YOUTUBE_MUSIC_PLAYLIST || type == LibraryChipType.YOUTUBE_MIX_FOR_YOU) && !loggedIn) {
                     return@forEach
                 }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -87,6 +88,7 @@ import com.wavora.domain.utils.connectArtists
 import com.wavora.domain.utils.toSongEntity
 import com.wavora.domain.utils.toTrack
 import com.wavora.app.extension.getStringBlocking
+import com.wavora.app.expect.ui.VerticalScrollBar
 import com.wavora.app.ui.component.ArtistFullWidthItems
 import com.wavora.app.ui.component.Chip
 import com.wavora.app.ui.component.EndOfPage
@@ -675,9 +677,16 @@ fun SearchScreen(
 
                                             Crossfade(targetState = currentResults.isNotEmpty()) {
                                                 if (it) {
+                                                    // AUDIT FIX (auditoría visual de scroll -
+                                                    // Búsqueda): mismo fix que ya tenían los
+                                                    // chips de género en HomeScreen, scrollbar
+                                                    // real en Desktop para los resultados.
+                                                    val searchResultsListState = rememberLazyListState()
+                                                    Box(modifier = Modifier.fillMaxSize()) {
                                                     LazyColumn(
+                                                        modifier = Modifier.fillMaxSize(),
                                                         contentPadding = PaddingValues(horizontal = 4.dp),
-                                                        state = rememberLazyListState(),
+                                                        state = searchResultsListState,
                                                     ) {
                                                         items(currentResults, key = { result ->
                                             when (result) {
@@ -810,6 +819,14 @@ fun SearchScreen(
                                                         }
                                                         // Space at bottom to account for bottom navigation and mini player
                                                         item { Spacer(modifier = Modifier.height(150.dp)) }
+                                                    }
+                                                    VerticalScrollBar(
+                                                        modifier =
+                                                            Modifier
+                                                                .align(Alignment.CenterEnd)
+                                                                .fillMaxHeight(),
+                                                        scrollState = searchResultsListState,
+                                                    )
                                                     }
                                                 } else {
                                                     Box(

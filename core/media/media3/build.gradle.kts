@@ -45,6 +45,11 @@ dependencies {
 
     implementation(projects.common)
     implementation(projects.domain)
+    // AUDIT NOTE: agregado para el scrobbling a Last.fm en Android
+    // (CrossfadeExoPlayerAdapter delega la parte de auth a LastFmApi, que
+    // vive en lyricsService - mismo criterio que ya se usa en media-jvm
+    // para Desktop).
+    implementation(projects.lyricsService)
 
     // Koin
     implementation(platform(libs.koin.bom))

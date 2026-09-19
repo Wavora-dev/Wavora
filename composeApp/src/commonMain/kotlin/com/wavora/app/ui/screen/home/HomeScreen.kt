@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -97,11 +98,16 @@ import com.wavora.logger.Logger
 import com.wavora.app.extension.angledGradientBackground
 import com.wavora.app.extension.isScrollingUp
 import com.wavora.app.extension.rgbFactor
+import com.wavora.app.Platform
+import com.wavora.app.getPlatform
+import com.wavora.app.expect.ui.HorizontalGridScrollBar
+import com.wavora.app.expect.ui.HorizontalScrollBar
 import com.wavora.app.ui.component.CenterLoadingBox
 import com.wavora.app.ui.component.Chip
 import com.wavora.app.ui.component.DropdownButton
 import com.wavora.app.ui.component.EndOfPage
 import com.wavora.app.ui.component.HomeItem
+import com.wavora.app.ui.component.SimpleTooltip
 import com.wavora.app.ui.component.BlogPromoDialog
 import com.wavora.app.ui.component.HomeItemContentPlaylist
 import com.wavora.app.ui.component.HomeShimmer
@@ -115,6 +121,7 @@ import com.wavora.app.ui.component.ShareSavedLyricsDialog
 import com.wavora.app.ui.navigation.destination.home.HomeDestination
 import com.wavora.app.ui.navigation.destination.home.MoodDestination
 import com.wavora.app.ui.navigation.destination.home.NotificationDestination
+import com.wavora.app.ui.navigation.destination.home.LocalMixDestination
 import com.wavora.app.ui.navigation.destination.home.RecentlySongsDestination
 import com.wavora.app.ui.navigation.destination.home.SettingsDestination
 import com.wavora.app.ui.navigation.destination.library.LibraryDynamicPlaylistDestination
@@ -154,9 +161,16 @@ import org.koin.compose.viewmodel.koinViewModel
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.all
 import wavora.composeapp.generated.resources.app_name
+import wavora.composeapp.generated.resources.baseline_edit_24
 import wavora.composeapp.generated.resources.baseline_history_24
+import wavora.composeapp.generated.resources.baseline_shuffle_24
+import wavora.composeapp.generated.resources.local_mix
+import wavora.composeapp.generated.resources.notification
+import wavora.composeapp.generated.resources.recently
+import wavora.composeapp.generated.resources.settings
 import wavora.composeapp.generated.resources.baseline_settings_24
 import wavora.composeapp.generated.resources.cancel
+import wavora.composeapp.generated.resources.choose_genre_chips
 import wavora.composeapp.generated.resources.chart
 import wavora.composeapp.generated.resources.commute
 import wavora.composeapp.generated.resources.do_not_show_again
@@ -180,6 +194,7 @@ import wavora.composeapp.generated.resources.quick_picks
 import wavora.composeapp.generated.resources.relax
 import wavora.composeapp.generated.resources.romance
 import wavora.composeapp.generated.resources.sad
+import wavora.composeapp.generated.resources.save
 import wavora.composeapp.generated.resources.sleep
 import wavora.composeapp.generated.resources.top_artists
 import wavora.composeapp.generated.resources.warning
@@ -234,8 +249,10 @@ fun HomeScreen(
     val reloadDestination by sharedViewModel.reloadDestination.collectAsStateWithLifecycle()
     val pullToRefreshState = rememberPullToRefreshState()
     var isRefreshing by remember { mutableStateOf(false) }
-    val chipRowState = rememberScrollState()
+    val chipListState = rememberLazyListState()
     val params by viewModel.params.collectAsStateWithLifecycle()
+    val visibleGenreChipTitles by viewModel.visibleGenreChipTitles.collectAsStateWithLifecycle()
+    var showGenreChipEditor by remember { mutableStateOf(false) }
     val homeListState by viewModel.homeListState.collectAsStateWithLifecycle()
     val continuation by viewModel.continuation.collectAsStateWithLifecycle()
 
@@ -786,52 +803,126 @@ fun HomeScreen(
                                 ),
                     )
                 }
-                Row(
-                    modifier =
-                        Modifier
-                            .horizontalScroll(chipRowState)
-                            .padding(vertical = 8.dp, horizontal = 15.dp)
-                            .background(Color.Transparent),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    listOfHomeChip.forEach { id ->
-                        val isSelected =
-                            when (params) {
-                                HOME_PARAMS_RELAX -> id == Res.string.relax
-                                HOME_PARAMS_SLEEP -> id == Res.string.sleep
-                                HOME_PARAMS_ENERGIZE -> id == Res.string.energize
-                                HOME_PARAMS_SAD -> id == Res.string.sad
-                                HOME_PARAMS_ROMANCE -> id == Res.string.romance
-                                HOME_PARAMS_FEEL_GOOD -> id == Res.string.feel_good
-                                HOME_PARAMS_WORKOUT -> id == Res.string.workout
-                                HOME_PARAMS_PARTY -> id == Res.string.party
-                                HOME_PARAMS_COMMUTE -> id == Res.string.commute
-                                HOME_PARAMS_FOCUS -> id == Res.string.focus
-                                else -> id == Res.string.all
-                            }
-                        Chip(
-                            isAnimated = loading,
-                            isSelected = isSelected,
-                            text = stringResource(id),
+                Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                    // AUDIT FIX (chips tapando/pisando el lápiz de editar): antes todo
+                    // -"Todo" + géneros + lápiz- vivía adentro de un mismo Row con
+                    // horizontalScroll. Con muchos chips, el lápiz quedaba empujado
+                    // fuera de la pantalla junto con los últimos chips, sin ninguna
+                    // señal visual de que había más para scrollear. Ahora el lápiz
+                    // vive AFUERA del área scrolleable (siempre visible, a la derecha),
+                    // y le agregamos una scrollbar real en Desktop (mismo componente
+                    // que ya se usa en otras listas horizontales de la app).
+                    Row(
+                        modifier = Modifier.padding(horizontal = 15.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        LazyRow(
+                            state = chipListState,
+                            modifier = Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
-                            when (id) {
-                                Res.string.all -> viewModel.setParams(null)
-                                Res.string.relax -> viewModel.setParams(HOME_PARAMS_RELAX)
-                                Res.string.sleep -> viewModel.setParams(HOME_PARAMS_SLEEP)
-                                Res.string.energize -> viewModel.setParams(HOME_PARAMS_ENERGIZE)
-                                Res.string.sad -> viewModel.setParams(HOME_PARAMS_SAD)
-                                Res.string.romance -> viewModel.setParams(HOME_PARAMS_ROMANCE)
-                                Res.string.feel_good -> viewModel.setParams(HOME_PARAMS_FEEL_GOOD)
-                                Res.string.workout -> viewModel.setParams(HOME_PARAMS_WORKOUT)
-                                Res.string.party -> viewModel.setParams(HOME_PARAMS_PARTY)
-                                Res.string.commute -> viewModel.setParams(HOME_PARAMS_COMMUTE)
-                                Res.string.focus -> viewModel.setParams(HOME_PARAMS_FOCUS)
+                            item(key = "all") {
+                                // AUDIT FIX (chips de "mood" fijos -> géneros reales): antes esta
+                                // fila mostraba Relax/Sleep/Energize/etc - tokens de YouTube Music
+                                // hardcodeados a mano, sin relación con géneros musicales. Ahora
+                                // muestra géneros REALES de la cuenta (mismos datos que ya se
+                                // usaban más abajo para "Moods & moments"), con una selección por
+                                // defecto de 10 + "Todo", editable por el usuario con el lápiz del
+                                // final. Nunca se inventa un género que la cuenta no tenga.
+                                Chip(
+                                    isAnimated = loading,
+                                    isSelected = params == null,
+                                    text = stringResource(Res.string.all),
+                                ) {
+                                    viewModel.setParams(null)
+                                }
+                            }
+                            val allGenres = moodMomentAndGenre?.genres ?: emptyList()
+                            val visibleGenres = allGenres.filter { it.title in (visibleGenreChipTitles ?: emptyList()) }
+                            items(visibleGenres, key = { it.title }) { genre ->
+                                // AUDIT FIX (chips de género mostrando siempre lo mismo que "Todo"):
+                                // el click llamaba a viewModel.setParams(genre.params), que recarga
+                                // el feed de Home vía browseId="FEmusic_home" - PERO el params de un
+                                // género real es para OTRO browseId completamente distinto
+                                // ("FEmusic_moods_and_genres_category", el mismo que ya usa
+                                // MoodViewModel.getMood() / la sección "Genre" de más abajo en este
+                                // mismo Home). Contra el browseId equivocado, el filtro no hace nada
+                                // real - por eso siempre se veía igual que "Todo". Reusamos la
+                                // navegación que YA funciona para género/mood en el resto del Home
+                                // (MoodDestination) en vez de intentar filtrar el feed principal.
+                                Chip(
+                                    isAnimated = loading,
+                                    isSelected = false,
+                                    text = genre.title,
+                                ) {
+                                    navController.navigate(MoodDestination(genre.params))
+                                }
                             }
                         }
+                        if ((moodMomentAndGenre?.genres ?: emptyList()).isNotEmpty()) {
+                            RippleIconButton(
+                                resId = Res.drawable.baseline_edit_24,
+                                modifier = Modifier.padding(start = 4.dp).size(32.dp),
+                            ) {
+                                showGenreChipEditor = true
+                            }
+                        }
+                    }
+                    if (getPlatform() == Platform.Desktop) {
+                        HorizontalScrollBar(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 15.dp),
+                            scrollState = chipListState,
+                        )
                     }
                 }
             }
         }
+    }
+
+    if (showGenreChipEditor) {
+        val allGenres = moodMomentAndGenre?.genres ?: emptyList()
+        var selection by remember(visibleGenreChipTitles) { mutableStateOf((visibleGenreChipTitles ?: emptyList()).toSet()) }
+        AlertDialog(
+            onDismissRequest = { showGenreChipEditor = false },
+            title = { Text(stringResource(Res.string.choose_genre_chips)) },
+            text = {
+                androidx.compose.foundation.lazy.LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
+                    items(allGenres, key = { it.title }) { genre ->
+                        Row(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        selection =
+                                            if (genre.title in selection) selection - genre.title else selection + genre.title
+                                    }.padding(vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(
+                                checked = genre.title in selection,
+                                onCheckedChange = { checked ->
+                                    selection = if (checked) selection + genre.title else selection - genre.title
+                                },
+                            )
+                            Text(genre.title, style = LocalAppTypography.current.bodyMedium)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.setVisibleGenreChips(selection.toList())
+                    showGenreChipEditor = false
+                }) {
+                    Text(stringResource(Res.string.save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showGenreChipEditor = false }) {
+                    Text(stringResource(Res.string.cancel))
+                }
+            },
+        )
     }
 }
 
@@ -886,14 +977,25 @@ fun HomeTopAppBar(navController: NavController) {
             }
         },
         actions = {
-            RippleIconButton(resId = Res.drawable.outline_notifications_24) {
-                navController.navigate(NotificationDestination)
+            SimpleTooltip(text = stringResource(Res.string.notification)) {
+                RippleIconButton(resId = Res.drawable.outline_notifications_24) {
+                    navController.navigate(NotificationDestination)
+                }
             }
-            RippleIconButton(resId = Res.drawable.baseline_history_24) {
-                navController.navigate(RecentlySongsDestination)
+            SimpleTooltip(text = stringResource(Res.string.recently)) {
+                RippleIconButton(resId = Res.drawable.baseline_history_24) {
+                    navController.navigate(RecentlySongsDestination)
+                }
             }
-            RippleIconButton(resId = Res.drawable.baseline_settings_24) {
-                navController.navigate(SettingsDestination)
+            SimpleTooltip(text = stringResource(Res.string.local_mix)) {
+                RippleIconButton(resId = Res.drawable.baseline_shuffle_24) {
+                    navController.navigate(LocalMixDestination)
+                }
+            }
+            SimpleTooltip(text = stringResource(Res.string.settings)) {
+                RippleIconButton(resId = Res.drawable.baseline_settings_24) {
+                    navController.navigate(SettingsDestination)
+                }
             }
         },
         colors =
@@ -1018,6 +1120,18 @@ fun QuickPicks(
                 }
             }
         }
+        // AUDIT FIX (Home - "Selecciones rápidas" sin forma de scrollear en
+        // Desktop): LazyHorizontalGrid no responde a la rueda del mouse por
+        // default (solo a drag/touch), y esta lista nunca tuvo scrollbar -
+        // en Desktop no había ninguna forma obvia de llegar al resto del
+        // contenido. Mismo componente que ya usan los chips de género.
+        HorizontalGridScrollBar(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+            scrollState = lazyListState,
+        )
     }
 }
 
@@ -1066,6 +1180,17 @@ fun MoodMomentAndGenre(
                 }
             }
         }
+        // AUDIT FIX (Home - "Moods & moment" y "Genre" sin forma de
+        // scrollear en Desktop): mismo problema y mismo fix que en
+        // QuickPicks de arriba - LazyHorizontalGrid no responde a la rueda
+        // del mouse, y estas dos filas nunca tuvieron scrollbar.
+        HorizontalGridScrollBar(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+            scrollState = lazyListState1,
+        )
         Text(
             text = stringResource(Res.string.genre),
             style = LocalAppTypography.current.headlineMedium,
@@ -1092,6 +1217,13 @@ fun MoodMomentAndGenre(
                 }
             }
         }
+        HorizontalGridScrollBar(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+            scrollState = lazyListState2,
+        )
     }
 }
 

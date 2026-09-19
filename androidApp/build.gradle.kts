@@ -212,6 +212,11 @@ dependencies {
 
     implementation(projects.composeApp)
     implementation(projects.data)
+    // AUDIT NOTE: agregado para poder llamar a LastFmApi.configure(...) desde
+    // SimpMusicApplication.kt - projects.data ya depende de lyricsService
+    // pero como "implementation", no queda visible acá salvo que lo
+    // agreguemos también (mismo criterio que en composeApp/build.gradle.kts).
+    implementation(projects.lyricsService)
 
     if (isFullBuild) {
         implementation(projects.crashlytics)

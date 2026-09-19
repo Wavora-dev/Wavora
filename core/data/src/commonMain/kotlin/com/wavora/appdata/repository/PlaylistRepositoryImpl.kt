@@ -737,6 +737,21 @@ internal class PlaylistRepositoryImpl(
                     } else {
                         emit(null)
                     }
+                }.onFailure { exception ->
+                    // BUGFIX ("Mi Mix de YouTube" nunca cargaba): a diferencia de
+                    // getLibraryPlaylist()/getYouTubePlaylist() de arriba, esta
+                    // función no tenía ningún .onFailure acá - si la request
+                    // inicial fallaba (red, auth, cambios en la respuesta de
+                    // YouTube), el flow{} terminaba sin emitir NADA, así que
+                    // collect{} en el ViewModel nunca corría y la UI se quedaba
+                    // en LocalResource.Loading() para siempre (spinner infinito).
+                    // Ahora se loguea el error y se emite null - mismo camino que
+                    // ya usa el caso "no se encontraron playlists" más arriba -
+                    // para que la pantalla pase a mostrar el estado vacío en vez
+                    // de tildarse.
+                    exception.printStackTrace()
+                    Logger.e("Mixed For You", "Error: ${exception.message}")
+                    emit(null)
                 }
         }.flowOn(Dispatchers.IO)
 

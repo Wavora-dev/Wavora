@@ -4,6 +4,9 @@ import com.wavora.app.viewModel.AlbumViewModel
 import com.wavora.app.viewModel.AnalyticsViewModel
 import com.wavora.app.viewModel.AppViewModel
 import com.wavora.app.viewModel.ArtistViewModel
+import com.wavora.app.viewModel.EqualizerViewModel
+import com.wavora.app.viewModel.ScrobblingViewModel
+import com.wavora.app.viewModel.LocalMixViewModel
 import com.wavora.app.viewModel.HomeViewModel
 import com.wavora.app.viewModel.LibraryDynamicPlaylistViewModel
 import com.wavora.app.viewModel.LibraryViewModel
@@ -106,6 +109,15 @@ val viewModelModule =
             )
         }
         viewModel {
+            EqualizerViewModel()
+        }
+        viewModel {
+            ScrobblingViewModel()
+        }
+        viewModel {
+            LocalMixViewModel(get(), get())
+        }
+        viewModel {
             SettingsViewModel(
                 get(),
                 get(),
@@ -161,6 +173,7 @@ val viewModelModule =
         }
         viewModel {
             MoodViewModel(
+                get(),
                 get(),
                 get(),
             )

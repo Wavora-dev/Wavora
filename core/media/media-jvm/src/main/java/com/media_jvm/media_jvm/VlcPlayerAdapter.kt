@@ -36,6 +36,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.yield
 import uk.co.caprica.vlcj.factory.MediaPlayerFactory
 import uk.co.caprica.vlcj.factory.discovery.NativeDiscovery
+import uk.co.caprica.vlcj.player.base.Equalizer
 import uk.co.caprica.vlcj.player.base.MediaPlayer
 import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
 import uk.co.caprica.vlcj.player.embedded.EmbeddedMediaPlayer
@@ -83,6 +84,12 @@ private const val CROSSFADE_WATCHDOG_TIMEOUT_MS = 6000L
 // vía "if (e !is CancellationException)"), igual que un return@launch normal.
 private class CrossfadeAbortedException(message: String) : CancellationException(message)
 
+/** Preamp + ganancias por banda de un preset curado de ecualizador (ver VlcPlayerAdapter.curatedPresets). */
+private data class EqPreset(
+    val preamp: Float,
+    val amps: List<Float>,
+)
+
 /**
  * Structured, single-purpose logger for the Windows crossfade audit
  * (see the user's request: exact-cause instrumentation, not another
@@ -105,6 +112,38 @@ private object CrossfadeAudit {
     private const val AUDIT_TAG = "CROSSFADE_AUDIT"
     private val nextId = java.util.concurrent.atomic.AtomicInteger(0)
 
+    // AUDIT FIX (mejor uso de Sentry): cada evento de auditoría de crossfade
+    // ahora también queda como breadcrumb de Sentry, no solo en el log local.
+    // El deadlock que depuramos esta sesión (leyendo miles de líneas de log a
+    // mano) hubiera aparecido solo en Sentry con todo el trail de eventos
+    // justo antes de la falla, sin depender de que el usuario nos mande el
+    // .log. Los eventos de ANOMALY_EVENTS además disparan un mensaje propio
+    // en Sentry (no solo breadcrumb), para que quede como algo accionable en
+    // el dashboard y no se pierda entre miles de breadcrumbs de sesiones sanas.
+    private val ANOMALY_EVENTS =
+        setOf(
+            "CROSSFADE_WATCHDOG_TIMEOUT",
+            "PREROLL_SEEK_CONFIRM_TIMEOUT",
+            "FADE_LOOP_SKIPPED_OUTGOING_DEAD",
+        )
+
+    // AUDIT FIX (Sentry batching): estos eventos son de altísima frecuencia
+    // por diseño - PREROLL_RAW_BUFFERING dispara sin ningún throttle en cada
+    // callback buffering() nativo de VLC (varias veces por segundo mientras
+    // el pre-roll carga), y PREROLL_RAW_HEARTBEAT/PREROLL_RAW_TIME_CHANGED
+    // son el sampleo periódico de timeChanged() durante hasta ~20 minutos de
+    // reproducción. Mandarlos como breadcrumb inundaba el trail de Sentry
+    // (cientos por canción) y desplazaba a los eventos que sí importan para
+    // diagnosticar un crossfade roto (CB_*, PREROLL_SEEK_*, CROSSFADE_*).
+    // Siguen quedando en el log local (Logger.d arriba) para debug manual,
+    // simplemente no viajan a Sentry.
+    private val HIGH_FREQUENCY_EVENTS =
+        setOf(
+            "PREROLL_RAW_BUFFERING",
+            "PREROLL_RAW_HEARTBEAT",
+            "PREROLL_RAW_TIME_CHANGED",
+        )
+
     fun nextPlayerId(): Int = nextId.incrementAndGet()
 
     fun log(
@@ -120,6 +159,28 @@ private object CrossfadeAudit {
             "t=${System.currentTimeMillis()} thread=${Thread.currentThread().name} " +
                 "event=$event player=$playerStr role=$roleStr $details",
         )
+
+        if (event in HIGH_FREQUENCY_EVENTS) return
+
+        // Sentry.addBreadcrumb/captureMessage son no-op seguros si Sentry.init()
+        // todavía no corrió (DSN no configurado) - el runCatching es una capa
+        // extra de seguridad nomás, para que esto JAMÁS pueda afectar el audio.
+        runCatching {
+            val isAnomaly = event in ANOMALY_EVENTS
+            io.sentry.Sentry.addBreadcrumb(
+                io.sentry.Breadcrumb().apply {
+                    category = "crossfade"
+                    message = "$event player=$playerStr role=$roleStr $details"
+                    level = if (isAnomaly) io.sentry.SentryLevel.WARNING else io.sentry.SentryLevel.INFO
+                },
+            )
+            if (isAnomaly) {
+                io.sentry.Sentry.captureMessage(
+                    "Crossfade anomaly: $event (player=$playerStr, role=$roleStr) - $details",
+                    io.sentry.SentryLevel.WARNING,
+                )
+            }
+        }
     }
 }
 
@@ -211,6 +272,8 @@ class VlcPlayerAdapter(
         mediaPlayerFactory = MediaPlayerFactory(discovery, *factoryArgs.toTypedArray())
         mediaPlayerFactorySecondary = MediaPlayerFactory(discovery, *factoryArgs.toTypedArray())
 
+        restoreEqualizerFromDataStore()
+
         // Load crossfade settings
         coroutineScope.launch {
             dataStoreManager.crossfadeEnabled.collect { enabled ->
@@ -239,6 +302,246 @@ class VlcPlayerAdapter(
 
     @Volatile
     private var currentPlayer: VlcPlayer? = null
+
+    // ========== Audio Equalizer ==========
+    // Un único Equalizer compartido para toda la sesión: se lo asociamos a
+    // TODOS los players activos (current + precacheados) para que el sonido
+    // no "pierda" el EQ a mitad de un crossfade cuando el player precacheado
+    // se promueve a current. vlcj permite asociar el mismo Equalizer a varios
+    // MediaPlayer simultáneamente sin problema (cada uno mantiene su propia
+    // copia interna de los valores en el momento de asociarlo).
+    private var vlcEqualizer: Equalizer? = null
+    private var equalizerIsEnabled = false
+    private var equalizerPresetName: String? = null
+
+    // AUDIT FIX (crash al arrastrar un slider del EQ en reproducción): cada
+    // cambio de banda/preamp lanzaba su propia corrutina para persistir en
+    // DataStore. Arrastrar rápido dispara docenas de onValueChange por
+    // segundo -> docenas de escrituras a disco casi simultáneas -> la misma
+    // carrera de "Unable to rename ...settings.preferences_pb" de Windows
+    // que ya vimos antes, pero ahora causada por nosotros mismos en vez de
+    // por un update de MSIX. El audio se sigue aplicando al instante (nunca
+    // se debounea la parte de VLC, solo el guardado a disco): cada llamada
+    // cancela el guardado pendiente anterior y programa uno nuevo, así que
+    // mientras el usuario sigue arrastrando nunca llega a escribirse nada, y
+    // recién a los EQUALIZER_PERSIST_DEBOUNCE_MS de que soltó el mouse se
+    // graba UNA sola vez con el valor final.
+    private var equalizerPersistJob: Job? = null
+
+    private fun debouncedPersistEqualizer(action: suspend () -> Unit) {
+        equalizerPersistJob?.cancel()
+        equalizerPersistJob =
+            coroutineScope.launch {
+                delay(EQUALIZER_PERSIST_DEBOUNCE_MS)
+                action()
+            }
+    }
+
+    private fun ensureEqualizer(): Equalizer =
+        vlcEqualizer ?: mediaPlayerFactory.equalizer().newEqualizer().also { vlcEqualizer = it }
+
+    /** Aplica (o quita) el equalizer actual a un MediaPlayer recién creado. */
+    private fun applyEqualizerTo(mediaPlayer: uk.co.caprica.vlcj.player.base.MediaPlayer) {
+        mediaPlayer.audio().setEqualizer(if (equalizerIsEnabled) vlcEqualizer else null)
+    }
+
+    /** Reaplica el equalizer actual a TODOS los players activos (current + precacheados). */
+    private fun applyEqualizerToAllPlayers() {
+        val eq = if (equalizerIsEnabled) vlcEqualizer else null
+        currentPlayer?.mediaPlayer?.audio()?.setEqualizer(eq)
+        precachedPlayers.values.forEach { it.player.mediaPlayer.audio().setEqualizer(eq) }
+    }
+
+    /** Aplica un preamp + lista de ganancias por banda al Equalizer compartido. */
+    private fun applyValuesToEqualizer(
+        preamp: Float,
+        amps: List<Float>,
+    ) {
+        val eq = ensureEqualizer()
+        eq.setPreamp(preamp)
+        amps.forEachIndexed { index, amp -> if (index < eq.bandCount()) eq.setAmp(index, amp) }
+    }
+
+    override fun supportsEqualizer(): Boolean = true
+
+    override fun getEqualizerBandFrequencies(): List<Float> = mediaPlayerFactory.equalizer().bands()
+
+    // AUDIT FIX (revisión de presets): antes usábamos los presets NATIVOS de
+    // libVLC (Flat, Classical, Club, Full bass, Headphones, Large Hall, Ska,
+    // Soft rock, Techno...) - son el set clásico de Winamp/XMMS de los años
+    // 90, pensado para géneros y calidades de audio de esa época, no algo
+    // que podamos "afinar" nosotros (VLC decide los dB de cada uno, solo
+    // podemos pedirlos por nombre). Los reemplazamos por un set propio, más
+    // chico y pensado para uso moderno, con valores de dB elegidos a mano
+    // (moderados, sin llegar a los extremos de ±20dB para evitar que se
+    // sature/distorsione el audio). Es una elección de gusto - se puede
+    // seguir ajustando después si algo no convence al probarlo.
+    private val curatedPresets =
+        linkedMapOf(
+            "Flat" to EqPreset(0f, List(10) { 0f }),
+            "Bass Boost" to EqPreset(-2f, listOf(6f, 5f, 3f, 1f, 0f, 0f, 0f, 0f, 0f, 0f)),
+            "Vocal Boost" to EqPreset(0f, listOf(-2f, -1f, 0f, 2f, 4f, 4f, 2f, 0f, -1f, -1f)),
+            "Treble Boost" to EqPreset(-2f, listOf(0f, 0f, 0f, 0f, 0f, 1f, 3f, 5f, 6f, 6f)),
+            "V-Shape" to EqPreset(-2f, listOf(5f, 4f, 2f, 0f, -3f, -3f, 0f, 2f, 4f, 5f)),
+            "Podcast" to EqPreset(2f, listOf(-6f, -4f, -2f, 0f, 3f, 4f, 3f, 0f, -2f, -4f)),
+            "Rock" to EqPreset(-1f, listOf(4f, 3f, 1f, 0f, -1f, 0f, 1f, 3f, 4f, 4f)),
+            "Pop" to EqPreset(0f, listOf(-1f, 0f, 2f, 4f, 4f, 2f, 0f, -1f, -1f, -1f)),
+            "Electronic" to EqPreset(-2f, listOf(5f, 4f, 1f, 0f, -2f, -1f, 0f, 2f, 4f, 5f)),
+            "Acoustic" to EqPreset(0f, listOf(3f, 2f, 1f, 0f, 0f, 1f, 2f, 2f, 1f, 0f)),
+        )
+
+    override fun getEqualizerPresetNames(): List<String> = curatedPresets.keys.toList()
+
+    override fun isEqualizerEnabled(): Boolean = equalizerIsEnabled
+
+    override fun setEqualizerEnabled(enabled: Boolean) {
+        equalizerIsEnabled = enabled
+        if (enabled) ensureEqualizer()
+        applyEqualizerToAllPlayers()
+        coroutineScope.launch { dataStoreManager.setEqualizerEnabled(enabled) }
+    }
+
+    override fun getEqualizerPreamp(): Float = vlcEqualizer?.preamp() ?: 0f
+
+    override fun setEqualizerPreamp(preamp: Float) {
+        val coerced = preamp.coerceIn(-20f, 20f)
+        ensureEqualizer().setPreamp(coerced)
+        applyEqualizerToAllPlayers()
+        persistCurrentBandsOrSlot()
+    }
+
+    override fun getEqualizerBandAmps(): List<Float> {
+        val eq = vlcEqualizer ?: return getEqualizerBandFrequencies().map { 0f }
+        return getEqualizerBandFrequencies().indices.map { eq.amp(it) }
+    }
+
+    override fun setEqualizerBandAmp(
+        index: Int,
+        amp: Float,
+    ) {
+        val coerced = amp.coerceIn(-20f, 20f)
+        ensureEqualizer().setAmp(index, coerced)
+        applyEqualizerToAllPlayers()
+        persistCurrentBandsOrSlot()
+    }
+
+    /**
+     * A dónde persistir un cambio de banda/preamp depende de qué había
+     * seleccionado ANTES del cambio: si era Custom 1/2, el cambio se guarda
+     * EN esa misma ranura (y sigue quedando seleccionada - el usuario está
+     * afinando su propio preset). Si era un preset curado o nada, el cambio
+     * pasa a ser "no hay preset seleccionado" (mismo comportamiento que
+     * había antes de agregar las ranuras Custom).
+     */
+    private fun persistCurrentBandsOrSlot() {
+        when (equalizerPresetName) {
+            MediaPlayerInterface.EQUALIZER_CUSTOM_1_NAME ->
+                debouncedPersistEqualizer {
+                    dataStoreManager.setEqualizerCustom1Preamp(getEqualizerPreamp())
+                    dataStoreManager.setEqualizerCustom1BandAmps(getEqualizerBandAmps())
+                }
+            MediaPlayerInterface.EQUALIZER_CUSTOM_2_NAME ->
+                debouncedPersistEqualizer {
+                    dataStoreManager.setEqualizerCustom2Preamp(getEqualizerPreamp())
+                    dataStoreManager.setEqualizerCustom2BandAmps(getEqualizerBandAmps())
+                }
+            else -> {
+                equalizerPresetName = null
+                debouncedPersistEqualizer {
+                    dataStoreManager.setEqualizerPreamp(getEqualizerPreamp())
+                    dataStoreManager.setEqualizerBandAmps(getEqualizerBandAmps())
+                    dataStoreManager.setEqualizerPresetName("")
+                }
+            }
+        }
+    }
+
+    override fun getEqualizerPresetName(): String? = equalizerPresetName
+
+    override suspend fun loadEqualizerCustomSlot(slot: Int) {
+        require(slot == 1 || slot == 2) { "slot debe ser 1 o 2, recibido $slot" }
+        val preamp = if (slot == 1) dataStoreManager.equalizerCustom1Preamp.first() else dataStoreManager.equalizerCustom2Preamp.first()
+        val ampsRaw = if (slot == 1) dataStoreManager.equalizerCustom1BandAmps.first() else dataStoreManager.equalizerCustom2BandAmps.first()
+        applyValuesToEqualizer(preamp, parseBandAmps(ampsRaw))
+        equalizerPresetName = if (slot == 1) MediaPlayerInterface.EQUALIZER_CUSTOM_1_NAME else MediaPlayerInterface.EQUALIZER_CUSTOM_2_NAME
+        applyEqualizerToAllPlayers()
+    }
+
+    override fun resetEqualizerToDefault() {
+        when (val current = equalizerPresetName) {
+            MediaPlayerInterface.EQUALIZER_CUSTOM_1_NAME -> {
+                applyValuesToEqualizer(0f, List(10) { 0f })
+                applyEqualizerToAllPlayers()
+                coroutineScope.launch {
+                    dataStoreManager.setEqualizerCustom1Preamp(0f)
+                    dataStoreManager.setEqualizerCustom1BandAmps(List(10) { 0f })
+                }
+            }
+            MediaPlayerInterface.EQUALIZER_CUSTOM_2_NAME -> {
+                applyValuesToEqualizer(0f, List(10) { 0f })
+                applyEqualizerToAllPlayers()
+                coroutineScope.launch {
+                    dataStoreManager.setEqualizerCustom2Preamp(0f)
+                    dataStoreManager.setEqualizerCustom2BandAmps(List(10) { 0f })
+                }
+            }
+            else -> if (current != null && curatedPresets.containsKey(current)) loadEqualizerPreset(current) else loadEqualizerPreset("Flat")
+        }
+    }
+
+    override fun supportsScrobbling(): Boolean = true
+
+    override fun isLastFmConfigured(): Boolean = org.app.lyrics.scrobbler.LastFmApi.isConfigured
+
+    override suspend fun loginToLastFm(
+        username: String,
+        password: String,
+    ): Result<String> = org.app.lyrics.scrobbler.LastFmApi.getMobileSession(username, password)
+
+    override fun loadEqualizerPreset(name: String) {
+        val preset = curatedPresets[name]
+        if (preset == null) {
+            Logger.w(TAG, "loadEqualizerPreset: preset desconocido '$name'")
+            return
+        }
+        applyValuesToEqualizer(preset.preamp, preset.amps)
+        equalizerPresetName = name
+        applyEqualizerToAllPlayers()
+        coroutineScope.launch {
+            dataStoreManager.setEqualizerPreamp(preset.preamp)
+            dataStoreManager.setEqualizerBandAmps(preset.amps)
+            dataStoreManager.setEqualizerPresetName(name)
+        }
+    }
+
+    private fun parseBandAmps(raw: String): List<Float> =
+        raw
+            .takeIf { it.isNotBlank() }
+            ?.split(",")
+            ?.mapNotNull { it.trim().toFloatOrNull() }
+            ?: emptyList()
+
+    /**
+     * Restaura el estado del ecualizador guardado en DataStore. Se llama una
+     * sola vez al arrancar (ver init más abajo) - mediaPlayerFactory ya existe
+     * en ese punto porque se asigna sincrónicamente antes en este mismo init.
+     */
+    private fun restoreEqualizerFromDataStore() {
+        coroutineScope.launch {
+            val enabled = dataStoreManager.equalizerEnabled.first() == DataStoreManager.Values.TRUE
+            val preamp = dataStoreManager.equalizerPreamp.first()
+            val bandAmps = parseBandAmps(dataStoreManager.equalizerBandAmps.first())
+            val presetName = dataStoreManager.equalizerPresetName.first()
+
+            if (bandAmps.isNotEmpty() || preamp != 0f) {
+                applyValuesToEqualizer(preamp, bandAmps)
+            }
+            equalizerPresetName = presetName.takeIf { it.isNotBlank() }
+            equalizerIsEnabled = enabled
+            applyEqualizerToAllPlayers()
+        }
+    }
+
 
     // Tracks whether the current player is actually rendering video
     // (based on PlayableSource.isVideo, not GenericMediaItem metadata)
@@ -1380,6 +1683,7 @@ class VlcPlayerAdapter(
             val embeddedPlayer = factory.mediaPlayers().newEmbeddedMediaPlayer()
             val surface = videoPanel.createVideoSurface(factory)
             embeddedPlayer.videoSurface().set(surface)
+            applyEqualizerTo(embeddedPlayer)
 
             return VlcPlayer(
                 mediaPlayer = embeddedPlayer,
@@ -1390,6 +1694,7 @@ class VlcPlayerAdapter(
         // Audio-only player
         Logger.d(TAG, "Creating audio-only player")
         val player = factory.mediaPlayers().newMediaPlayer()
+        applyEqualizerTo(player)
         return VlcPlayer(
             mediaPlayer = player,
             videoSurface = null,
@@ -1752,6 +2057,24 @@ class VlcPlayerAdapter(
      */
     private fun triggerCrossfadeTransition(nextIndex: Int) {
         if (nextIndex !in playlist.indices || isCrossfading) return
+
+        // AUDIT FIX (canciones "mezcladas" / sonando una encima de otra):
+        // confirmado por logs — cuando una canción termina de forma ambigua
+        // (el stream de YouTube corta un poco antes de lo esperado), dos
+        // mecanismos independientes reaccionan casi al mismo tiempo: este
+        // (avanzar con crossfade a la siguiente) y el recovery de stopped()
+        // más abajo en este archivo (que intenta RESUCITAR la canción vieja
+        // asumiendo que el stop fue un glitch). El recovery YA chequea
+        // isCrossfading antes de actuar - pero antes, esta bandera solo se
+        // ponía en true DENTRO de la corrutina de abajo, unos milisegundos
+        // después de que handleTrackEndInternal() ya había decidido avanzar.
+        // En esa ventana de milisegundos, el recovery podía alcanzar a
+        // arrancar un player nuevo para la canción vieja (a volumen 100,
+        // sin mute) mientras el crossfade normal también arrancaba el
+        // player de la canción siguiente - dos canciones sonando a la vez.
+        // Poner la bandera acá, sincrónicamente, ANTES de siquiera lanzar la
+        // corrutina, cierra esa ventana de carrera por completo.
+        setCrossfading(true)
 
         crossfadeJob =
             coroutineScope.launch {
@@ -2519,6 +2842,7 @@ class VlcPlayerAdapter(
         private const val AUTO_FALLBACK_DURATION_MS = 30000
         private const val AUTO_MIN_DURATION_MS = 20000
         private const val AUTO_MAX_DURATION_MS = 45000
+        private const val EQUALIZER_PERSIST_DEBOUNCE_MS = 400L
         private val BEAT_COUNT_OPTIONS = intArrayOf(8, 16, 24, 32, 40, 48, 64, 80, 96)
         private const val DEFAULT_BEAT_COUNT = 32
         private const val BPM_RATIO_MIN = 0.75f

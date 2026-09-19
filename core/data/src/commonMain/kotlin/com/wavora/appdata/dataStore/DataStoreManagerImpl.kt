@@ -520,6 +520,158 @@ internal class DataStoreManagerImpl(
         }
     }
 
+    override val equalizerEnabled: Flow<String> =
+        settingsDataStore.data.map { preferences ->
+            preferences[EQUALIZER_ENABLED] ?: FALSE
+        }
+
+    override suspend fun setEqualizerEnabled(enabled: Boolean) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[EQUALIZER_ENABLED] = if (enabled) TRUE else FALSE
+            }
+        }
+    }
+
+    override val equalizerPreamp: Flow<Float> =
+        settingsDataStore.data.map { preferences ->
+            preferences[EQUALIZER_PREAMP] ?: 0f
+        }
+
+    override suspend fun setEqualizerPreamp(preamp: Float) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[EQUALIZER_PREAMP] = preamp.coerceIn(-20f, 20f)
+            }
+        }
+    }
+
+    override val equalizerBandAmps: Flow<String> =
+        settingsDataStore.data.map { preferences ->
+            preferences[EQUALIZER_BAND_AMPS] ?: ""
+        }
+
+    override suspend fun setEqualizerBandAmps(amps: List<Float>) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[EQUALIZER_BAND_AMPS] = amps.joinToString(",")
+            }
+        }
+    }
+
+    override val equalizerPresetName: Flow<String> =
+        settingsDataStore.data.map { preferences ->
+            preferences[EQUALIZER_PRESET_NAME] ?: ""
+        }
+
+    override suspend fun setEqualizerPresetName(name: String) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[EQUALIZER_PRESET_NAME] = name
+            }
+        }
+    }
+
+    override val equalizerCustom1Preamp: Flow<Float> =
+        settingsDataStore.data.map { preferences -> preferences[EQUALIZER_CUSTOM1_PREAMP] ?: 0f }
+
+    override suspend fun setEqualizerCustom1Preamp(preamp: Float) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings -> settings[EQUALIZER_CUSTOM1_PREAMP] = preamp.coerceIn(-20f, 20f) }
+        }
+    }
+
+    override val equalizerCustom1BandAmps: Flow<String> =
+        settingsDataStore.data.map { preferences -> preferences[EQUALIZER_CUSTOM1_BAND_AMPS] ?: "" }
+
+    override suspend fun setEqualizerCustom1BandAmps(amps: List<Float>) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings -> settings[EQUALIZER_CUSTOM1_BAND_AMPS] = amps.joinToString(",") }
+        }
+    }
+
+    override val equalizerCustom2Preamp: Flow<Float> =
+        settingsDataStore.data.map { preferences -> preferences[EQUALIZER_CUSTOM2_PREAMP] ?: 0f }
+
+    override suspend fun setEqualizerCustom2Preamp(preamp: Float) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings -> settings[EQUALIZER_CUSTOM2_PREAMP] = preamp.coerceIn(-20f, 20f) }
+        }
+    }
+
+    override val equalizerCustom2BandAmps: Flow<String> =
+        settingsDataStore.data.map { preferences -> preferences[EQUALIZER_CUSTOM2_BAND_AMPS] ?: "" }
+
+    override suspend fun setEqualizerCustom2BandAmps(amps: List<Float>) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings -> settings[EQUALIZER_CUSTOM2_BAND_AMPS] = amps.joinToString(",") }
+        }
+    }
+
+    override val homeGenreChipTitles: Flow<String> =
+        settingsDataStore.data.map { preferences -> preferences[HOME_GENRE_CHIP_TITLES] ?: "" }
+
+    override suspend fun setHomeGenreChipTitles(titles: List<String>) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings -> settings[HOME_GENRE_CHIP_TITLES] = titles.joinToString("|") }
+        }
+    }
+
+    override val scrobbleLastFmEnabled: Flow<String> =
+        settingsDataStore.data.map { preferences -> preferences[SCROBBLE_LASTFM_ENABLED] ?: FALSE }
+
+    override suspend fun setScrobbleLastFmEnabled(enabled: Boolean) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings -> settings[SCROBBLE_LASTFM_ENABLED] = if (enabled) TRUE else FALSE }
+        }
+    }
+
+    override val scrobbleLastFmUsername: Flow<String> =
+        settingsDataStore.data.map { preferences -> preferences[SCROBBLE_LASTFM_USERNAME] ?: "" }
+
+    override val scrobbleLastFmSessionKey: Flow<String> =
+        settingsDataStore.data.map { preferences -> preferences[SCROBBLE_LASTFM_SESSION_KEY] ?: "" }
+
+    override suspend fun setScrobbleLastFmSession(
+        username: String,
+        sessionKey: String,
+    ) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[SCROBBLE_LASTFM_USERNAME] = username
+                settings[SCROBBLE_LASTFM_SESSION_KEY] = sessionKey
+            }
+        }
+    }
+
+    override suspend fun clearScrobbleLastFmSession() {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings ->
+                settings[SCROBBLE_LASTFM_USERNAME] = ""
+                settings[SCROBBLE_LASTFM_SESSION_KEY] = ""
+                settings[SCROBBLE_LASTFM_ENABLED] = FALSE
+            }
+        }
+    }
+
+    override val scrobbleListenBrainzEnabled: Flow<String> =
+        settingsDataStore.data.map { preferences -> preferences[SCROBBLE_LISTENBRAINZ_ENABLED] ?: FALSE }
+
+    override suspend fun setScrobbleListenBrainzEnabled(enabled: Boolean) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings -> settings[SCROBBLE_LISTENBRAINZ_ENABLED] = if (enabled) TRUE else FALSE }
+        }
+    }
+
+    override val scrobbleListenBrainzToken: Flow<String> =
+        settingsDataStore.data.map { preferences -> preferences[SCROBBLE_LISTENBRAINZ_TOKEN] ?: "" }
+
+    override suspend fun setScrobbleListenBrainzToken(token: String) {
+        withContext(Dispatchers.IO) {
+            settingsDataStore.edit { settings -> settings[SCROBBLE_LISTENBRAINZ_TOKEN] = token }
+        }
+    }
+
     override val videoQuality =
         settingsDataStore.data.map { preferences ->
             preferences[VIDEO_QUALITY] ?: "720p"
@@ -1462,6 +1614,20 @@ internal class DataStoreManagerImpl(
             stringPreferencesKey("download_video_enabled")
         val VIDEO_QUALITY = stringPreferencesKey("video_quality")
         val PLAYER_VOLUME = floatPreferencesKey("player_volume")
+        val EQUALIZER_ENABLED = stringPreferencesKey("equalizer_enabled")
+        val EQUALIZER_PREAMP = floatPreferencesKey("equalizer_preamp")
+        val EQUALIZER_BAND_AMPS = stringPreferencesKey("equalizer_band_amps")
+        val EQUALIZER_PRESET_NAME = stringPreferencesKey("equalizer_preset_name")
+        val EQUALIZER_CUSTOM1_PREAMP = floatPreferencesKey("equalizer_custom1_preamp")
+        val EQUALIZER_CUSTOM1_BAND_AMPS = stringPreferencesKey("equalizer_custom1_band_amps")
+        val EQUALIZER_CUSTOM2_PREAMP = floatPreferencesKey("equalizer_custom2_preamp")
+        val EQUALIZER_CUSTOM2_BAND_AMPS = stringPreferencesKey("equalizer_custom2_band_amps")
+        val HOME_GENRE_CHIP_TITLES = stringPreferencesKey("home_genre_chip_titles")
+        val SCROBBLE_LASTFM_ENABLED = stringPreferencesKey("scrobble_lastfm_enabled")
+        val SCROBBLE_LASTFM_USERNAME = stringPreferencesKey("scrobble_lastfm_username")
+        val SCROBBLE_LASTFM_SESSION_KEY = stringPreferencesKey("scrobble_lastfm_session_key")
+        val SCROBBLE_LISTENBRAINZ_ENABLED = stringPreferencesKey("scrobble_listenbrainz_enabled")
+        val SCROBBLE_LISTENBRAINZ_TOKEN = stringPreferencesKey("scrobble_listenbrainz_token")
         val SPDC = stringPreferencesKey("sp_dc")
         val SPOTIFY_LYRICS = stringPreferencesKey("spotify_lyrics")
         val SPOTIFY_CANVAS = stringPreferencesKey("spotify_canvas")

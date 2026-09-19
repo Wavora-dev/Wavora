@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
@@ -15,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.wavora.app.ui.component.EndOfPage
@@ -36,6 +38,7 @@ fun MoodScreen(
 ) {
     val moodData by viewModel.moodsMomentObject.collectAsStateWithLifecycle()
     val loading by viewModel.loading.collectAsStateWithLifecycle()
+    val genreMixLoading by viewModel.genreMixLoading.collectAsStateWithLifecycle()
 
     LaunchedEffect(key1 = params) {
         if (params != null) {
@@ -59,6 +62,33 @@ fun MoodScreen(
                     )
                 }
             },
+            // AUDIT (Mix por género, Desktop + Android): arma una cola para
+            // reproducir con canciones reales de varias de las playlists
+            // curadas que YouTube Music trae para esta categoría, en vez de
+            // tener que entrar a una sola playlist a mano. No depende de la
+            // plataforma - toda la lógica vive en MoodViewModel (común).
+            rightIcon =
+                if (!moodData?.items.isNullOrEmpty()) {
+                    {
+                        if (genreMixLoading) {
+                            Box(
+                                modifier = Modifier.size(48.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                            }
+                        } else {
+                            IconButton(onClick = { viewModel.playGenreMix() }) {
+                                Icon(
+                                    painterResource(Res.drawable.baseline_shuffle_24),
+                                    contentDescription = stringResource(Res.string.genre_mix),
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    null
+                },
         )
         AnimatedVisibility(visible = !loading) {
             LazyColumn(

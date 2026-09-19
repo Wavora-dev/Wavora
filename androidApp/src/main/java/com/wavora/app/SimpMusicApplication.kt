@@ -116,6 +116,12 @@ class WavoraApplication :
         }
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
         configCrashlytics(this, BuildKonfig.sentryDsn)
+        // AUDIT NOTE: mismo criterio que en DesktopApp.kt - credenciales DE LA
+        // APP horneadas en el build (BuildKonfig, ver composeApp/build.gradle.kts),
+        // no algo que configure cada usuario. Sin esto, LastFmApi.isConfigured
+        // queda false y la pantalla de Scrobbling avisa que no está configurado,
+        // sin romper nada más.
+        org.app.lyrics.scrobbler.LastFmApi.configure(BuildKonfig.lastFmApiKey, BuildKonfig.lastFmApiSecret)
         startKoin {
             androidLogger(level = Level.DEBUG)
             androidContext(this@WavoraApplication)

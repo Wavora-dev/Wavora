@@ -255,9 +255,24 @@ internal class HomeRepositoryImpl(
                 youTube
                     .moodAndGenres()
                     .onSuccess { result ->
+                        // AUDIT FIX (chips de género mostrando moods como "Sleep"/"Gaming"/
+                        // "Calm"/"Focus" en vez de géneros musicales reales): antes se asumía
+                        // que result[0] siempre es "Moods & moments" y result[1] siempre es
+                        // "Genres", por POSICIÓN fija. Confirmado que ese orden no es
+                        // confiable (varía según la cuenta) - YouTube en realidad ya manda el
+                        // título real de cada sección (MoodAndGenres.title, ej. "Genres" o
+                        // "Géneros"), así que identificamos la sección de géneros buscando
+                        // esa palabra en el título en vez de por posición. Si por lo que sea
+                        // ninguna sección matchea (título en un idioma no contemplado, cambio
+                        // de formato de YouTube), caemos al comportamiento anterior
+                        // (result[0]/result[1]) en vez de dejar todo vacío.
+                        val genreKeywords = listOf("genre", "género", "genero")
+                        val genreSection = result.firstOrNull { section -> genreKeywords.any { section.title.contains(it, ignoreCase = true) } }
+                        val moodSection = result.firstOrNull { section -> section !== genreSection }
+
                         val listMoodMoments: ArrayList<MoodsMoment> = arrayListOf()
                         val listGenre: ArrayList<Genre> = arrayListOf()
-                        result[0].let { moodsmoment ->
+                        (moodSection ?: result.getOrNull(0))?.let { moodsmoment ->
                             for (item in moodsmoment.items) {
                                 listMoodMoments.add(
                                     MoodsMoment(
@@ -267,7 +282,7 @@ internal class HomeRepositoryImpl(
                                 )
                             }
                         }
-                        result[1].let { genres ->
+                        (genreSection ?: result.getOrNull(1))?.let { genres ->
                             for (item in genres.items) {
                                 listGenre.add(
                                     Genre(

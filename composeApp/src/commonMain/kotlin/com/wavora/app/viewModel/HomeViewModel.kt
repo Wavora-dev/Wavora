@@ -5,6 +5,7 @@ import com.wavora.domain.model.entities.SongEntity
 import com.wavora.domain.model.model.home.HomeDataCombine
 import com.wavora.domain.model.model.home.HomeItem
 import com.wavora.domain.model.model.home.chart.Chart
+import com.wavora.domain.model.model.mood.Genre
 import com.wavora.domain.model.model.mood.Mood
 import com.wavora.domain.manager.DataStoreManager
 import com.wavora.domain.manager.DataStoreManager.Values.TRUE
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -68,6 +70,90 @@ class HomeViewModel(
 
     private var _params: MutableStateFlow<String?> = MutableStateFlow(null)
     val params: StateFlow<String?> = _params
+
+    // AUDIT NOTE (chips de género en Home, reemplazan los de "mood" fijos):
+    // null = todavía no se decidió qué mostrar (esperando el primer fetch de
+    // géneros reales de la cuenta). Una vez decidido, nunca vuelve a null -
+    // los refrescos posteriores del home NO recalculan la selección por
+    // defecto, solo la primera vez.
+    private val _visibleGenreChipTitles: MutableStateFlow<List<String>?> = MutableStateFlow(null)
+    val visibleGenreChipTitles: StateFlow<List<String>?> = _visibleGenreChipTitles
+
+    init {
+        viewModelScope.launch {
+            val mood = exploreMoodItem.filterNotNull().first()
+            val stored = dataStoreManager.homeGenreChipTitles.first()
+            val storedTitles = stored.takeIf { it.isNotBlank() }?.split("|")
+            val valid = storedTitles?.filter { title -> mood.genres.any { it.title == title } }
+            // AUDIT FIX (aparecía "Bachata" u otros géneros nunca acordados): antes,
+            // si a la cuenta le faltaba alguno de los 10 géneros buscados, se
+            // completaba el resto con lo que fuera que viniera primero en la lista
+            // de YouTube - lo cual podía meter cualquier género random. Ahora, si
+            // faltan matches, simplemente se muestran menos de 10 (nunca se rellena
+            // con algo no pedido) - el usuario ve exactamente los géneros buscados
+            // que su cuenta realmente tiene, ni uno más.
+            val resolved =
+                if (!valid.isNullOrEmpty()) {
+                    valid
+                } else {
+                    computeDefaultGenreChips(mood.genres)
+                }
+            _visibleGenreChipTitles.value = resolved
+            // Persistimos siempre (no solo la primera vez): si lo guardado había
+            // quedado inválido (ej. venía de la versión con el bug de moods/genres
+            // invertidos) esto lo corrige en disco además de en memoria, para que
+            // no se recalcule en cada arranque.
+            if (resolved != storedTitles) {
+                viewModelScope.launch { dataStoreManager.setHomeGenreChipTitles(resolved) }
+            }
+        }
+    }
+
+    /** El usuario elige cuáles quiere ver como chips rápidos, desde el editor. */
+    fun setVisibleGenreChips(titles: List<String>) {
+        _visibleGenreChipTitles.value = titles
+        viewModelScope.launch { dataStoreManager.setHomeGenreChipTitles(titles) }
+    }
+
+    // AUDIT NOTE: selección por defecto pensada para audiencia argentina/LATAM
+    // (acordado con el usuario). Cada target es una lista de substrings
+    // aceptables (por si YouTube Music devuelve el género con una grafía
+    // distinta, ej. "Reggaeton" vs "Reggaetón", o combinado como "Hip-Hop/Rap").
+    // Se usa el PRIMER género real de la cuenta que matchee - nunca se inventa
+    // un género que la cuenta no tenga, y si no matchea ninguno para un target
+    // puntual, ese target simplemente no aparece (ver computeDefaultGenreChips).
+    // El orden importa: "Rock Nacional" se busca antes que "Rock" a secas para
+    // no comerse esa categoría más específica por el genérico.
+    private val defaultGenreChipTargets =
+        listOf(
+            listOf("pop"),
+            listOf("rock nacional", "rock argentino", "rock en español"),
+            listOf("reggaeton", "reggaetón"),
+            listOf("hip-hop", "hip hop", "rap"),
+            listOf("cumbia"),
+            listOf("trap"),
+            listOf("rock"),
+            listOf("electronic", "electrónica", "dance", "edm"),
+            listOf("indie"),
+            listOf("salsa"),
+        )
+
+    private fun computeDefaultGenreChips(genres: List<Genre>): List<String> {
+        val used = mutableSetOf<String>()
+        val result = mutableListOf<String>()
+        for (target in defaultGenreChipTargets) {
+            val match = genres.firstOrNull { g -> g.title !in used && target.any { key -> g.title.contains(key, ignoreCase = true) } }
+            if (match != null) {
+                result.add(match.title)
+                used.add(match.title)
+            }
+        }
+        // A propósito NO se completa con géneros extra si faltan matches acá -
+        // mejor mostrar menos de 10 que meter algo que nunca se pidió (ver
+        // comentario en el init de arriba).
+        return result
+    }
+
 
     // For showing alert that should log in to YouTube
     private val _showLogInAlert: MutableStateFlow<Boolean> = MutableStateFlow(false)

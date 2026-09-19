@@ -314,6 +314,12 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
                                 options.setDiagnosticLevel(SentryLevel.ERROR)
                             }
                         }
+                        // AUDIT NOTE: mismo criterio que Sentry arriba - credenciales DE LA
+                        // APP horneadas en el build (ver composeApp/build.gradle.kts), no
+                        // algo que configure cada usuario. Sin esto, LastFmApi.isConfigured
+                        // queda false y la sección de Last.fm en Ajustes avisa que no está
+                        // configurado, sin romper nada más.
+                        org.app.lyrics.scrobbler.LastFmApi.configure(BuildKonfig.lastFmApiKey, BuildKonfig.lastFmApiSecret)
                         com.wavora.app.diagnostics.StartupTiming.end("language + VersionManager + Sentry")
 
                         com.wavora.app.diagnostics.StartupTiming.begin("MediaPlayerHandler (Koin get + VLC init)")

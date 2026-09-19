@@ -39,6 +39,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.lastOrNull
 import kotlinx.coroutines.isActive
@@ -333,6 +334,8 @@ internal class CrossfadeExoPlayerAdapter(
 
                 override fun seekToPreviousMediaItem(): Unit = this@CrossfadeExoPlayerAdapter.seekToPreviousMediaItem()
             }
+
+        restoreEqualizerFromDataStore()
     }
 
     // ========== ExoPlayer Instance Factory ==========
@@ -1204,6 +1207,306 @@ internal class CrossfadeExoPlayerAdapter(
             secondaryPlayer?.skipSilenceEnabled = value
         }
 
+    // ========== Equalizer (paridad con Desktop/VLC) ==========
+    // A diferencia de libVLC (un solo Equalizer de software aplicado a todos
+    // los players activos), acá cada instancia de ExoPlayer tiene su propio
+    // audioSessionId nativo, y ese id cambia con cada crossfade (currentPlayer
+    // se reemplaza en triggerCrossfadeTransition/swap). Enganchar el efecto a
+    // un audioSessionId puntual se rompería en cada transición. La sesión de
+    // audio 0 le pide al framework que aplique el efecto al output mix GLOBAL
+    // del proceso en vez de a un player puntual - se sigue aplicando sin
+    // importar cuál ExoPlayer esté sonando, incluso durante el overlap de un
+    // crossfade con dos instancias native activas a la vez.
+    //
+    // Presets: NO son un set curado a mano como en Desktop - son los presets
+    // NATIVOS que el propio android.media.audiofx.Equalizer reporta para este
+    // dispositivo (Equalizer.getPresetName), que varían por fabricante/chip
+    // de audio. Es justo lo pedido ("con presets nativos del dispositivo").
+    private var androidEqualizer: android.media.audiofx.Equalizer? = null
+    // Sesión de audio a la que está enganchada la instancia actual de
+    // [androidEqualizer] - se compara contra la sesión real del player en
+    // cada [ensureAndroidEqualizer] para saber si hay que reconstruirlo.
+    private var androidEqualizerSessionId: Int? = null
+    private var equalizerIsEnabled = false
+    private var equalizerPresetName: String? = null
+
+    // Android no separa un control de "preamp" de las bandas individuales
+    // (a diferencia de libVLC) - lo modelamos igual que un preamp real: un
+    // offset parejo que se suma a cada banda antes de escribirla al
+    // hardware, clampeado al rango que reporte el equalizer nativo.
+    private var equalizerPreampDb = 0f
+    private var equalizerBandAmpsDb: MutableList<Float> = mutableListOf()
+
+    /**
+     * BUGFIX (Android: la pantalla de ecualizador solo mostraba el
+     * preamp y los slots Custom 1/2, sin bandas ni presets reales): la
+     * primera versión enganchaba el Equalizer a la sesión de audio
+     * "global" del proceso (id 0), pensada para sobrevivir a los cambios
+     * de player nativo en cada crossfade sin tener que reengancharse. En
+     * la teoría de Android eso debería aplicarse a toda la mezcla de
+     * salida sin importar qué player suene - pero en la práctica, varios
+     * fabricantes (Samsung en particular, por su propia cadena de audio)
+     * rechazan o ignoran en silencio los efectos enganchados a la sesión
+     * 0: `getNumberOfBands()`/`getNumberOfPresets()` devuelven 0 sin
+     * lanzar ninguna excepción, así que quedaba "andando" pero vacío.
+     *
+     * Ahora se engancha a la sesión REAL del ExoPlayer que está sonando
+     * (`this.audioSessionId`, la misma que ya expone este adapter) - el
+     * camino estándar y mucho más probado en el ecosistema Android. Como
+     * esa sesión SÍ cambia en cada crossfade (cada ExoPlayer nativo tiene
+     * la suya), acá se detecta el cambio y se reconstruye el efecto en la
+     * sesión nueva, reaplicando enabled + preamp + bandas guardadas para
+     * que el usuario no note el salto a mitad de un crossfade.
+     */
+    private fun ensureAndroidEqualizer(): android.media.audiofx.Equalizer {
+        val targetSessionId = audioSessionId
+        val current = androidEqualizer
+        if (current != null && androidEqualizerSessionId == targetSessionId) {
+            return current
+        }
+        runCatching { current?.release() }
+        // Si construir sobre la sesión real del player falla por lo que sea
+        // (dispositivo raro, sesión inválida en ese instante), caemos a la
+        // sesión global (0) como último recurso en vez de dejar que la
+        // excepción se propague y tumbe a quien haya llamado a esto.
+        val fresh =
+            runCatching { android.media.audiofx.Equalizer(0, targetSessionId) }
+                .getOrElse {
+                    Logger.w(TAG, "ensureAndroidEqualizer: falló con sesión $targetSessionId (${it.message}), probando sesión global")
+                    android.media.audiofx.Equalizer(0, 0)
+                }
+        androidEqualizer = fresh
+        androidEqualizerSessionId = targetSessionId
+        runCatching { fresh.enabled = equalizerIsEnabled }
+            .onFailure { Logger.w(TAG, "ensureAndroidEqualizer: no se pudo restaurar 'enabled': ${it.message}") }
+        // Reaplica las bandas guardadas a la instancia nueva. Es seguro
+        // llamar a applyEqualizerBandsToHardware() acá adentro: internamente
+        // vuelve a pedir ensureAndroidEqualizer(), pero como androidEqualizer
+        // y androidEqualizerSessionId ya quedaron seteados arriba, esa
+        // llamada recursiva entra por el "return current" de arriba y no
+        // reconstruye de nuevo.
+        applyEqualizerBandsToHardware()
+        return fresh
+    }
+
+    override fun supportsEqualizer(): Boolean = true
+
+    override fun getEqualizerBandFrequencies(): List<Float> =
+        runCatching {
+            val eq = ensureAndroidEqualizer()
+            (0 until eq.numberOfBands.toInt()).map { eq.getCenterFreq(it.toShort()) / 1000f }
+        }.getOrElse {
+            Logger.w(TAG, "getEqualizerBandFrequencies falló: ${it.message}")
+            emptyList()
+        }
+
+    override fun getEqualizerPresetNames(): List<String> =
+        runCatching {
+            val eq = ensureAndroidEqualizer()
+            (0 until eq.numberOfPresets.toInt()).map { eq.getPresetName(it.toShort()) }
+        }.getOrElse {
+            Logger.w(TAG, "getEqualizerPresetNames falló: ${it.message}")
+            emptyList()
+        }
+
+    override fun isEqualizerEnabled(): Boolean = equalizerIsEnabled
+
+    override fun setEqualizerEnabled(enabled: Boolean) {
+        equalizerIsEnabled = enabled
+        runCatching { ensureAndroidEqualizer().enabled = enabled }
+            .onFailure { Logger.w(TAG, "setEqualizerEnabled falló: ${it.message}") }
+        coroutineScope.launch { dataStoreManager.setEqualizerEnabled(enabled) }
+    }
+
+    override fun getEqualizerPreamp(): Float = equalizerPreampDb
+
+    override fun setEqualizerPreamp(preamp: Float) {
+        equalizerPreampDb = preamp.coerceIn(-20f, 20f)
+        applyEqualizerBandsToHardware()
+        persistCurrentBandsOrSlot()
+    }
+
+    override fun getEqualizerBandAmps(): List<Float> = equalizerBandAmpsDb.toList()
+
+    override fun setEqualizerBandAmp(
+        index: Int,
+        amp: Float,
+    ) {
+        if (equalizerBandAmpsDb.isEmpty()) {
+            equalizerBandAmpsDb = getEqualizerBandFrequencies().map { 0f }.toMutableList()
+        }
+        if (index !in equalizerBandAmpsDb.indices) return
+        equalizerBandAmpsDb[index] = amp.coerceIn(-20f, 20f)
+        applyEqualizerBandsToHardware()
+        persistCurrentBandsOrSlot()
+    }
+
+    /** Vuelca [equalizerPreampDb] + [equalizerBandAmpsDb] al Equalizer nativo, banda por banda. */
+    private fun applyEqualizerBandsToHardware() {
+        runCatching {
+            val eq = ensureAndroidEqualizer()
+            val range = eq.bandLevelRange
+            val minMb = range[0].toInt()
+            val maxMb = range[1].toInt()
+            equalizerBandAmpsDb.forEachIndexed { index, amp ->
+                if (index >= eq.numberOfBands.toInt()) return@forEachIndexed
+                val combinedMb = ((amp + equalizerPreampDb) * 100).toInt().coerceIn(minMb, maxMb)
+                eq.setBandLevel(index.toShort(), combinedMb.toShort())
+            }
+        }.onFailure { Logger.w(TAG, "applyEqualizerBandsToHardware falló: ${it.message}") }
+    }
+
+    /**
+     * A dónde persistir un cambio de banda/preamp depende de qué había
+     * seleccionado ANTES del cambio: si era Custom 1/2, se guarda EN esa
+     * misma ranura (y sigue quedando seleccionada). Si era un preset nativo
+     * o nada, pasa a ser "no hay preset seleccionado" - mismo criterio que
+     * JvmMediaPlayerHandlerImpl/VlcPlayerAdapter en Desktop.
+     */
+    private fun persistCurrentBandsOrSlot() {
+        when (equalizerPresetName) {
+            MediaPlayerInterface.EQUALIZER_CUSTOM_1_NAME ->
+                coroutineScope.launch {
+                    dataStoreManager.setEqualizerCustom1Preamp(equalizerPreampDb)
+                    dataStoreManager.setEqualizerCustom1BandAmps(equalizerBandAmpsDb)
+                }
+            MediaPlayerInterface.EQUALIZER_CUSTOM_2_NAME ->
+                coroutineScope.launch {
+                    dataStoreManager.setEqualizerCustom2Preamp(equalizerPreampDb)
+                    dataStoreManager.setEqualizerCustom2BandAmps(equalizerBandAmpsDb)
+                }
+            else -> {
+                equalizerPresetName = null
+                coroutineScope.launch {
+                    dataStoreManager.setEqualizerPreamp(equalizerPreampDb)
+                    dataStoreManager.setEqualizerBandAmps(equalizerBandAmpsDb)
+                    dataStoreManager.setEqualizerPresetName("")
+                }
+            }
+        }
+    }
+
+    override fun getEqualizerPresetName(): String? = equalizerPresetName
+
+    override fun loadEqualizerPreset(name: String) {
+        runCatching {
+            val eq = ensureAndroidEqualizer()
+            val presetIndex = (0 until eq.numberOfPresets.toInt()).firstOrNull { eq.getPresetName(it.toShort()) == name }
+            if (presetIndex == null) {
+                Logger.w(TAG, "loadEqualizerPreset: preset desconocido '$name'")
+                return@runCatching
+            }
+            runCatching { eq.usePreset(presetIndex.toShort()) }
+                .onFailure { Logger.w(TAG, "loadEqualizerPreset falló: ${it.message}") }
+            // Releemos los band levels reales que el preset dejó en el hardware -
+            // el fabricante decide los dB de cada uno, no algo que sepamos de
+            // este lado. Android no separa preamp de bandas, así que queda en 0.
+            equalizerPreampDb = 0f
+            equalizerBandAmpsDb =
+                (0 until eq.numberOfBands.toInt()).map { eq.getBandLevel(it.toShort()) / 100f }.toMutableList()
+            equalizerPresetName = name
+            coroutineScope.launch {
+                dataStoreManager.setEqualizerPreamp(0f)
+                dataStoreManager.setEqualizerBandAmps(equalizerBandAmpsDb)
+                dataStoreManager.setEqualizerPresetName(name)
+            }
+        }.onFailure { Logger.w(TAG, "loadEqualizerPreset falló al preparar el Equalizer: ${it.message}") }
+    }
+
+    /** Carga la ranura de usuario Custom 1 (slot=1) o Custom 2 (slot=2). Arrancan planas (0 en todo) hasta que el usuario las edita. */
+    override suspend fun loadEqualizerCustomSlot(slot: Int) {
+        require(slot == 1 || slot == 2) { "slot debe ser 1 o 2, recibido $slot" }
+        val preamp = if (slot == 1) dataStoreManager.equalizerCustom1Preamp.first() else dataStoreManager.equalizerCustom2Preamp.first()
+        val ampsRaw = if (slot == 1) dataStoreManager.equalizerCustom1BandAmps.first() else dataStoreManager.equalizerCustom2BandAmps.first()
+        val parsedAmps = parseEqualizerBandAmps(ampsRaw)
+        equalizerPreampDb = preamp
+        equalizerBandAmpsDb =
+            (parsedAmps.takeIf { it.isNotEmpty() } ?: getEqualizerBandFrequencies().map { 0f }).toMutableList()
+        applyEqualizerBandsToHardware()
+        equalizerPresetName = if (slot == 1) MediaPlayerInterface.EQUALIZER_CUSTOM_1_NAME else MediaPlayerInterface.EQUALIZER_CUSTOM_2_NAME
+    }
+
+    override fun resetEqualizerToDefault() {
+        when (val current = equalizerPresetName) {
+            MediaPlayerInterface.EQUALIZER_CUSTOM_1_NAME -> {
+                equalizerPreampDb = 0f
+                equalizerBandAmpsDb = getEqualizerBandFrequencies().map { 0f }.toMutableList()
+                applyEqualizerBandsToHardware()
+                coroutineScope.launch {
+                    dataStoreManager.setEqualizerCustom1Preamp(0f)
+                    dataStoreManager.setEqualizerCustom1BandAmps(equalizerBandAmpsDb)
+                }
+            }
+            MediaPlayerInterface.EQUALIZER_CUSTOM_2_NAME -> {
+                equalizerPreampDb = 0f
+                equalizerBandAmpsDb = getEqualizerBandFrequencies().map { 0f }.toMutableList()
+                applyEqualizerBandsToHardware()
+                coroutineScope.launch {
+                    dataStoreManager.setEqualizerCustom2Preamp(0f)
+                    dataStoreManager.setEqualizerCustom2BandAmps(equalizerBandAmpsDb)
+                }
+            }
+            else -> {
+                val presetNames = getEqualizerPresetNames()
+                val target =
+                    current?.takeIf { it in presetNames }
+                        ?: presetNames.firstOrNull { it.equals("Normal", ignoreCase = true) || it.equals("Flat", ignoreCase = true) }
+                        ?: presetNames.firstOrNull()
+                if (target != null) {
+                    loadEqualizerPreset(target)
+                } else {
+                    equalizerPreampDb = 0f
+                    equalizerBandAmpsDb = getEqualizerBandFrequencies().map { 0f }.toMutableList()
+                    applyEqualizerBandsToHardware()
+                }
+            }
+        }
+    }
+
+    private fun parseEqualizerBandAmps(raw: String): List<Float> =
+        raw
+            .takeIf { it.isNotBlank() }
+            ?.split(",")
+            ?.mapNotNull { it.trim().toFloatOrNull() }
+            ?: emptyList()
+
+    /**
+     * Restaura el estado del ecualizador guardado en DataStore. Se llama una
+     * sola vez al arrancar (ver init más arriba).
+     */
+    private fun restoreEqualizerFromDataStore() {
+        coroutineScope.launch {
+            val enabled = dataStoreManager.equalizerEnabled.first() == DataStoreManager.Values.TRUE
+            val preamp = dataStoreManager.equalizerPreamp.first()
+            val bandAmps = parseEqualizerBandAmps(dataStoreManager.equalizerBandAmps.first())
+            val presetName = dataStoreManager.equalizerPresetName.first()
+
+            equalizerPreampDb = preamp
+            equalizerBandAmpsDb =
+                (bandAmps.takeIf { it.isNotEmpty() } ?: getEqualizerBandFrequencies().map { 0f }).toMutableList()
+            equalizerPresetName = presetName.takeIf { it.isNotBlank() }
+            equalizerIsEnabled = enabled
+            applyEqualizerBandsToHardware()
+            runCatching { ensureAndroidEqualizer().enabled = enabled }
+                .onFailure { Logger.w(TAG, "restoreEqualizerFromDataStore: enabled falló: ${it.message}") }
+        }
+    }
+
+    // ========== Scrobbling (Last.fm) ==========
+    // Mismo criterio que en VlcPlayerAdapter (Desktop): delegamos la parte de
+    // red/firma a LastFmApi, que acá vive en el androidMain de lyricsService
+    // (código prácticamente idéntico al de Desktop - MessageDigest y ktor
+    // funcionan igual en Android, por eso se pudo copiar en vez de reescribir).
+
+    override fun supportsScrobbling(): Boolean = true
+
+    override fun isLastFmConfigured(): Boolean = org.app.lyrics.scrobbler.LastFmApi.isConfigured
+
+    override suspend fun loginToLastFm(
+        username: String,
+        password: String,
+    ): Result<String> = org.app.lyrics.scrobbler.LastFmApi.getMobileSession(username, password)
+
     // ========== Listener Management ==========
 
     override fun addListener(listener: MediaPlayerListener) {
@@ -1236,6 +1539,8 @@ internal class CrossfadeExoPlayerAdapter(
         cleanupCurrentPlayerInternal()
         clearAllPrecacheInternal()
         listeners.clear()
+        runCatching { androidEqualizer?.release() }
+        androidEqualizer = null
     }
 
     // ========== Internal: State Transition ==========

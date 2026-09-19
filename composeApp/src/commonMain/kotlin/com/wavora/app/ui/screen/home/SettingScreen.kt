@@ -117,6 +117,8 @@ import com.wavora.app.ui.component.EndOfPage
 import com.wavora.app.ui.component.RippleIconButton
 import com.wavora.app.ui.component.SettingItem
 import com.wavora.app.ui.navigation.destination.home.CreditDestination
+import com.wavora.app.ui.navigation.destination.home.EqualizerDestination
+import com.wavora.app.ui.navigation.destination.home.ScrobblingDestination
 import com.wavora.app.ui.navigation.destination.login.DiscordLoginDestination
 import com.wavora.app.ui.navigation.destination.login.LoginDestination
 import com.wavora.app.ui.navigation.destination.login.SpotifyLoginDestination
@@ -166,6 +168,9 @@ import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.about_us
+import wavora.composeapp.generated.resources.equalizer
+import wavora.composeapp.generated.resources.equalizer_enable
+import wavora.composeapp.generated.resources.scrobbling
 import wavora.composeapp.generated.resources.add_an_account
 import wavora.composeapp.generated.resources.ai
 import wavora.composeapp.generated.resources.ai_api_key
@@ -2096,6 +2101,41 @@ fun SettingScreen(
                     },
                 )
             }
+        }
+        // AUDIT FIX (ecualizador Android invisible): este ítem navegaba a
+        // EqualizerDestination -el ecualizador nuevo, con soporte real en
+        // CrossfadeExoPlayerAdapter (Android) y VlcPlayerAdapter (Desktop)-
+        // pero quedó encerrado en "if (Platform.Desktop)" desde antes de que
+        // Android tuviera su propia implementación. Resultado: en Android
+        // nunca aparecía, y lo único visible en Configuración era el viejo
+        // "Abrir ecualizador del sistema" de la sección Audio (que lanza el
+        // panel de EQ del propio dispositivo por Intent, algo completamente
+        // distinto). Mismo criterio que ya usa Scrobbling más abajo: queda
+        // SIEMPRE visible, y EqualizerScreen ya maneja el caso "no soportado"
+        // con su propio mensaje si algún día corre en una plataforma sin
+        // implementación (ej. iOS, todavía no implementado).
+        item(key = "equalizer") {
+            SettingItem(
+                title = stringResource(Res.string.equalizer),
+                subtitle = stringResource(Res.string.equalizer_enable),
+                onClick = {
+                    navController.navigate(EqualizerDestination)
+                },
+            )
+        }
+        // AUDIT NOTE: Scrobbling ya no está atado a Desktop - CrossfadeExoPlayerAdapter
+        // (Android) también implementa supportsScrobbling()/loginToLastFm() ahora.
+        // Se deja SIEMPRE visible (en vez de chequear la plataforma acá) porque
+        // ScrobblingScreen ya maneja el caso "no soportado" con su propio mensaje si
+        // algún día corre en una plataforma sin soporte (ej. iOS, todavía no implementado).
+        item(key = "scrobbling") {
+            SettingItem(
+                title = stringResource(Res.string.scrobbling),
+                subtitle = "Last.fm / ListenBrainz",
+                onClick = {
+                    navController.navigate(ScrobblingDestination)
+                },
+            )
         }
         item(key = "about_us") {
             Column {

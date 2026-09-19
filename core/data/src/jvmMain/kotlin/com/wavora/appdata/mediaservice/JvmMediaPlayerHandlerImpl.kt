@@ -1411,7 +1411,22 @@ class JvmMediaPlayerHandlerImpl(
                                             ),
                                     )
                                 }
-                                if (runBlocking { dataStoreManager.endlessQueue.first() } == TRUE) {
+                                // AUDIT FIX (radio "contaminada" al terminar el Mix local /
+                                // una playlist local): antes, cualquier cola que se quedaba
+                                // sin canciones con "Cola infinita" activado saltaba a una
+                                // radio de YouTube sembrada con la ÚLTIMA canción de la cola
+                                // - sin importar de qué tipo era esa cola. Con el Mix local
+                                // (25 canciones a propósito variadas en género) eso significa
+                                // arrancar una radio de YouTube al azar según cuál canción
+                                // terminó última después del shuffle, sin que el usuario lo
+                                // haya pedido. Lo mismo le pasaba a cualquier playlist local
+                                // del usuario al terminarla. Cola infinita debería seguir
+                                // funcionando para radios/playlists de YouTube reales, pero
+                                // NO debería inventar una radio nueva cuando lo que terminó
+                                // fue algo local.
+                                if (runBlocking { dataStoreManager.endlessQueue.first() } == TRUE &&
+                                    queueData.value.data.playlistType != PlaylistType.LOCAL_PLAYLIST
+                                ) {
                                     Logger.w(TAG, "loadMore: Endless Queue")
                                     val lastTrack =
                                         queueData.value.data.listTracks
@@ -1438,7 +1453,9 @@ class JvmMediaPlayerHandlerImpl(
                         }
                 }
             }
-        } else if (runBlocking { dataStoreManager.endlessQueue.first() } == TRUE) {
+        } else if (runBlocking { dataStoreManager.endlessQueue.first() } == TRUE &&
+            queueData.value.data.playlistType != PlaylistType.LOCAL_PLAYLIST
+        ) {
             Logger.w(TAG, "loadMore: Endless Queue")
             val lastTrack =
                 queueData.value.data.listTracks
@@ -2400,6 +2417,7 @@ class JvmMediaPlayerHandlerImpl(
         val currentState = simpleMediaState.value
         if (currentState is SimpleMediaState.Progress && lastPlayed != null && lastPlayed.durationSeconds > 0) {
             mayBeTrackingListeningLocal(lastPlayed, currentState.progress)
+            maybeScrobbleToExternalServices(lastPlayed, currentState.progress)
         }
         Logger.w(TAG, "Smooth Switching Transition Current Position: ${player.currentPosition}")
         mayBeNormalizeVolume()
@@ -2468,6 +2486,44 @@ class JvmMediaPlayerHandlerImpl(
                 ).collect {
                     Logger.d(TAG, "Inserted playback event for ${song.title}: $it")
                 }
+        }
+    }
+
+    /**
+     * Scrobbling a Last.fm/ListenBrainz - toggle independiente del tracking
+     * local de arriba (mayBeTrackingListeningLocal), con el umbral estándar
+     * de la industria: track de al menos 30s, escuchado al menos la mitad o
+     * 4 minutos (lo que sea menor). Nunca bloquea ni afecta la reproducción -
+     * ScrobbleManager atrapa cualquier error de red/config internamente.
+     *
+     * BUGFIX: `coroutineScope` acá es el SERVICE_SCOPE de VlcModule, que en
+     * Desktop corre sobre un único hilo dedicado ("VLC-Player-Thread") -
+     * VLC no es thread-safe y todas las llamadas al player se serializan
+     * ahí. Antes de este fix, ScrobbleManager.maybeScrobble (red +
+     * DataStore) se ejecutaba arrancando en ese mismo hilo, compitiendo
+     * directamente con la reproducción. Ahora se fuerza a Dispatchers.IO.
+     */
+    private fun maybeScrobbleToExternalServices(
+        song: SongEntity,
+        currentPositionMillis: Long,
+    ) {
+        coroutineScope.launch {
+            if (song.durationSeconds < 30) return@launch
+            val percent = currentPositionMillis / (song.durationSeconds * 1000f)
+            val listenedSeconds = currentPositionMillis / 1000
+            val eligible = percent >= 0.5f || listenedSeconds >= 240
+            if (!eligible) return@launch
+
+            val startedAtEpochSeconds = (System.currentTimeMillis() / 1000) - listenedSeconds
+            withContext(Dispatchers.IO) {
+                org.app.lyrics.scrobbler.ScrobbleManager.maybeScrobble(
+                    dataStoreManager = dataStoreManager,
+                    artist = song.artistName?.joinToString(", ") ?: "",
+                    title = song.title,
+                    album = song.albumName,
+                    startedAtEpochSeconds = startedAtEpochSeconds,
+                )
+            }
         }
     }
 

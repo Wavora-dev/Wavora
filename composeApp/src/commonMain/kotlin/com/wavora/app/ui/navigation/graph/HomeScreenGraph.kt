@@ -7,16 +7,22 @@ import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import com.wavora.app.ui.navigation.destination.home.AnalyticsDestination
 import com.wavora.app.ui.navigation.destination.home.CreditDestination
+import com.wavora.app.ui.navigation.destination.home.EqualizerDestination
+import com.wavora.app.ui.navigation.destination.home.LocalMixDestination
 import com.wavora.app.ui.navigation.destination.home.MoodDestination
 import com.wavora.app.ui.navigation.destination.home.NotificationDestination
 import com.wavora.app.ui.navigation.destination.home.RecentlySongsDestination
+import com.wavora.app.ui.navigation.destination.home.ScrobblingDestination
 import com.wavora.app.ui.navigation.destination.home.SettingsDestination
 import com.wavora.app.ui.screen.home.MoodScreen
+import com.wavora.app.ui.screen.home.LocalMixScreen
 import com.wavora.app.ui.screen.home.NotificationScreen
 import com.wavora.app.ui.screen.home.RecentlySongsScreen
 import com.wavora.app.ui.screen.home.SettingScreen
 import com.wavora.app.ui.screen.home.analytics.AnalyticsScreen
 import com.wavora.app.ui.screen.other.CreditScreen
+import com.wavora.app.ui.screen.other.EqualizerScreen
+import com.wavora.app.ui.screen.other.ScrobblingScreen
 
 fun NavGraphBuilder.homeScreenGraph(
     innerPadding: PaddingValues,
@@ -27,6 +33,12 @@ fun NavGraphBuilder.homeScreenGraph(
             paddingValues = innerPadding,
             navController = navController,
         )
+    }
+    composable<EqualizerDestination> {
+        EqualizerScreen(navController = navController)
+    }
+    composable<ScrobblingDestination> {
+        ScrobblingScreen(navController = navController)
     }
     composable<MoodDestination> { entry ->
         val params = entry.toRoute<MoodDestination>().params
@@ -42,6 +54,12 @@ fun NavGraphBuilder.homeScreenGraph(
     }
     composable<RecentlySongsDestination> {
         RecentlySongsScreen(
+            navController = navController,
+            innerPadding = innerPadding,
+        )
+    }
+    composable<LocalMixDestination> {
+        LocalMixScreen(
             navController = navController,
             innerPadding = innerPadding,
         )

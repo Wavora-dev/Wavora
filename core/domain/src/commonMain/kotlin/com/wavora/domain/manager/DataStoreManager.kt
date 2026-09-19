@@ -146,6 +146,85 @@ interface DataStoreManager {
 
     suspend fun setPlayerVolume(volume: Float)
 
+    // Ecualizador de audio (Desktop/VLC) - ver MediaPlayerInterface.kt para los
+    // métodos en tiempo real; esto es solo lo que se persiste entre sesiones.
+    // bandAmps se guarda como floats separados por coma (Preferences DataStore
+    // no tiene un tipo nativo para listas de float), mismo criterio que otras
+    // listas del proyecto (ver sponsorBlockCategories).
+    val equalizerEnabled: Flow<String>
+
+    suspend fun setEqualizerEnabled(enabled: Boolean)
+
+    val equalizerPreamp: Flow<Float>
+
+    suspend fun setEqualizerPreamp(preamp: Float)
+
+    /** Ganancias por banda, separadas por coma (ej "0.0,2.5,-1.0,..."), vacío si nunca se tocó. */
+    val equalizerBandAmps: Flow<String>
+
+    suspend fun setEqualizerBandAmps(amps: List<Float>)
+
+    /** Nombre del último preset cargado, o vacío si el usuario ajustó bandas manualmente. */
+    val equalizerPresetName: Flow<String>
+
+    suspend fun setEqualizerPresetName(name: String)
+
+    // Ranuras Custom 1 / Custom 2 - iguales en forma a lo de arriba, pero
+    // guardadas aparte para que el usuario pueda ir y volver entre un preset
+    // curado y su propia ranura sin perder lo que tenía ahí.
+    val equalizerCustom1Preamp: Flow<Float>
+
+    suspend fun setEqualizerCustom1Preamp(preamp: Float)
+
+    val equalizerCustom1BandAmps: Flow<String>
+
+    suspend fun setEqualizerCustom1BandAmps(amps: List<Float>)
+
+    val equalizerCustom2Preamp: Flow<Float>
+
+    suspend fun setEqualizerCustom2Preamp(preamp: Float)
+
+    val equalizerCustom2BandAmps: Flow<String>
+
+    suspend fun setEqualizerCustom2BandAmps(amps: List<Float>)
+
+    // Chips de género rápidos en Home (reemplazan los de "mood" fijos que
+    // había antes). Se guardan los TÍTULOS elegidos (vienen siempre de la
+    // lista real de géneros que trae la cuenta de YouTube Music en ese
+    // momento, nunca inventados a mano) separados por "|" (los títulos de
+    // género pueden traer comas, ej. "Rock, Pop"). Vacío = todavía no se
+    // configuró nada, usar la selección por defecto.
+    val homeGenreChipTitles: Flow<String>
+
+    suspend fun setHomeGenreChipTitles(titles: List<String>)
+
+    // Scrobbling (Last.fm / ListenBrainz) - Desktop únicamente por ahora.
+    // La contraseña de Last.fm NUNCA se persiste, solo la session key que
+    // devuelve auth.getMobileSession (ver LastFmApi.kt en lyricsService).
+    val scrobbleLastFmEnabled: Flow<String>
+
+    suspend fun setScrobbleLastFmEnabled(enabled: Boolean)
+
+    val scrobbleLastFmUsername: Flow<String>
+
+    val scrobbleLastFmSessionKey: Flow<String>
+
+    /** Guarda usuario + session key juntos (resultado de un login exitoso). Vacíos = "no logueado". */
+    suspend fun setScrobbleLastFmSession(
+        username: String,
+        sessionKey: String,
+    )
+
+    suspend fun clearScrobbleLastFmSession()
+
+    val scrobbleListenBrainzEnabled: Flow<String>
+
+    suspend fun setScrobbleListenBrainzEnabled(enabled: Boolean)
+
+    val scrobbleListenBrainzToken: Flow<String>
+
+    suspend fun setScrobbleListenBrainzToken(token: String)
+
     val videoQuality: Flow<String>
 
     suspend fun setVideoQuality(quality: String)
