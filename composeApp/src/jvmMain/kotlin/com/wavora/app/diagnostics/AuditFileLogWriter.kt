@@ -3,8 +3,6 @@ package com.wavora.app.diagnostics
 import co.touchlab.kermit.LogWriter
 import co.touchlab.kermit.Severity
 import java.io.File
-import java.io.FileWriter
-import java.io.PrintWriter
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -13,9 +11,18 @@ import java.time.format.DateTimeFormatter
 // usa su writer por default en JVM, que solo imprime a stdout, así que entre
 // sesiones no queda ningún rastro. Este LogWriter cubre eso.
 //
-// VERIFICAR al compilar: la firma de LogWriter.log(...) corresponde a kermit
-// 2.1.0 (gradle/libs.versions.toml:59). No se pudo compilar en el entorno de
-// auditoría (sin Windows/GUI) para confirmarlo con el IDE.
+// OPTIMIZACIÓN (v2.3): antes cada línea se escribía con un PrintWriter con
+// autoFlush=true DESDE EL HILO QUE LOGUEABA (UI, hilo de VLC, etc.): una
+// escritura + flush a disco sincrónica por cada log, incluidos los de debug
+// del reproductor. Ahora:
+//  - las líneas se encolan y las escribe un único hilo de fondo con buffer
+//    (ver [AsyncLogFile]); el que loguea nunca toca el disco;
+//  - Error/Assert se escriben y se vacían a disco antes de volver, así un
+//    crash (CrashDialog hace exitProcess) nunca pierde su stack trace;
+//  - en un cierre normal, un shutdown hook vacía lo pendiente;
+//  - se borran los logs viejos (ver [AsyncLogFile.pruneOldLogs]).
+// El nivel mínimo (Warn en uso normal, Debug con el modo diagnóstico) lo
+// decide [DiagnosticsConfig] en DesktopApp.kt, no este writer.
 class AuditFileLogWriter : LogWriter() {
     companion object {
         val logDir: File by lazy {
@@ -32,11 +39,9 @@ class AuditFileLogWriter : LogWriter() {
         }
     }
 
-    // autoFlush = true: si el proceso queda "Suspendido" o hay que matarlo a
-    // la fuerza, el archivo tiene que seguir teniendo lo escrito hasta ese
-    // instante — es la evidencia que se necesita justo en esos casos.
-    private val writer: PrintWriter by lazy {
-        PrintWriter(FileWriter(logFile, true), true)
+    private val output: AsyncLogFile by lazy {
+        AsyncLogFile.pruneOldLogs(logDir, prefix = "wavora-", keep = logFile)
+        AsyncLogFile(logFile)
     }
 
     private val timeFmt = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
@@ -50,9 +55,7 @@ class AuditFileLogWriter : LogWriter() {
         val ts = LocalDateTime.now().format(timeFmt)
         val threadName = Thread.currentThread().name
         val line = "$ts [$threadName] ${severity.name.padEnd(5)} $tag: $message"
-        synchronized(this) {
-            writer.println(line)
-            throwable?.let { writer.println(it.stackTraceToString()) }
-        }
+        val text = if (throwable != null) line + "\n" + throwable.stackTraceToString() else line
+        output.write(text, flushNow = severity >= Severity.Error)
     }
 }

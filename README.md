@@ -5,7 +5,7 @@
 
   **A free, open-source, cross-platform YouTube Music client — built with Kotlin Multiplatform & Compose.**
 
-  [![Version](https://img.shields.io/badge/version-1.1.0-00D4FF?style=flat-square)](https://github.com/Wavora-dev/Wavora/releases)
+  [![Version](https://img.shields.io/badge/version-2.3.0-00D4FF?style=flat-square)](https://github.com/Wavora-dev/Wavora/releases)
   [![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square)](LICENSE)
   [![Kotlin](https://img.shields.io/badge/Kotlin-2.4.0-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
   [![Compose Multiplatform](https://img.shields.io/badge/Compose%20Multiplatform-1.11.1-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)](https://www.jetbrains.com/lp/compose-multiplatform/)
@@ -99,7 +99,8 @@ Wavora's goal isn't to be "yet another YouTube Music wrapper." It exists to push
 - Moods & genres browser, personalized recommendations on the home feed
 - YouTube-style radio ("start radio" from any track)
 - **Mix by genre** — a "Mix" button on every genre/mood screen that pulls real tracks from several of the curated playlists YouTube Music shows for that category, fetched in parallel, shuffled together, and queued up as a single ready-to-play mix (Android & Desktop)
-- **Local Mix** — a locally-generated, no-network mix built from your own listening history, refreshed with a weighted shuffle each time you regenerate it (see "How Local Mix works" below)
+- **Local Mix** — a locally-generated, no-network mix built from your own listening history, refreshed with a weighted shuffle each time you regenerate it (see "How Local Mix works" below). Three modes: **For you**, **For this time of day** and **Rediscover**, plus a **Mix radio** button
+- **Your year in Wavora** — a yearly recap built only from your on-device listening history: minutes listened, plays, different songs, days with music, longest streak, your favorite time to listen, top songs and top artists (open it from Analytics)
 
 ### 🤖 AI
 - AI-powered lyrics translation (OpenAI, Gemini, or self-hosted/custom model endpoint), configurable per-provider with your own API key
@@ -127,6 +128,9 @@ Wavora's goal isn't to be "yet another YouTube Music wrapper." It exists to push
 - **Desktop (Windows / macOS / Linux)** — standalone windowed app, floating draggable miniplayer window, full-screen player, custom title bar, scrollbars, VLC-based playback (libVLC)
   - macOS Now Playing Center + Remote Command Center (media keys, lock-screen widget)
   - Windows custom protocol handler (`wavora://`) for deep links
+  - **Windows keyboard media keys** (play/pause, next, previous, stop) that work even when Wavora is minimized or in the tray — uses the standard `RegisterHotKey` API, not a keyboard hook
+  - **Configurable keyboard shortcuts** in the main window (Settings › Performance (PC) › Keyboard shortcuts: turn them on/off, change or remove each one, restore defaults). Defaults: Ctrl+Space play/pause · Alt+→/← next/previous · Alt+↑/↓ volume · Ctrl+L like · Ctrl+M mini player. Every shortcut must use Ctrl/Alt (or F1–F12) so it never interferes with typing
+  - **Hardware acceleration on Windows** (Automatic / On / Off) with automatic fallback to compatibility mode — see "Performance" and "Troubleshooting (Windows)"
   - System tray integration
   - YouTube Music login on Windows via a lazily-loaded embedded Chromium browser (KCEF), just to capture the session cookie — no persistent browser engine left running afterward
 
@@ -147,6 +151,7 @@ Wavora's goal isn't to be "yet another YouTube Music wrapper." It exists to push
 - Manual and automatic update checks with a toggle for the auto-check-on-launch behavior
 - Optional Android "keep background service alive" setting to reduce playback interruptions from battery optimization
 - Per-feature toggles for crossfade, SponsorBlock, normalization, silence-skip, quality tiers, and more, all under Settings
+- **Settings › Performance (PC)**: hardware acceleration, keyboard media keys, keyboard shortcuts and **Diagnostic mode** (detailed logs only when you turn it on)
 
 ### How Local Mix works
 Local Mix looks at your own local play-history analytics (already used for the
@@ -154,13 +159,26 @@ Library "most played" view) over the last 60 days, weighted by how many times
 you played each song (using a square-root weighting so your single
 most-replayed track doesn't crowd out everything else), and picks 25 of them
 with a random weighted draw — so a full regeneration can shuffle in different
-songs each time rather than always returning the identical list. There's no
-fixed "listen to N songs and it unlocks" threshold; it just needs at least 10
-songs in your recent play history to work well, and falls back to your
-all-time history if the last 60 days don't have enough. It's entirely local
-(no network call, no server), so it keeps working offline and **persists
-across app updates** — it's built from the same on-device Room database used
-for Library, which app updates don't wipe.
+songs each time rather than always returning the identical list. It needs at
+least 10 songs to work well: if the last 60 days don't have enough it widens to
+your all-time history, and if that is still short it completes the mix with
+each song's play counter (`song.totalPlayTime`, which is updated on every play
+even with the listening history turned off), so the mix works from day one.
+
+Modes:
+- **For you** — the weighted mix described above.
+- **For this time of day** — what you play most within ±2 hours of the current
+  time, based on the last 120 days.
+- **Rediscover** — songs you used to play a lot and haven't played in the last
+  60 days (no filler: if there are none yet, it says so).
+- **Mix radio** — starts a YouTube Music radio seeded with a song from the mix.
+
+The local listening history is **on by default** since v2.3 (it never leaves
+the device). If you turned it off, the Local Mix screen offers a one-tap button
+to turn it back on. The song that is playing when you close the app is now
+recorded too. It's entirely local (no network call, no server), so it keeps
+working offline and **persists across app updates** — it's built from the same
+on-device Room database used for Library, which app updates don't wipe.
 
 ## What's new compared to SimpMusic
 
@@ -305,7 +323,14 @@ Wavora is a **Kotlin Multiplatform** project. Shared Kotlin code targets both `a
 Download the latest `.apk` from [Releases](https://github.com/Wavora-dev/Wavora/releases). Requires **Android 8.0 (API 26) or newer**.
 
 ### Windows
-Download the `.msi` installer from [Releases](https://github.com/Wavora-dev/Wavora/releases). Requires [VLC](https://www.videolan.org/vlc/) (64-bit) installed on the system.
+1. Download `AppwavoraWindows.zip` from [Releases](https://github.com/Wavora-dev/Wavora/releases) and extract it.
+2. Run `install-wavora.bat` and accept the administrator prompt (one time only — it's needed to trust the app's certificate).
+3. From then on Wavora updates itself in the background. VLC's libraries are bundled, no separate VLC install is needed.
+
+#### Troubleshooting (Windows)
+- **Blank or glitchy window** — Wavora detects it and switches to compatibility mode on its own. You can also force it: tray icon › *Restart in compatibility mode*, Settings › Performance (PC) › Hardware acceleration › Off, or launch with `--software-render`.
+- **Detailed logs for a bug report** — turn on Settings › Performance (PC) › Diagnostic mode and restart (or launch with `--diagnostics`, or set `WAVORA_DIAGNOSTICS=1`). Logs are in `%LOCALAPPDATA%\Wavora\logs`.
+- **Media keys go to another player** — if another app (e.g. Spotify) already registered a media key, that key stays with it. You can turn Wavora's media keys off in Settings › Performance (PC).
 
 ### macOS
 Download the `.dmg` from [Releases](https://github.com/Wavora-dev/Wavora/releases). Requires VLC installed.
@@ -405,6 +430,13 @@ Real, code-verified optimizations, not aspirational claims:
 - **Sentry breadcrumb batching** — the crossfade audit log's highest-frequency internal events (buffering-progress and periodic playback-position heartbeats, which could otherwise fire hundreds of times per track) are no longer forwarded to Sentry as breadcrumbs, so the events that actually matter for diagnosing a broken crossfade don't get pushed out of the trail.
 - **Local Mix parity fix on Android** — the "endless queue" auto-radio feature used to ignore what kind of queue it was extending, so a Local Mix or local playlist running out on Android could get silently replaced by an unrelated YouTube radio. Android now shares Desktop's guard: endless queue only kicks in for actual YouTube-sourced queues, never local ones.
 
+**New in v2.3 (Desktop / low-end PCs):**
+- **Hardware acceleration on Windows** — previous versions forced CPU (software) rendering on every Windows PC to avoid a blank-window bug on some GPUs. Now Wavora reads the graphics card from the Windows registry before opening the window (< 5 ms, no external process) and uses Direct3D when it is safe (real GPU with a driver from 2018 or newer, not a remote/virtual session). After opening, it checks a few title-bar pixels to confirm the window is really visible; if not, it shows a native notice and the next launch goes back to compatibility mode. If a hardware-accelerated launch crashes or hangs before being confirmed, the next launch also falls back automatically. Settings › Performance (PC) lets you pick Automatic / On / Off.
+- **Diagnostic logging only on demand** — the session log used to receive every Debug line, written and flushed to disk one by one from the calling thread (UI and VLC threads included), plus a per-thread CPU sampler every 5 s and a full process census every 5 s during the first 2 minutes. Now, by default, only Warn/Error lines are logged, written by a single background thread with buffering (errors are flushed immediately so crashes keep their stack trace), old logs are pruned (last 10 files, max 14 days), and the samplers only run in **Diagnostic mode**. The Android session log is also written asynchronously now.
+- **No `runBlocking` on the VLC thread at track changes** — the endless-queue and explicit-content settings are read from an in-memory copy seeded at startup and kept in sync, instead of blocking the player thread on DataStore.
+- **Lighter splash** — the splash halos skip the `blur()` when rendering on the CPU and all splash animations are read in the draw phase (no recomposition per frame).
+- **JVM memory flags** — `G1PeriodicGCInterval` returns unused memory to the OS while the app idles, `Min/MaxHeapFreeRatio` keeps the heap from staying inflated after a peak, and `UseStringDeduplication` shares repeated strings. No hard `-Xmx` cap (to avoid OutOfMemory risks).
+
 ## Accessibility
 
 - `contentDescription` labels are set on interactive and image-only elements across the shared UI (buttons, artwork, playback controls) so screen readers (TalkBack on Android, VoiceOver on macOS) can announce them correctly.
@@ -424,12 +456,14 @@ Real, code-verified optimizations, not aspirational claims:
 
 ## Roadmap
 
-Sourced directly from `// TODO` markers currently present in the codebase — nothing here is invented:
+Sourced directly from `// TODO` markers currently present in the codebase, plus features already planned for upcoming versions — nothing here is invented:
 
 - **Shuffle order persistence** — the shuffle-order logic (`core/media/media3/.../BetterShuffleOrder.kt`) has known rough edges: "play next" ordering doesn't currently survive an unshuffle operation, and the underlying algorithm is flagged internally for a cleaner rewrite.
 - **Discord Gateway connection-wait strategy** — the Discord Rich Presence WebSocket client (`core/service/kizzy`) currently uses a workaround while waiting for the socket to report as connected to the user's account; a more robust wait strategy is planned.
 - **JVM (Desktop) loudness enhancer** — desktop playback normalization currently mirrors Android's behavior at the application level; a native VLC-side loudness enhancer is a known gap, noted directly in `JvmMediaPlayerHandlerImpl.kt`.
 - **Desktop UI extension hook** — a platform-specific UI extension point on the JVM target (`UIExt.jvm.kt`) is currently a stub, reserved for a future desktop-specific enhancement.
+- **Windows media overlay (SMTC)** — showing the current song with cover art in the Windows volume/lock-screen media panel needs the WinRT `SystemMediaTransportControls` API; v2.3 ships the keyboard media keys, the full panel is planned.
+- **Local music files** — playing audio files from your own folders (MP3/FLAC/…) is planned; it needs a dedicated playback path and database changes, so it was not rushed into v2.3.
 
 ## Credits
 
@@ -515,7 +549,8 @@ El objetivo de Wavora no es ser "otro wrapper más de YouTube Music". Existe par
 - Explorador de estados de ánimo y géneros, recomendaciones personalizadas en la pantalla principal
 - Radio estilo YouTube ("iniciar radio" desde cualquier canción)
 - **Mix por género** — un botón "Mix" en cada pantalla de género/estado de ánimo que trae canciones reales de varias de las playlists curadas que YouTube Music muestra para esa categoría, pedidas en paralelo, mezcladas entre sí, y armadas en una sola cola lista para reproducir (Android y Escritorio)
-- **Mix local** — un mix armado 100% en el dispositivo (sin red) a partir de tu propio historial de reproducción, que se mezcla con peso distinto cada vez que lo regenerás (ver "Cómo funciona el Mix local" más abajo)
+- **Mix local** — un mix armado 100% en el dispositivo (sin red) a partir de tu propio historial de reproducción, que se mezcla con peso distinto cada vez que lo regenerás (ver "Cómo funciona el Mix local" más abajo). Tres modos: **Para vos**, **Para esta hora** y **Redescubrir**, más un botón de **Radio del mix**
+- **Tu año en Wavora** — un resumen anual armado solo con tu historial local de escucha: minutos escuchados, reproducciones, canciones distintas, días con música, racha más larga, tu hora favorita para escuchar, canciones y artistas más escuchados (se abre desde Analíticas)
 
 ### 🤖 IA
 - Traducción de letras impulsada por IA (OpenAI, Gemini, o un endpoint de modelo propio/autoalojado), configurable por proveedor con tu propia API key
@@ -543,6 +578,9 @@ El objetivo de Wavora no es ser "otro wrapper más de YouTube Music". Existe par
 - **Escritorio (Windows / macOS / Linux)** — app de ventana independiente, miniplayer flotante y arrastrable, reproductor en pantalla completa, barra de título personalizada, scrollbars, reproducción basada en VLC (libVLC)
   - Now Playing Center + Remote Command Center en macOS (teclas multimedia, widget de pantalla de bloqueo)
   - Manejador de protocolo personalizado (`wavora://`) para deep links en Windows
+  - **Teclas multimedia del teclado en Windows** (reproducir/pausar, siguiente, anterior, detener) que funcionan aunque Wavora esté minimizada o en la bandeja — usa la API estándar `RegisterHotKey`, no un hook de teclado
+  - **Atajos de teclado configurables** en la ventana principal (Ajustes › Rendimiento (PC) › Atajos de teclado: activarlos/desactivarlos, cambiar o quitar cada uno, restaurar los predeterminados). Por defecto: Ctrl+Espacio reproducir/pausar · Alt+→/← siguiente/anterior · Alt+↑/↓ volumen · Ctrl+L me gusta · Ctrl+M mini reproductor. Todo atajo usa Ctrl/Alt (o F1–F12) para no interferir al escribir
+  - **Aceleración por hardware en Windows** (Automático / Activada / Desactivada) con vuelta automática al modo compatible — ver "Rendimiento" y "Solución de problemas (Windows)"
   - Integración con la bandeja del sistema
   - Inicio de sesión de YouTube Music en Windows vía un navegador Chromium embebido (KCEF) que se carga solo cuando hace falta, únicamente para capturar la cookie de sesión — no queda ningún motor de navegador corriendo en segundo plano después
 
@@ -563,6 +601,7 @@ El objetivo de Wavora no es ser "otro wrapper más de YouTube Music". Existe par
 - Chequeo manual y automático de actualizaciones, con interruptor para el comportamiento de auto-chequeo al iniciar
 - Ajuste opcional en Android para "mantener el servicio en segundo plano activo" y reducir interrupciones de reproducción por la optimización de batería del sistema
 - Interruptores por función para crossfade, SponsorBlock, normalización, salteo de silencios, niveles de calidad, y más, todo dentro de Ajustes
+- **Ajustes › Rendimiento (PC)**: aceleración por hardware, teclas multimedia, atajos de teclado y **Modo diagnóstico** (logs detallados solo cuando lo activás)
 
 ### Cómo funciona el Mix local
 El Mix local mira tu propio historial local de reproducción (el mismo que ya
@@ -570,14 +609,28 @@ se usa para la vista "más reproducidas" de Biblioteca) de los últimos 60
 días, ponderado por cuántas veces escuchaste cada canción (con un peso de
 raíz cuadrada para que tu canción más repetida no acapare todo el mix), y
 elige 25 con un sorteo aleatorio ponderado — así una regeneración completa
-puede traer canciones distintas cada vez en vez de devolver siempre la misma
-lista. No hay un umbral fijo de "escuchá N canciones y se desbloquea"; solo
-necesita al menos 10 canciones en tu historial reciente para funcionar bien,
-y si los últimos 60 días no alcanzan, cae al historial de siempre. Es 100%
-local (sin ningún pedido de red, sin servidor), así que sigue funcionando
-sin conexión y **persiste entre actualizaciones de la app** — se arma desde
-la misma base de datos Room en el dispositivo que ya usa Biblioteca, que las
-actualizaciones de la app no borran.
+puede traer canciones distintas cada vez. Necesita al menos 10 canciones para
+funcionar bien: si los últimos 60 días no alcanzan amplía a todo tu historial,
+y si igual faltan completa con el contador de reproducciones de cada canción
+(`song.totalPlayTime`, que se actualiza en cada reproducción aunque el
+historial esté apagado), así el mix funciona desde el primer día.
+
+Modos:
+- **Para vos** — el mix ponderado de arriba.
+- **Para esta hora** — lo que más escuchás a ±2 horas de la hora actual, según
+  los últimos 120 días.
+- **Redescubrir** — canciones que escuchabas mucho y no sonaron en los últimos
+  60 días (sin relleno: si todavía no hay, lo dice).
+- **Radio del mix** — arranca una radio de YouTube Music a partir de una
+  canción del mix.
+
+Desde la v2.3 el historial local de escuchas viene **activado por defecto**
+(nunca sale del dispositivo). Si lo apagaste, la pantalla del Mix local ofrece
+un botón para volver a activarlo. Además ahora también se registra la canción
+que estaba sonando al cerrar la app. Es 100% local (sin ningún pedido de red,
+sin servidor), así que sigue funcionando sin conexión y **persiste entre
+actualizaciones de la app** — se arma desde la misma base de datos Room en el
+dispositivo que ya usa Biblioteca, que las actualizaciones no borran.
 
 ## Novedades respecto a SimpMusic
 
@@ -614,7 +667,14 @@ Nada de esto busca desmerecer a SimpMusic — es la base sobre la que se constru
 Descargá el `.apk` más reciente desde [Releases](https://github.com/Wavora-dev/Wavora/releases). Requiere **Android 8.0 (API 26) o superior**.
 
 ### Windows
-Descargá el instalador `.msi` desde [Releases](https://github.com/Wavora-dev/Wavora/releases). Requiere tener [VLC](https://www.videolan.org/vlc/) (64-bit) instalado en el sistema.
+1. Descargá `AppwavoraWindows.zip` desde [Releases](https://github.com/Wavora-dev/Wavora/releases) y descomprimilo.
+2. Ejecutá `install-wavora.bat` y aceptá el permiso de administrador (una sola vez — hace falta para confiar en el certificado de la app).
+3. De ahí en más Wavora se actualiza sola en segundo plano. Las librerías de VLC vienen incluidas, no hace falta instalar VLC aparte.
+
+#### Solución de problemas (Windows)
+- **Ventana en blanco o con fallas** — Wavora lo detecta y pasa sola a modo compatible. También podés forzarlo: ícono de la bandeja › *Reiniciar en modo compatible*, Ajustes › Rendimiento (PC) › Aceleración por hardware › Desactivada, o abrirla con `--software-render`.
+- **Logs detallados para reportar un error** — activá Ajustes › Rendimiento (PC) › Modo diagnóstico y reiniciá (o abrila con `--diagnostics`, o con la variable `WAVORA_DIAGNOSTICS=1`). Los logs están en `%LOCALAPPDATA%\Wavora\logs`.
+- **Las teclas multimedia van a otro reproductor** — si otra app (por ejemplo Spotify) ya registró una tecla, esa tecla queda para ella. Podés apagar las teclas multimedia de Wavora en Ajustes › Rendimiento (PC).
 
 ### macOS
 Descargá el `.dmg` desde [Releases](https://github.com/Wavora-dev/Wavora/releases). Requiere VLC instalado.
@@ -680,6 +740,13 @@ Optimizaciones reales, verificadas en el código, no promesas:
 - **Batching de breadcrumbs de Sentry** — los eventos internos de mayor frecuencia del log de auditoría de crossfade (progreso de buffering y heartbeats periódicos de posición, que podían dispararse cientos de veces por canción) ya no se mandan como breadcrumb a Sentry, para que los eventos que sí importan para diagnosticar un crossfade roto no queden desplazados del trail.
 - **Corrección de paridad del Mix Local en Android** — la función de "cola infinita" (radio automática) no distinguía qué tipo de cola estaba extendiendo, así que un Mix Local o una playlist local que se quedaba sin canciones en Android podía terminar reemplazada, sin pedirlo, por una radio de YouTube sin relación. Android ahora comparte el mismo resguardo que ya tenía Escritorio: la cola infinita solo actúa sobre colas realmente provenientes de YouTube, nunca sobre locales.
 
+**Nuevo en v2.3 (Escritorio / PCs modestas):**
+- **Aceleración por hardware en Windows** — las versiones anteriores forzaban el dibujado por CPU (software) en todas las PCs con Windows para evitar un bug de ventana en blanco en algunas placas de video. Ahora Wavora lee la placa de video desde el registro de Windows antes de abrir la ventana (< 5 ms, sin procesos externos) y usa Direct3D cuando es seguro (GPU real con driver de 2018 o más nuevo, sin escritorio remoto ni máquina virtual). Al abrir, mira unos píxeles de la barra de título para confirmar que la ventana se ve de verdad; si no, muestra un aviso nativo y el próximo arranque vuelve a modo compatible. Si un arranque con aceleración se cuelga o crashea antes de confirmarse, el siguiente también vuelve solo. En Ajustes › Rendimiento (PC) se elige Automático / Activada / Desactivada.
+- **Logs de diagnóstico solo cuando hacen falta** — antes el log de sesión recibía todas las líneas Debug, escritas y vaciadas a disco una por una desde el hilo que logueaba (incluidos el de la UI y el de VLC), más un muestreo de CPU por hilo cada 5 s y un censo de todos los procesos cada 5 s durante los primeros 2 minutos. Ahora, por defecto, solo se guardan Warn/Error, los escribe un único hilo de fondo con buffer (los errores se vacían al instante para que un crash conserve su stack trace), se borran los logs viejos (últimos 10 archivos, máximo 14 días) y los muestreos solo corren en **Modo diagnóstico**. En Android el log de sesión también se escribe en segundo plano.
+- **Sin `runBlocking` en el hilo de VLC al cambiar de canción** — los ajustes de cola infinita y contenido explícito se leen de una copia en memoria que se carga al arrancar y se mantiene sincronizada, en vez de bloquear el hilo del reproductor esperando a DataStore.
+- **Splash más liviano** — los halos del splash no usan `blur()` cuando se dibuja por CPU y todas sus animaciones se leen en la fase de dibujo (sin recomposición por frame).
+- **Flags de memoria de la JVM** — `G1PeriodicGCInterval` devuelve al sistema la memoria que no se usa mientras la app está quieta, `Min/MaxHeapFreeRatio` evita que el heap quede inflado después de un pico, y `UseStringDeduplication` comparte textos repetidos. Sin tope duro de `-Xmx` (para no arriesgar errores de falta de memoria).
+
 ## Accesibilidad
 
 - Se definieron etiquetas `contentDescription` en elementos interactivos y de solo imagen a lo largo de la interfaz compartida (botones, portadas, controles de reproducción) para que los lectores de pantalla (TalkBack en Android, VoiceOver en macOS) puedan anunciarlos correctamente.
@@ -699,12 +766,14 @@ Optimizaciones reales, verificadas en el código, no promesas:
 
 ## Hoja de ruta
 
-Extraída directamente de los marcadores `// TODO` presentes hoy en el código — nada de esto está inventado:
+Extraída directamente de los marcadores `// TODO` presentes hoy en el código, más funciones ya planeadas para próximas versiones — nada de esto está inventado:
 
 - **Persistencia del orden de aleatorio** — la lógica de orden aleatorio (`core/media/media3/.../BetterShuffleOrder.kt`) tiene bordes ásperos conocidos: el orden de "reproducir a continuación" actualmente no sobrevive a una operación de desactivar el aleatorio, y el algoritmo subyacente está marcado internamente para una reescritura más prolija.
 - **Estrategia de espera de conexión al Gateway de Discord** — el cliente WebSocket de Discord Rich Presence (`core/service/kizzy`) usa actualmente una solución provisoria mientras espera a que el socket confirme estar conectado a la cuenta del usuario; se planea una estrategia de espera más robusta.
 - **Loudness enhancer en JVM (Escritorio)** — la normalización de reproducción en escritorio actualmente replica el comportamiento de Android a nivel de aplicación; un loudness enhancer nativo del lado de VLC es una brecha conocida, señalada directamente en `JvmMediaPlayerHandlerImpl.kt`.
 - **Punto de extensión de UI de Escritorio** — un punto de extensión de UI específico de la plataforma en el target JVM (`UIExt.jvm.kt`) es actualmente un stub, reservado para una futura mejora específica de escritorio.
+- **Panel multimedia de Windows (SMTC)** — mostrar la canción actual con su portada en el panel de medios de Windows (volumen / pantalla de bloqueo) requiere la API WinRT `SystemMediaTransportControls`; la v2.3 trae las teclas multimedia del teclado, el panel completo queda planeado.
+- **Archivos de música locales** — reproducir archivos de tus propias carpetas (MP3/FLAC/…) está planeado; necesita un camino de reproducción propio y cambios en la base de datos, así que no se apuró para la v2.3.
 
 ## Créditos
 

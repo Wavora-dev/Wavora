@@ -115,6 +115,7 @@ import com.wavora.app.ui.component.ActionButton
 import com.wavora.app.ui.component.CenterLoadingBox
 import com.wavora.app.ui.component.EndOfPage
 import com.wavora.app.ui.component.RippleIconButton
+import com.wavora.app.expect.ui.PlatformPerformanceSettings
 import com.wavora.app.ui.component.SettingItem
 import com.wavora.app.ui.navigation.destination.home.CreditDestination
 import com.wavora.app.ui.navigation.destination.home.EqualizerDestination
@@ -2114,6 +2115,11 @@ fun SettingScreen(
         // SIEMPRE visible, y EqualizerScreen ya maneja el caso "no soportado"
         // con su propio mensaje si algún día corre en una plataforma sin
         // implementación (ej. iOS, todavía no implementado).
+        // v2.3: Rendimiento (PC) - aceleración por hardware, teclas multimedia,
+        // atajos y modo diagnóstico. Solo Desktop dibuja algo acá.
+        item(key = "desktop_performance") {
+            PlatformPerformanceSettings()
+        }
         item(key = "equalizer") {
             SettingItem(
                 title = stringResource(Res.string.equalizer),

@@ -9,6 +9,7 @@ import com.wavora.app.ui.navigation.destination.home.AnalyticsDestination
 import com.wavora.app.ui.navigation.destination.home.CreditDestination
 import com.wavora.app.ui.navigation.destination.home.EqualizerDestination
 import com.wavora.app.ui.navigation.destination.home.LocalMixDestination
+import com.wavora.app.ui.navigation.destination.home.WrappedDestination
 import com.wavora.app.ui.navigation.destination.home.MoodDestination
 import com.wavora.app.ui.navigation.destination.home.NotificationDestination
 import com.wavora.app.ui.navigation.destination.home.RecentlySongsDestination
@@ -16,6 +17,7 @@ import com.wavora.app.ui.navigation.destination.home.ScrobblingDestination
 import com.wavora.app.ui.navigation.destination.home.SettingsDestination
 import com.wavora.app.ui.screen.home.MoodScreen
 import com.wavora.app.ui.screen.home.LocalMixScreen
+import com.wavora.app.ui.screen.home.WrappedScreen
 import com.wavora.app.ui.screen.home.NotificationScreen
 import com.wavora.app.ui.screen.home.RecentlySongsScreen
 import com.wavora.app.ui.screen.home.SettingScreen
@@ -72,6 +74,12 @@ fun NavGraphBuilder.homeScreenGraph(
     }
     composable<AnalyticsDestination> {
         AnalyticsScreen(
+            navController = navController,
+            innerPadding = innerPadding,
+        )
+    }
+    composable<WrappedDestination> {
+        WrappedScreen(
             navController = navController,
             innerPadding = innerPadding,
         )

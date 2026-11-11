@@ -4,8 +4,6 @@ import android.content.Context
 import co.touchlab.kermit.LogWriter
 import co.touchlab.kermit.Severity
 import java.io.File
-import java.io.FileWriter
-import java.io.PrintWriter
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -26,7 +24,7 @@ import java.time.format.DateTimeFormatter
 // no se pudo compilar en el entorno de auditoría (sin Android SDK) para
 // confirmarlo con el IDE.
 class AuditFileLogWriter(
-    context: Context,
+    private val context: Context,
 ) : LogWriter() {
     companion object {
         // internal (filesDir), NO external: no requiere permisos de
@@ -54,12 +52,15 @@ class AuditFileLogWriter(
             File(logDir(context), "wavora-android-$ts.log").also { activeLogFile = it }
         }
 
-    // autoFlush = true: si la app se va a background y el sistema la mata
-    // (muy común en un celular random de un usuario, no bajo nuestro
-    // control), el archivo tiene que tener escrito hasta el último evento
-    // antes de eso - es justo la evidencia que se necesita en ese caso.
-    private val writer: PrintWriter by lazy {
-        PrintWriter(FileWriter(logFile, true), true)
+    // OPTIMIZACIÓN (v2.3): antes era un PrintWriter con autoFlush=true, es
+    // decir una escritura + flush a disco sincrónica por cada línea, desde el
+    // hilo que logueaba (incluido el main thread). Ahora escribe un hilo de
+    // fondo con buffer (AsyncLogFile) y los Error/Assert se vacían a disco al
+    // instante, así un crash o un kill del sistema no pierde lo importante.
+    // También se borran los logs viejos (antes se acumulaban para siempre).
+    private val output: AsyncLogFile by lazy {
+        AsyncLogFile.pruneOldLogs(logDir(context.applicationContext), prefix = "wavora-android-", keep = logFile)
+        AsyncLogFile(logFile)
     }
 
     private val timeFmt = DateTimeFormatter.ofPattern("HH:mm:ss.SSS")
@@ -73,9 +74,7 @@ class AuditFileLogWriter(
         val ts = LocalDateTime.now().format(timeFmt)
         val threadName = Thread.currentThread().name
         val line = "$ts [$threadName] ${severity.name.padEnd(5)} $tag: $message"
-        synchronized(this) {
-            writer.println(line)
-            throwable?.let { writer.println(it.stackTraceToString()) }
-        }
+        val text = if (throwable != null) line + "\n" + throwable.stackTraceToString() else line
+        output.write(text, flushNow = severity >= Severity.Error)
     }
 }

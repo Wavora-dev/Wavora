@@ -92,10 +92,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import org.koin.mp.KoinPlatform.getKoin
 import kotlin.math.pow
 
+private const val RELEASE_TRACKING_TIMEOUT_MS = 1_500L
+private const val ERROR_SKIP_RESET_EXTRA_MS = 7_000L
 private val TAG = "Media3ServiceHandlerImpl"
 
 internal class MediaServiceHandlerImpl(
@@ -122,6 +125,12 @@ internal class MediaServiceHandlerImpl(
     private val playbackErrorRetryDelayMs = 1500L
     // AUDIT FIX: ver explicación completa en onIsPlayingChanged() más abajo.
     private var retryCountResetJob: Job? = null
+
+    // FIX: saltos automáticos seguidos tras errores irrecuperables (ver
+    // handlePlayerErrorWithRetry). Se resetea junto con playbackErrorRetryCount
+    // cuando la reproducción se sostiene (retryCountResetJob).
+    private var consecutiveErrorSkips = 0
+    private val maxConsecutiveErrorSkips = 3
     override var onUpdateNotification: (List<GenericCommandButton>) -> Unit = {}
     override var showToast: (ToastType) -> Unit = {}
     override var pushPlayerError: (PlayerError) -> Unit = {}
@@ -2179,6 +2188,7 @@ internal class MediaServiceHandlerImpl(
             }
             discordRPC = null
             // Save state first
+            trackCurrentSongBeforeRelease()
             mayBeSaveRecentSong(true)
             mayBeSavePlaybackState()
 
@@ -2323,6 +2333,10 @@ internal class MediaServiceHandlerImpl(
                 coroutineScope.launch {
                     delay(playbackErrorRetryDelayMs * 2)
                     playbackErrorRetryCount = 0
+                    // Solo tras reproducción sostenida (bastante más que un ciclo de
+                    // reintento) se da por superada la racha de pistas fallidas.
+                    delay(ERROR_SKIP_RESET_EXTRA_MS)
+                    consecutiveErrorSkips = 0
                 }
             startProgressUpdate()
             nowPlayingState.value.songEntity?.let { updateDiscordRpc(it) }
@@ -2396,34 +2410,60 @@ internal class MediaServiceHandlerImpl(
         song: SongEntity,
         currentPositionMillis: Long,
     ) {
-        coroutineScope.launch {
-            val trackingEnabled = dataStoreManager.localTrackingEnabled.first() == TRUE
-            if (!trackingEnabled) {
-                return@launch
-            }
-            val percent = (currentPositionMillis / (song.durationSeconds * 1000f))
-            Logger.w(TAG, "${song.title} - $currentPositionMillis ms listened, duration: ${song.durationSeconds * 1000} ms, percent: $percent")
-            if (percent < 0.2f) {
-                Logger.d(TAG, "Not enough listening time for ${song.title}, skipping tracking")
-                return@launch
-            }
-            Logger.d(TAG, "Tracking listening for ${song.title} at position $currentPositionMillis ms")
-            analyticsRepository
-                .insertPlaybackEvent(
-                    videoId = song.videoId,
-                    channelIds = song.artistId ?: emptyList(),
-                    albumBrowseId = song.albumId,
-                    durationSecond = song.durationSeconds.toLong(),
-                    listenedSecond =
-                        if (percent >= 0.8f) {
-                            song.durationSeconds.toLong()
-                        } else {
-                            (currentPositionMillis / 1000)
-                        },
-                ).collect {
-                    Logger.d(TAG, "Inserted playback event for ${song.title}: $it")
+        coroutineScope.launch { trackListeningLocal(song, currentPositionMillis) }
+    }
+
+    /**
+     * Registra la canción actual al cerrar el reproductor. Antes solo se registraba
+     * en onMediaItemTransition, así que la última canción de cada sesión (la que
+     * sonaba al cerrar la app) nunca entraba al historial local ni al Mix local.
+     * Bloquea como mucho [RELEASE_TRACKING_TIMEOUT_MS] para no demorar el cierre.
+     */
+    private fun trackCurrentSongBeforeRelease() {
+        try {
+            val song = nowPlayingState.value.songEntity ?: return
+            val state = simpleMediaState.value
+            if (state !is SimpleMediaState.Progress || song.durationSeconds <= 0) return
+            runBlocking {
+                withTimeoutOrNull(RELEASE_TRACKING_TIMEOUT_MS) {
+                    trackListeningLocal(song, state.progress)
                 }
+            }
+        } catch (e: Exception) {
+            Logger.e(TAG, "trackCurrentSongBeforeRelease: ${e.message}", e)
         }
+    }
+
+    private suspend fun trackListeningLocal(
+        song: SongEntity,
+        currentPositionMillis: Long,
+    ) {
+        val trackingEnabled = dataStoreManager.localTrackingEnabled.first() == TRUE
+        if (!trackingEnabled) {
+            return
+        }
+        val percent = (currentPositionMillis / (song.durationSeconds * 1000f))
+        Logger.w(TAG, "${song.title} - $currentPositionMillis ms listened, duration: ${song.durationSeconds * 1000} ms, percent: $percent")
+        if (percent < 0.2f) {
+            Logger.d(TAG, "Not enough listening time for ${song.title}, skipping tracking")
+            return
+        }
+        Logger.d(TAG, "Tracking listening for ${song.title} at position $currentPositionMillis ms")
+        analyticsRepository
+            .insertPlaybackEvent(
+                videoId = song.videoId,
+                channelIds = song.artistId ?: emptyList(),
+                albumBrowseId = song.albumId,
+                durationSecond = song.durationSeconds.toLong(),
+                listenedSecond =
+                    if (percent >= 0.8f) {
+                        song.durationSeconds.toLong()
+                    } else {
+                        (currentPositionMillis / 1000)
+                    },
+            ).collect {
+                Logger.d(TAG, "Inserted playback event for ${song.title}: $it")
+            }
     }
 
     /**
@@ -2525,14 +2565,24 @@ internal class MediaServiceHandlerImpl(
                 player.play()
             }
         } else {
-            Logger.w(TAG, "Player error: se agotaron los reintentos automáticos, pausando y avisando")
             playbackErrorRetryCount = 0
             if (isAppInForeground()) {
                 showToast(ToastType.PlayerError(error.errorCodeName))
             } else {
                 Logger.w("Player Error", "App is not in foreground, skipping toast")
             }
-            player.pause()
+            // FIX ("tengo que cambiar manualmente a la siguiente"): agotados los
+            // reintentos, antes se pausaba siempre. Ahora se pasa a la siguiente pista;
+            // con tope de saltos seguidos para que, sin red, no recorra toda la cola.
+            if (consecutiveErrorSkips < maxConsecutiveErrorSkips && player.hasNextMediaItem()) {
+                consecutiveErrorSkips++
+                Logger.w(TAG, "Player error: reintentos agotados, saltando a la siguiente ($consecutiveErrorSkips/$maxConsecutiveErrorSkips)")
+                player.seekToNext()
+            } else {
+                Logger.w(TAG, "Player error: reintentos agotados y sin siguiente (o demasiados fallos seguidos), pausando")
+                consecutiveErrorSkips = 0
+                player.pause()
+            }
         }
     }
 

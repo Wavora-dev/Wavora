@@ -23,6 +23,7 @@ crowdin.yml
 /wavora.jks
 *.jks
 /ffmpeg-kit/build/
+*.zip
 
 #dev files
 ign.md
@@ -46,3 +47,4 @@ sentry.properties
 /output/
 # Upload
 /upload/
+/docs/

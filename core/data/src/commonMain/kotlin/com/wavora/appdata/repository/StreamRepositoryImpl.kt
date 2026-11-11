@@ -50,8 +50,32 @@ internal class StreamRepositoryImpl(
                     .player(videoId)
                     .onSuccess { triple ->
                         val response = triple.second
+                        // FIX: antes se extendía expiredTime pero se conservaban las URLs
+                        // VIEJAS (ya vencidas): la entrada quedaba marcada como válida ~6 h
+                        // con una URL muerta, y cada reproducción/reconexión pagaba un 403
+                        // (o, sin el HEAD, fallaba). Ahora se renuevan las URLs por itag;
+                        // si no se puede renovar el audio, no se extiende la validez y el
+                        // resolver hace una extracción completa como corresponde.
+                        val allFormats =
+                            response.streamingData?.formats.orEmpty() +
+                                response.streamingData?.adaptiveFormats.orEmpty()
+
+                        fun freshUrlFor(oldUrl: String?): String? {
+                            val itag =
+                                oldUrl
+                                    ?.let { Regex("[?&]itag=(\\d+)").find(it)?.groupValues?.getOrNull(1)?.toIntOrNull() }
+                                    ?: return null
+                            return allFormats.firstOrNull { it.itag == itag && !it.url.isNullOrEmpty() }?.url
+                        }
+                        val freshAudioUrl = freshUrlFor(oldFormat.audioUrl)
+                        if (oldFormat.audioUrl != null && freshAudioUrl == null) {
+                            Logger.w("UpdateFormat", "Could not refresh URL for $videoId; leaving it expired")
+                            return@onSuccess
+                        }
                         localDataSource.updateNewFormat(
                             oldFormat.copy(
+                                audioUrl = freshAudioUrl ?: oldFormat.audioUrl,
+                                videoUrl = freshUrlFor(oldFormat.videoUrl),
                                 expiredTime = now().plusSeconds(response.streamingData?.expiresInSeconds?.toLong() ?: 0L),
                                 playbackTrackingVideostatsPlaybackUrl =
                                     response.playbackTracking?.videostatsPlaybackUrl?.baseUrl?.replace(
@@ -262,7 +286,11 @@ internal class StreamRepositoryImpl(
                                     if (youTube.isManifestUrl(url)) {
                                         url.plus("&cpn=${data.first}")
                                     } else {
-                                        url.plus("&cpn=${data.first}&range=0-${format.contentLength ?: 10000000}")
+                                        // FIX: antes, sin contentLength se inventaba `range=0-10000000`: todo
+                                        // lo que pasara de 10 MB (descargas largas, video)
+                                        // quedaba truncado. Solo se fija el rango si se
+                                        // conoce el tamaño real.
+                                        url.plus("&cpn=${data.first}") + (format.contentLength?.let { "&range=0-$it" } ?: "")
                                     }
                                 }
                             },
@@ -276,7 +304,7 @@ internal class StreamRepositoryImpl(
                                     if (youTube.isManifestUrl(url)) {
                                         url
                                     } else {
-                                        url.plus("&range=0-${format.contentLength ?: 10000000}")
+                                        url + (format.contentLength?.let { "&range=0-$it" } ?: "")
                                     }
                                 }
                             },

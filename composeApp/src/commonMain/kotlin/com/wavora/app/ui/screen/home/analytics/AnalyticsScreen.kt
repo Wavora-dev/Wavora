@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBackIosNew
+import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.rounded.CalendarToday
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
@@ -72,6 +73,7 @@ import com.wavora.app.ui.component.ImageData
 import com.wavora.app.ui.component.NowPlayingBottomSheet
 import com.wavora.app.ui.component.SongFullWidthItems
 import com.wavora.app.ui.navigation.destination.home.RecentlySongsDestination
+import com.wavora.app.ui.navigation.destination.home.WrappedDestination
 import com.wavora.app.ui.navigation.destination.library.LibraryDynamicPlaylistDestination
 import com.wavora.app.ui.navigation.destination.list.AlbumDestination
 import com.wavora.app.ui.navigation.destination.list.ArtistDestination
@@ -92,6 +94,7 @@ import kotlinx.datetime.format.char
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
+import wavora.composeapp.generated.resources.wrapped_open
 import wavora.composeapp.generated.resources.Res
 import wavora.composeapp.generated.resources.artists
 import wavora.composeapp.generated.resources.date_range
@@ -868,6 +871,28 @@ fun AnalyticsScreen(
                 }
             },
             actions = {
+                // "Tu año en Wavora" (v2.3)
+                Box(
+                    modifier =
+                        Modifier
+                            .clip(CircleShape)
+                            .wrapContentSize()
+                            .padding(vertical = 12.dp),
+                ) {
+                    IconButton(
+                        onClick = { navController.navigate(WrappedDestination) },
+                        colors =
+                            IconButtonDefaults.iconButtonColors().copy(
+                                containerColor =
+                                    wavoraSurface.copy(
+                                        alpha = 0.8f,
+                                    ),
+                                contentColor = Color.White,
+                            ),
+                    ) {
+                        Icon(Icons.Filled.Insights, stringResource(Res.string.wrapped_open))
+                    }
+                }
                 Box(
                     modifier =
                         Modifier

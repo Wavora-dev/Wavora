@@ -274,6 +274,21 @@ compose.desktop {
     application {
         mainClass = "com.wavora.app.MainKt"
         jvmArgs += "--add-opens=java.base/java.nio=ALL-UNNAMED"
+        // v2.3 - memoria en PCs modestas. Sin tope duro de heap (-Xmx): un tope
+        // mal elegido puede terminar en OutOfMemoryError. En cambio:
+        //  - G1PeriodicGCInterval: con la app quieta (música de fondo, en la
+        //    bandeja) G1 hace un ciclo cada 60 s y DEVUELVE al sistema la
+        //    memoria que no usa. Si la JVM eligió otro GC, el flag se ignora.
+        //  - Min/MaxHeapFreeRatio 15/40: el heap no queda inflado después de un
+        //    pico (scroll de muchas portadas, búsqueda, etc.).
+        //  - UseStringDeduplication: los textos repetidos (títulos, artistas,
+        //    IDs) ocupan una sola vez en memoria.
+        // Son flags estándar de HotSpot/JBR 21. Este bloque también alimenta
+        // app.jvm.options del config de Conveyor (writeConveyorConfig).
+        jvmArgs += "-XX:G1PeriodicGCInterval=60000"
+        jvmArgs += "-XX:MinHeapFreeRatio=15"
+        jvmArgs += "-XX:MaxHeapFreeRatio=40"
+        jvmArgs += "-XX:+UseStringDeduplication"
 
         nativeDistributions {
             appResourcesRootDir = rootDir.resolve("vlc-natives/")

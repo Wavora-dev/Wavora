@@ -34,6 +34,7 @@ import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.SilenceSkippingAudioProcessor
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 import androidx.media3.extractor.ExtractorsFactory
 import androidx.media3.extractor.flac.FlacExtractor
 import androidx.media3.extractor.mkv.MatroskaExtractor
@@ -47,6 +48,7 @@ import com.wavora.common.Config.MAIN_PLAYER
 import com.wavora.common.Config.PLAYER_CACHE
 import com.wavora.common.Config.SERVICE_SCOPE
 import com.wavora.common.MERGING_DATA_TYPE
+import com.wavora.common.StreamUrlUtils
 import com.wavora.domain.extension.now
 import com.wavora.domain.manager.DataStoreManager
 import com.wavora.domain.mediaservice.handler.DownloadHandler
@@ -61,6 +63,7 @@ import com.wavora.domain.repository.SongRepository
 import com.wavora.domain.repository.StreamRepository
 import com.wavora.logger.Logger
 import com.wavora.media3.cast.CastPlayerManager
+import com.wavora.media3.datasource.ChunkedDataSource
 import com.wavora.media3.exoplayer.CrossfadeExoPlayerAdapter
 import com.wavora.media3.repository.CacheRepositoryImpl
 import com.wavora.media3.service.SimpleMediaService
@@ -271,6 +274,14 @@ private fun provideResolvingDataSourceFactory(
         }
         var dataSpecReturn: DataSpec = dataSpec
         var resolved = false
+        // FIX: cualquier excepción que NO sea IOException lanzada desde un DataSource
+        // (errores de DB/ktor/serialización dentro de este runBlocking, p.ej.
+        // UnresolvedAddressException sin red) el Loader de ExoPlayer la envuelve en
+        // UnexpectedLoaderException, que la política de errores trata como FATAL sin
+        // ningún reintento: un microcorte de red al reabrir la conexión a mitad de
+        // canción mataba la reproducción al instante. Ahora todo sale como IOException
+        // (reintentable) y la interrupción del hilo como InterruptedIOException.
+        try {
         runBlocking(Dispatchers.IO) {
             if (mediaId.contains(MERGING_DATA_TYPE.VIDEO)) {
                 val id = mediaId.removePrefix(MERGING_DATA_TYPE.VIDEO)
@@ -282,7 +293,7 @@ private fun provideResolvingDataSourceFactory(
                         val is403Url = streamRepository.is403Url(videoUrl).firstOrNull() != false
                         Logger.d("Stream", "is 403 $is403Url")
                         if (!is403Url) {
-                            dataSpecReturn = dataSpec.withUri(videoUrl.toUri()).subrange(dataSpec.uriPositionOffset, chunkLength)
+                            dataSpecReturn = dataSpec.withUri(videoUrl.toUri())
                             resolved = true
                             return@runBlocking
                         }
@@ -298,7 +309,7 @@ private fun provideResolvingDataSourceFactory(
                     ?.let {
                         Logger.d("Stream", it)
                         Logger.w("Stream", "Video")
-                        dataSpecReturn = dataSpec.withUri(it.toUri()).subrange(dataSpec.uriPositionOffset, chunkLength)
+                        dataSpecReturn = dataSpec.withUri(StreamUrlUtils.stripRangeQueryParam(it).toUri())
                         resolved = true
                     }
             } else {
@@ -310,7 +321,7 @@ private fun provideResolvingDataSourceFactory(
                         val is403Url = streamRepository.is403Url(audioUrl).firstOrNull() != false
                         Logger.d("Stream", "is 403 $is403Url")
                         if (!is403Url) {
-                            dataSpecReturn = dataSpec.withUri(audioUrl.toUri()).subrange(dataSpec.uriPositionOffset, chunkLength)
+                            dataSpecReturn = dataSpec.withUri(audioUrl.toUri())
                             resolved = true
                             return@runBlocking
                         }
@@ -326,10 +337,19 @@ private fun provideResolvingDataSourceFactory(
                     ?.let {
                         Logger.d("Stream", it)
                         Logger.w("Stream", "Audio")
-                        dataSpecReturn = dataSpec.withUri(it.toUri()).subrange(dataSpec.uriPositionOffset, chunkLength)
+                        dataSpecReturn = dataSpec.withUri(StreamUrlUtils.stripRangeQueryParam(it).toUri())
                         resolved = true
                     }
             }
+        }
+        } catch (e: java.io.IOException) {
+            throw e
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw java.io.InterruptedIOException("Stream URL resolution interrupted for $mediaId")
+        } catch (e: Exception) {
+            Logger.e("Stream", "Stream URL resolution failed for $mediaId: ${e.message}")
+            throw java.io.IOException("Failed to resolve stream URL for $mediaId", e)
         }
         if (!resolved) {
             Logger.e("Stream", "Failed to resolve stream URL for $mediaId")
@@ -390,7 +410,19 @@ private fun provideMediaSourceFactory(
             coroutineScope,
         ),
         provideExtractorFactory(),
+    ).setLoadErrorHandlingPolicy(
+        // FIX: con la política por defecto (3 reintentos de carga) un corte de red de
+        // pocos segundos se volvía error FATAL apenas se vaciaba el buffer. Con más
+        // reintentos (backoff 0,1,2,3,4,5 s… según DefaultLoadErrorHandlingPolicy) un
+        // hiccup de wifi/datos se absorbe sin cortar la canción.
+        DefaultLoadErrorHandlingPolicy(LOADABLE_RETRY_COUNT),
     )
+
+// Mismo tamaño de petición HTTP que antes (5 MB), ahora troceado bajo el caché.
+private const val STREAM_CHUNK_LENGTH = 10 * 512 * 1024L
+
+// Reintentos de carga antes de que un error de red se vuelva fatal.
+private const val LOADABLE_RETRY_COUNT = 8
 
 @OptIn(UnstableApi::class)
 private fun provideMergingMediaSource(
@@ -455,24 +487,33 @@ private fun provideCacheDataSource(
                 .Factory()
                 .setCache(playerCache)
                 .setUpstreamDataSourceFactory(
-                    DefaultDataSource
-                        .Factory(
-                            context,
-                            OkHttpDataSource.Factory(
-                                OkHttpClient
-                                    .Builder()
-                                    .connectTimeout(30.seconds)
-                                    .readTimeout(30.seconds)
-                                    .proxy(
-                                        proxy,
-                                    ).addInterceptor(
-                                        HttpLoggingInterceptor()
-                                            .apply {
-                                                level = HttpLoggingInterceptor.Level.HEADERS
-                                            },
-                                    ).build(),
+                    // FIX: el troceo en bloques de 5 MB ahora vive acá, debajo de los
+                    // cachés y de forma transparente (ver ChunkedDataSource), en vez de
+                    // acotar el DataSource entero desde el resolver.
+                    ChunkedDataSource.Factory(
+                        DefaultDataSource
+                            .Factory(
+                                context,
+                                OkHttpDataSource.Factory(
+                                    OkHttpClient
+                                        .Builder()
+                                        .connectTimeout(30.seconds)
+                                        .readTimeout(30.seconds)
+                                        // Reintenta conexiones caídas reusadas del pool
+                                        // (default de OkHttp, explícito a propósito).
+                                        .retryOnConnectionFailure(true)
+                                        .proxy(
+                                            proxy,
+                                        ).addInterceptor(
+                                            HttpLoggingInterceptor()
+                                                .apply {
+                                                    level = HttpLoggingInterceptor.Level.HEADERS
+                                                },
+                                        ).build(),
+                                ),
                             ),
-                        ),
+                        STREAM_CHUNK_LENGTH,
+                    ),
                 ),
         ).setCacheWriteDataSinkFactory(null)
         .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)

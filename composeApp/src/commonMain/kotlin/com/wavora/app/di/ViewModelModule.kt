@@ -7,6 +7,7 @@ import com.wavora.app.viewModel.ArtistViewModel
 import com.wavora.app.viewModel.EqualizerViewModel
 import com.wavora.app.viewModel.ScrobblingViewModel
 import com.wavora.app.viewModel.LocalMixViewModel
+import com.wavora.app.viewModel.WrappedViewModel
 import com.wavora.app.viewModel.HomeViewModel
 import com.wavora.app.viewModel.LibraryDynamicPlaylistViewModel
 import com.wavora.app.viewModel.LibraryViewModel
@@ -116,6 +117,9 @@ val viewModelModule =
         }
         viewModel {
             LocalMixViewModel(get(), get())
+        }
+        viewModel {
+            WrappedViewModel(get(), get(), get())
         }
         viewModel {
             SettingsViewModel(

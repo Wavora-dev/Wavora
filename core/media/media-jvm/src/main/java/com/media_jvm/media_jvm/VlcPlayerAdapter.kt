@@ -1,6 +1,8 @@
 package com.wavora.media_jvm
 
 import com.wavora.common.MERGING_DATA_TYPE
+import com.wavora.common.StreamUrlUtils
+import com.wavora.domain.extension.now
 import com.wavora.domain.model.player.GenericMediaItem
 import com.wavora.domain.model.player.GenericPlaybackParameters
 import com.wavora.domain.model.player.PlayerConstants
@@ -39,6 +41,7 @@ import uk.co.caprica.vlcj.factory.discovery.NativeDiscovery
 import uk.co.caprica.vlcj.player.base.Equalizer
 import uk.co.caprica.vlcj.player.base.MediaPlayer
 import uk.co.caprica.vlcj.player.base.MediaPlayerEventAdapter
+import uk.co.caprica.vlcj.player.base.State
 import uk.co.caprica.vlcj.player.embedded.EmbeddedMediaPlayer
 import uk.co.caprica.vlcj.player.embedded.videosurface.callback.BufferFormat
 import uk.co.caprica.vlcj.player.embedded.videosurface.callback.BufferFormatCallback
@@ -72,7 +75,32 @@ private const val SEEK_CONFIRM_TIMEOUT_MS = 2000L
 // aparezca otra causa de cuelgue en el futuro, nunca se vuelva a repetir un
 // silencio en cascada de varios minutos - como máximo el fallback de abajo
 // entra a los pocos segundos y salta al siguiente track sin crossfade.
-private const val CROSSFADE_WATCHDOG_TIMEOUT_MS = 6000L
+//
+// FIX (corte + silencio + la siguiente arranca de nuevo, en CADA crossfade largo):
+// la cota de 6000 ms envolvía TAMBIÉN el fundido (performCrossfade), que dura lo que
+// diga el ajuste del usuario: 5 s (default) + espera de seek/preroll ya rozaba el
+// límite; 8 s, 10 s y el modo Auto (20-45 s) lo superaban SIEMPRE. Al vencer, el
+// catch liberaba el player entrante a mitad del fade, hacía seekTo(next) y la
+// canción siguiente se volvía a resolver por red y arrancaba desde 0 (o fallaba y
+// todo quedaba en pausa). Ahora el watchdog cubre solo la PREPARACIÓN (resolver URL,
+// confirmar seek del pre-roll), que es donde puede colgarse; el fundido tiene su
+// propia cota calculada a partir de su duración real.
+private const val CROSSFADE_PREP_WATCHDOG_TIMEOUT_MS = 10_000L
+private const val CROSSFADE_FADE_WATCHDOG_MARGIN_MS = 5_000L
+
+// Watchdog de reproducción trabada (ver startPositionUpdates()): cuántos ticks de
+// 200 ms seguidos tolera un estado nativo terminal (ERROR/ENDED/STOPPED/NOTHING)
+// mientras deberíamos estar reproduciendo, y cuánto tiempo sin avance de posición.
+private const val STALL_TERMINAL_STATE_TICKS = 10
+private const val STALL_NO_PROGRESS_TIMEOUT_MS = 20_000L
+
+// Para no reintentar en bucle infinito la misma pista: el contador de reintentos
+// solo se resetea después de reproducir de verdad este tramo tras el reintento.
+private const val RETRY_RESET_AFTER_PROGRESS_MS = 10_000L
+
+// Un finished() nativo con más de esto por delante del final real de la pista se
+// considera corte de red (EOF prematuro), no fin de canción.
+private const val PREMATURE_END_TOLERANCE_MS = 5_000L
 
 // AUDIT FIX: withTimeout() (a diferencia de let/run/apply) NO es inline, así
 // que un "return@launch" de adentro suyo no compila ("'return' is prohibited
@@ -254,6 +282,14 @@ class VlcPlayerAdapter(
                 "--quiet",
                 "--no-metadata-network-access",
                 "--network-caching=3000",
+                // FIX (la siguiente canción arranca en mute/volumen 0): con
+                // volume-save activo (default de libVLC), cada setVolume() de
+                // CUALQUIER player se persiste en la config global del proceso
+                // (config_PutFloat, compartida aun entre instancias de libVLC) y
+                // cada salida de audio nueva arranca con ese valor. El pre-roll
+                // (setVolume(0)) y el final del fade-out (setVolume(0)) dejaban
+                // guardado 0 → el próximo player creado nacía en silencio.
+                "--no-volume-save",
             )
 
         // EXPERIMENTAL FIX (mute que se activa/desactiva solo en el player actual,
@@ -659,6 +695,18 @@ class VlcPlayerAdapter(
     private var retryCount = 0
     private var retryVideoId: String? = null
     private val maxRetryCount = 2
+
+    // Posición desde la que se reanudó el último reintento. El contador solo se
+    // resetea cuando la reproducción avanza RETRY_RESET_AFTER_PROGRESS_MS más allá
+    // de este punto (antes se reseteaba en el primer playing(), así que una pista
+    // que fallaba siempre en el mismo punto se reintentaba en bucle infinito).
+    private var retryResumePositionMs = 0L
+
+    // Watchdog de reproducción trabada (ver startPositionUpdates()).
+    private var stallTerminalTicks = 0
+    private var stallLastObservedTimeMs = Long.MIN_VALUE
+    private var stallLastProgressAtMs = 0L
+    private var stallRecoveryInFlight = false
 
     // Playlist management
     private val playlist = mutableListOf<GenericMediaItem>()
@@ -1398,7 +1446,14 @@ class VlcPlayerAdapter(
      * JvmMediaPlayerHandlerImpl uses thread-safe StateFlow updates
      * and contains runBlocking calls that would deadlock on Main.
      */
-    private fun transitionToState(newState: InternalState) {
+    private fun transitionToState(
+        newState: InternalState,
+        // FIX (error notificado dos veces): el caller pasa acá el error real para que
+        // se emita UNA sola vez. Antes error() emitía onPlayerError y además esta
+        // función emitía un segundo error genérico, así que el handler reaccionaba
+        // dos veces al mismo fallo (dos toasts, doble pause/reintento).
+        error: PlayerError? = null,
+    ) {
         if (internalState == newState) return
 
         val oldState = internalState
@@ -1462,17 +1517,79 @@ class VlcPlayerAdapter(
             InternalState.ERROR -> {
                 listeners.forEach { it.onPlaybackStateChanged(PlayerConstants.STATE_IDLE) }
                 listeners.forEach { it.onIsPlayingChanged(false) }
-                listeners.forEach {
-                    it.onPlayerError(
-                        PlayerError(
-                            errorCode = 403,
-                            errorCodeName = "ERROR_UNKNOWN",
-                            message = "Can not extract playable URL or playback error",
-                        ),
+                val reported =
+                    error ?: PlayerError(
+                        errorCode = 403,
+                        errorCodeName = "ERROR_UNKNOWN",
+                        message = "Can not extract playable URL or playback error",
                     )
-                }
+                listeners.forEach { it.onPlayerError(reported) }
             }
         }
+    }
+
+    /**
+     * Recuperación unificada de la pista actual (error nativo, stopped() inesperado,
+     * watchdog de reproducción trabada). Invalida la URL cacheada y recarga la pista
+     * DESDE [resumePositionMs] (antes error() reiniciaba siempre desde 0).
+     *
+     * @return true si programó un reintento; false si se agotaron los reintentos
+     *   para esta pista (el caller reporta el error UNA vez y el handler decide).
+     */
+    private suspend fun retryCurrentTrack(
+        reason: String,
+        resumePositionMs: Long,
+    ): Boolean {
+        val currentVideoId = playlist.getOrNull(localCurrentMediaItemIndex)?.mediaId ?: return false
+        if (retryVideoId != currentVideoId) {
+            retryVideoId = currentVideoId
+            retryCount = 0
+        }
+        if (retryCount >= maxRetryCount) {
+            Logger.e(TAG, "Max retries ($maxRetryCount) exhausted for $currentVideoId ($reason)")
+            return false
+        }
+        retryCount++
+        retryResumePositionMs = resumePositionMs
+        Logger.w(
+            TAG,
+            "Recovering playback ($reason) attempt $retryCount/$maxRetryCount for $currentVideoId at ${resumePositionMs}ms",
+        )
+        CrossfadeAudit.log(
+            "PLAYBACK_RECOVERY",
+            playerId = currentPlayer?.id,
+            details = "reason=$reason attempt=$retryCount resumeAt=$resumePositionMs videoId=$currentVideoId",
+        )
+        try {
+            withContext(Dispatchers.IO) {
+                streamRepository.invalidateFormat(currentVideoId)
+                streamRepository.invalidateFormat("${MERGING_DATA_TYPE.VIDEO}$currentVideoId")
+            }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            Logger.w(TAG, "invalidateFormat failed during recovery: ${e.message}")
+        }
+        precachedPlayers.remove(currentVideoId)?.player?.release()
+        loadAndPlayTrackInternal(localCurrentMediaItemIndex, resumePositionMs, shouldPlay = true)
+        return true
+    }
+
+    /** EOF reportado lejos del final real de la pista = corte de red, no fin de canción. */
+    private fun isPrematureEnd(): Boolean {
+        val dur = cachedDuration
+        val pos = cachedPosition
+        return dur > 0 && pos > 0 && pos < dur - PREMATURE_END_TOLERANCE_MS
+    }
+
+    private fun reportUnrecoverableError(message: String) {
+        transitionToState(
+            InternalState.ERROR,
+            PlayerError(
+                errorCode = PlayerConstants.ERROR_CODE_TIMEOUT,
+                errorCodeName = "VLC_ERROR",
+                message = message,
+            ),
+        )
     }
 
     /**
@@ -1539,6 +1656,12 @@ class VlcPlayerAdapter(
                     // VLC native calls on VLC thread
                     cleanupCurrentPlayerInternal()
                     currentPlayer = player
+                    // FIX: la posición cacheada seguía siendo la de la canción ANTERIOR
+                    // hasta el primer timeChanged() de la nueva. Si la nueva fallaba en
+                    // ese lapso, el reintento "reanudaba" en el minuto donde terminó la
+                    // anterior. La posición real de esta pista es startPositionMs.
+                    cachedPosition = startPositionMs
+                    cachedBufferedPosition = 0L
                     currentPlayerIsVideo = player.videoSurface != null
                     _currentVideoSurface.value = player.videoSurface
                     setupPlayerEventsInternal(player)
@@ -1571,8 +1694,7 @@ class VlcPlayerAdapter(
                     // agregado en PREROLL_RAW_MUTE_REASSERTED) para confirmar o descartar
                     // esto la próxima vez que se repita.
                     val wasMutedBeforeForce = runCatching { player.mediaPlayer.audio().isMute }.getOrNull()
-                    player.mediaPlayer.audio().isMute = false
-                    player.preRollIntentionallyUnmuted = true
+                    player.unmuteForPlayback()
                     CrossfadeAudit.log(
                         "MANUAL_UNMUTE_FORCED",
                         playerId = player.id,
@@ -1581,6 +1703,15 @@ class VlcPlayerAdapter(
                     )
 
                     if (cachedPrecache != null) {
+                        // FIX: un player pre-rolleado ya viene reproduciendo (en volumen 0)
+                        // unos ~3.5 s adelantado. Reusarlo tal cual (skip manual durante el
+                        // pre-roll) hacía arrancar la canción unos segundos tarde. Volver al
+                        // inicio pedido y, si no hay que reproducir, pausarlo.
+                        if (player.isPrimed) {
+                            player.seekTo(startPositionMs)
+                            player.isPrimed = false
+                            if (!shouldPlay) player.pause()
+                        }
                         if (shouldPlay) {
                             player.mediaPlayer.controls().play()
                         }
@@ -1731,6 +1862,27 @@ class VlcPlayerAdapter(
                             CrossfadeAudit.log("CB_FINISHED_IGNORED_CROSSFADING", playerId = emittingId)
                             return@launch
                         }
+                        // FIX ("se corta a la mitad"): si la conexión HTTP se cae a mitad
+                        // de canción y VLC no logra reconectar, el demuxer ve EOF y VLC
+                        // reporta finished() en el punto del corte. Antes eso se trataba
+                        // como fin real de la pista. Si faltaba más de
+                        // PREMATURE_END_TOLERANCE_MS, es un corte: recargar desde ahí.
+                        if (isPrematureEnd()) {
+                            CrossfadeAudit.log(
+                                "CB_FINISHED_PREMATURE",
+                                playerId = emittingId,
+                                details = "pos=$cachedPosition dur=$cachedDuration",
+                            )
+                            val recovered =
+                                try {
+                                    retryCurrentTrack("premature-end", cachedPosition)
+                                } catch (e: Exception) {
+                                    if (e is CancellationException) throw e
+                                    false
+                                }
+                            if (recovered) return@launch
+                            // Agotados los reintentos: seguir con la siguiente pista.
+                        }
                         transitionToState(InternalState.ENDED)
                         handleTrackEndInternal()
                     }
@@ -1756,53 +1908,40 @@ class VlcPlayerAdapter(
                             CrossfadeAudit.log("CB_ERROR_IGNORED_CROSSFADING", playerId = emittingId)
                             return@launch
                         }
-                        val currentVideoId = playlist.getOrNull(localCurrentMediaItemIndex)?.mediaId
-                        if (currentVideoId != null) {
-                            // Reset retry count for new track
-                            if (retryVideoId != currentVideoId) {
-                                retryVideoId = currentVideoId
-                                retryCount = 0
+                        // FIX: reintento desde la posición actual (antes: desde 0) y error
+                        // reportado UNA sola vez si se agotan los reintentos.
+                        val recovered =
+                            try {
+                                retryCurrentTrack("error", cachedPosition)
+                            } catch (e: Exception) {
+                                if (e is CancellationException) throw e
+                                Logger.e(TAG, "Retry failed: ${e.message}", e)
+                                false
                             }
-                            if (retryCount < maxRetryCount) {
-                                retryCount++
-                                Logger.w(TAG, "Retrying playback (attempt $retryCount/$maxRetryCount) for $currentVideoId")
-                                try {
-                                    // Invalidate cached format so fresh URL is fetched
-                                    streamRepository.invalidateFormat(currentVideoId)
-                                    streamRepository.invalidateFormat("${MERGING_DATA_TYPE.VIDEO}$currentVideoId")
-                                    // Evict stale precache
-                                    precachedPlayers.remove(currentVideoId)?.player?.release()
-                                    // Reload the track
-                                    loadAndPlayTrackInternal(localCurrentMediaItemIndex, 0L, shouldPlay = true)
-                                    return@launch
-                                } catch (e: Exception) {
-                                    if (e is CancellationException) throw e
-                                    Logger.e(TAG, "Retry failed: ${e.message}", e)
-                                }
-                            }
-                            Logger.e(TAG, "Max retries ($maxRetryCount) exhausted for $currentVideoId")
+                        if (!recovered) {
+                            reportUnrecoverableError("Playback error")
                         }
-                        val error =
-                            PlayerError(
-                                errorCode = PlayerConstants.ERROR_CODE_TIMEOUT,
-                                errorCodeName = "VLC_ERROR",
-                                message = "Playback error",
-                            )
-                        listeners.forEach { it.onPlayerError(error) }
-                        transitionToState(InternalState.ERROR)
                     }
                 }
 
                 override fun playing(mediaPlayer: MediaPlayer) {
                     CrossfadeAudit.log("CB_PLAYING", playerId = playerIdFor(mediaPlayer))
                     coroutineScope.launch {
-                        if (currentPlayer?.mediaPlayer != mediaPlayer) return@launch
+                        val player = currentPlayer ?: return@launch
+                        if (player.mediaPlayer != mediaPlayer) return@launch
+                        // FIX (mute al arrancar la siguiente): el stream de audio recién
+                        // arranca acá; reafirmar unmute + volumen real en el hilo del
+                        // player, que es el único que toca estos valores fuera del fade.
+                        if (!isCrossfading) {
+                            player.unmuteForPlayback()
+                            player.setVolume((internalVolume * 100).toInt())
+                        }
                         if (internalState != InternalState.PLAYING) {
                             transitionToState(InternalState.PLAYING)
                             notifyEqualizerIntent(true)
-                            // Reset retry counter on successful playback
-                            retryCount = 0
-                            retryVideoId = null
+                            // El contador de reintentos ya NO se resetea acá (ver
+                            // retryResumePositionMs): se resetea en startPositionUpdates()
+                            // tras avanzar de verdad, para evitar bucles de reintento.
                         }
                     }
                 }
@@ -1836,34 +1975,28 @@ class VlcPlayerAdapter(
                         if (currentPlayer?.mediaPlayer != mediaPlayer) return@launch
                         if (isCrossfading) return@launch
                         if (!internalPlayWhenReady) return@launch
+                        // Un stop() deliberado (override fun stop) deja el estado en IDLE:
+                        // no es un corte inesperado, no hay nada que recuperar.
+                        if (internalState == InternalState.IDLE) return@launch
 
-                        val currentVideoId = playlist.getOrNull(localCurrentMediaItemIndex)?.mediaId
-                        if (currentVideoId != null) {
-                            if (retryVideoId != currentVideoId) {
-                                retryVideoId = currentVideoId
-                                retryCount = 0
+                        CrossfadeAudit.log(
+                            "CB_STOPPED_RECOVERY_ATTEMPT",
+                            playerId = playerIdFor(mediaPlayer),
+                            details = "retryCount=$retryCount resumePosition=$cachedPosition",
+                        )
+                        val recovered =
+                            try {
+                                retryCurrentTrack("stopped", cachedPosition)
+                            } catch (e: Exception) {
+                                if (e is CancellationException) throw e
+                                Logger.e(TAG, "Stopped-recovery failed: ${e.message}", e)
+                                false
                             }
-                            if (retryCount < maxRetryCount) {
-                                retryCount++
-                                val resumePosition = cachedPosition
-                                Logger.w(
-                                    TAG,
-                                    "Recovering from unexpected stopped() (attempt $retryCount/$maxRetryCount) " +
-                                        "for $currentVideoId at position $resumePosition",
-                                )
-                                CrossfadeAudit.log(
-                                    "CB_STOPPED_RECOVERY_ATTEMPT",
-                                    playerId = playerIdFor(mediaPlayer),
-                                    details = "retryCount=$retryCount videoId=$currentVideoId resumePosition=$resumePosition",
-                                )
-                                try {
-                                    precachedPlayers.remove(currentVideoId)?.player?.release()
-                                    loadAndPlayTrackInternal(localCurrentMediaItemIndex, resumePosition, shouldPlay = true)
-                                } catch (e: Exception) {
-                                    if (e is CancellationException) throw e
-                                    Logger.e(TAG, "Stopped-recovery failed: ${e.message}", e)
-                                }
-                            }
+                        // FIX: antes, agotados los reintentos, no se hacía NADA: la app
+                        // quedaba en "PLAYING" sin sonido para siempre. Ahora se reporta
+                        // y el handler pasa a la siguiente.
+                        if (!recovered) {
+                            reportUnrecoverableError("Playback stopped unexpectedly")
                         }
                     }
                 }
@@ -2079,9 +2212,9 @@ class VlcPlayerAdapter(
         crossfadeJob =
             coroutineScope.launch {
                 try {
-                    // AUDIT FIX (02/09): watchdog de punta a punta. Ver comentario en la
-                    // constante CROSSFADE_WATCHDOG_TIMEOUT_MS.
-                    withTimeout(CROSSFADE_WATCHDOG_TIMEOUT_MS) {
+                    // Watchdog SOLO de la fase de preparación. Ver comentario en
+                    // CROSSFADE_PREP_WATCHDOG_TIMEOUT_MS.
+                    val prepared = withTimeout(CROSSFADE_PREP_WATCHDOG_TIMEOUT_MS) {
                     setCrossfading(true)
                     val nextMediaItem = playlist[nextIndex]
                     val nextVideoId = nextMediaItem.mediaId
@@ -2274,8 +2407,7 @@ class VlcPlayerAdapter(
                             nextPlayer.mediaPlayer.events().removeMediaPlayerEventListener(seekConfirmListener)
 
                             val timeRightBeforeUnmute = nextPlayer.time
-                            nextPlayer.mediaPlayer.audio().isMute = false
-                            nextPlayer.preRollIntentionallyUnmuted = true
+                            nextPlayer.unmuteForPlayback()
                             CrossfadeAudit.log(
                                 "PREROLL_SEEK_AFTER",
                                 playerId = nextPlayer.id,
@@ -2318,8 +2450,7 @@ class VlcPlayerAdapter(
                                 role = "next",
                                 details = "signalledBeforeTimeout=$signalled",
                             )
-                            nextPlayer.mediaPlayer.audio().isMute = false
-                            nextPlayer.preRollIntentionallyUnmuted = true
+                            nextPlayer.unmuteForPlayback()
                             CrossfadeAudit.log(
                                 "PREROLL_FRESH_UNMUTE_RETURNED",
                                 playerId = nextPlayer.id,
@@ -2394,23 +2525,31 @@ class VlcPlayerAdapter(
                             "actualRemaining=${actualTimeRemaining}ms, effective=${effectiveCrossfadeDurationMs}ms",
                     )
 
-                    performCrossfade(nextIndex, nextPlayer, effectiveCrossfadeDurationMs)
-                    } // fin withTimeout(CROSSFADE_WATCHDOG_TIMEOUT_MS)
+                    Pair(nextPlayer, effectiveCrossfadeDurationMs)
+                    } // fin withTimeout(CROSSFADE_PREP_WATCHDOG_TIMEOUT_MS)
+
+                    // Cota del fundido proporcional a su duración real (nunca menor
+                    // que el propio fade, que era el bug).
+                    val (preparedPlayer, preparedDurationMs) = prepared
+                    withTimeout(preparedDurationMs.toLong() + CROSSFADE_FADE_WATCHDOG_MARGIN_MS) {
+                        performCrossfade(nextIndex, preparedPlayer, preparedDurationMs)
+                    }
                 } catch (e: TimeoutCancellationException) {
-                    // Red de contención: el crossfade no terminó dentro de la cota. Forzar
-                    // avance real a la siguiente pista en vez de dejar la app en silencio
-                    // (que es exactamente lo que pasó el 02/09 sin este catch).
+                    // Red de contención: el crossfade se colgó de verdad. Forzar avance
+                    // real a la siguiente pista en vez de dejar la app en silencio.
                     Logger.e(TAG, "Crossfade watchdog timeout - forcing recovery to track $nextIndex", e)
                     CrossfadeAudit.log(
                         "CROSSFADE_WATCHDOG_TIMEOUT",
                         playerId = currentPlayer?.id,
                         details = "nextIndex=$nextIndex",
                     )
+                    releaseOrphanSecondaryPlayer()
                     setCrossfading(false)
                     seekTo(nextIndex, 0)
                 } catch (e: Exception) {
                     if (e !is CancellationException) {
                         Logger.e(TAG, "Crossfade error: ${e.message}", e)
+                        releaseOrphanSecondaryPlayer()
                         setCrossfading(false)
                         seekTo(nextIndex, 0)
                     }
@@ -2432,6 +2571,21 @@ class VlcPlayerAdapter(
                     setCrossfading(false)
                 }
             }
+    }
+
+    /**
+     * FIX (fuga de player nativo): si el crossfade abortaba en la fase de
+     * preparación (timeout/error) DESPUÉS de haber asignado secondaryPlayer, nadie lo
+     * liberaba: el seekTo() de recuperación ya ve isCrossfading=false y no llama a
+     * cancelCrossfadeAndCleanup(). Quedaba un player nativo decodificando en
+     * segundo plano para siempre. Nunca libera al player que ya es currentPlayer.
+     */
+    private fun releaseOrphanSecondaryPlayer() {
+        val orphan = secondaryPlayer ?: return
+        secondaryPlayer = null
+        if (orphan !== currentPlayer) {
+            orphan.release()
+        }
     }
 
     /**
@@ -2562,9 +2716,15 @@ class VlcPlayerAdapter(
         } catch (e: CancellationException) {
             Logger.d(TAG, "Crossfade cancelled")
             CrossfadeAudit.log("FADE_LOOP_CANCELLED", playerId = fadeOutId, details = "nextPlayerId=${nextPlayer.id}")
-            nextPlayer.release()
+            // FIX: si la cancelación llega durante finalizeCrossfade() (después del
+            // swap), nextPlayer YA es currentPlayer: liberarlo dejaba la app sin
+            // ningún player sonando. Solo se libera si sigue siendo el entrante.
+            if (nextPlayer !== currentPlayer) {
+                nextPlayer.release()
+            }
             secondaryPlayer = null
             setCrossfading(false)
+            throw e
         }
     }
 
@@ -2611,8 +2771,7 @@ class VlcPlayerAdapter(
                 details = "nextIsPlayingBeforeRecovery=$nextIsPlaying",
             )
             try {
-                nextPlayer.mediaPlayer.audio().isMute = false
-                nextPlayer.preRollIntentionallyUnmuted = true
+                nextPlayer.unmuteForPlayback()
                 nextPlayer.mediaPlayer.controls().play()
             } catch (e: Exception) {
                 Logger.w(TAG, "Error attempting crossfade recovery for player ${nextPlayer.id}: ${e.message}")
@@ -2690,6 +2849,13 @@ class VlcPlayerAdapter(
                 details = "nextIsPlaying was already true - no mute glitch to recover from",
             )
         }
+
+        // FIX (canción nueva muda tras el crossfade): garantizar, en el hilo del
+        // player, que el player promovido termina SIN mute nativo y con el volumen
+        // real del usuario, pase lo que pase con el pre-roll. unmuteForPlayback()
+        // es atómico respecto al re-mute del listener de pre-roll (ver VlcPlayer).
+        nextPlayer.unmuteForPlayback()
+        nextPlayer.setVolume((internalVolume * 100).toInt())
 
         // Reset state
         setCrossfading(false)
@@ -2881,8 +3047,109 @@ class VlcPlayerAdapter(
 
     // ========== Position Updates ==========
 
+    /**
+     * Supervisor de la reproducción actual. Corre en cada tick del loop de posición,
+     * en el hilo VLC-Player-Thread (el mismo que hace promociones/crossfades, así que
+     * no puede competir con ellos).
+     *
+     * 1) Self-heal de mute/volumen: si el player actual quedó con mute nativo o con un
+     *    volumen distinto al del usuario fuera de un crossfade, se corrige. Acota
+     *    cualquier "canción muda" (venga de donde venga) a como mucho un tick.
+     * 2) Reset del contador de reintentos solo tras progreso real.
+     * 3) Watchdog: si deberíamos estar sonando pero el estado nativo es terminal
+     *    (ERROR/ENDED/STOPPED/NOTHING_SPECIAL) durante STALL_TERMINAL_STATE_TICKS, o la
+     *    posición no avanza en STALL_NO_PROGRESS_TIMEOUT_MS, se recupera la pista.
+     *    Cubre el caso de un player promovido que murió ANTES de tener nuestro
+     *    listener (error durante el pre-roll/crossfade): no llega ningún evento y la
+     *    app quedaba en "PLAYING" sin sonido para siempre.
+     */
+    private fun superviseCurrentPlayback() {
+        val player = currentPlayer ?: return
+        if (player.isReleased || isCrossfading || stallRecoveryInFlight) return
+        val now = System.currentTimeMillis()
+        if (internalState != InternalState.PLAYING || !internalPlayWhenReady) {
+            stallTerminalTicks = 0
+            stallLastProgressAtMs = now
+            return
+        }
+
+        // 1) Self-heal de mute/volumen.
+        val expectedVolume = (internalVolume * 100).toInt()
+        val muted = runCatching { player.mediaPlayer.audio().isMute }.getOrNull()
+        if (muted == true) {
+            CrossfadeAudit.log("SELF_HEAL_UNMUTE", playerId = player.id, role = "current")
+            player.unmuteForPlayback()
+        }
+        val actualVolume = runCatching { player.mediaPlayer.audio().volume() }.getOrNull()
+        if (actualVolume != null && actualVolume >= 0 && abs(actualVolume - expectedVolume) > 1) {
+            CrossfadeAudit.log(
+                "SELF_HEAL_VOLUME",
+                playerId = player.id,
+                role = "current",
+                details = "actual=$actualVolume expected=$expectedVolume",
+            )
+            player.setVolume(expectedVolume)
+        }
+
+        // 2) Reset del contador de reintentos tras progreso real.
+        val time = player.time
+        if (retryCount > 0 && time > retryResumePositionMs + RETRY_RESET_AFTER_PROGRESS_MS) {
+            retryCount = 0
+            retryVideoId = null
+        }
+
+        // 3) Watchdog de reproducción trabada.
+        if (time != stallLastObservedTimeMs) {
+            stallLastObservedTimeMs = time
+            stallLastProgressAtMs = now
+        }
+        val nativeState = runCatching { player.mediaPlayer.status().state() }.getOrNull()
+        stallTerminalTicks =
+            when (nativeState) {
+                State.ERROR, State.ENDED, State.STOPPED, State.NOTHING_SPECIAL -> stallTerminalTicks + 1
+                else -> 0
+            }
+        val terminal = stallTerminalTicks >= STALL_TERMINAL_STATE_TICKS
+        val frozen = now - stallLastProgressAtMs >= STALL_NO_PROGRESS_TIMEOUT_MS
+        if (!terminal && !frozen) return
+
+        stallRecoveryInFlight = true
+        stallTerminalTicks = 0
+        stallLastProgressAtMs = now
+        val reason = if (terminal) "stall-$nativeState" else "stall-frozen"
+        CrossfadeAudit.log(
+            "PLAYBACK_STALL_DETECTED",
+            playerId = player.id,
+            role = "current",
+            details = "reason=$reason time=$time cachedPosition=$cachedPosition",
+        )
+        coroutineScope.launch {
+            try {
+                if (currentPlayer !== player || isCrossfading || internalState != InternalState.PLAYING) return@launch
+                if (nativeState == State.ENDED && !isPrematureEnd()) {
+                    // finished() se perdió (llegó antes de que hubiera listener):
+                    // tratarlo como fin normal de pista.
+                    transitionToState(InternalState.ENDED)
+                    handleTrackEndInternal()
+                    return@launch
+                }
+                if (!retryCurrentTrack(reason, cachedPosition)) {
+                    reportUnrecoverableError("Playback stalled ($reason)")
+                }
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                Logger.e(TAG, "Stall recovery failed: ${e.message}", e)
+            } finally {
+                stallRecoveryInFlight = false
+            }
+        }
+    }
+
     private fun startPositionUpdates() {
         stopPositionUpdates()
+        stallTerminalTicks = 0
+        stallLastObservedTimeMs = Long.MIN_VALUE
+        stallLastProgressAtMs = System.currentTimeMillis()
 
         positionUpdateJob =
             coroutineScope.launch {
@@ -2909,6 +3176,7 @@ class VlcPlayerAdapter(
                                     if (pos > 0) cachedPosition = pos
                                     if (dur > 0) cachedDuration = dur
                                 }
+                                superviseCurrentPlayback()
                             }
 
                             // Check if should trigger crossfade.
@@ -3029,8 +3297,12 @@ class VlcPlayerAdapter(
                                                         // isMute=true acá para tapar esa ventana — pero SOLO si
                                                         // este player todavía no fue promovido a currentPlayer
                                                         // (nunca debe mutear al player que está sonando de verdad).
-                                                        if (currentPlayer?.id != precachedPlayer.id && precachedPlayer.isPrimed && !precachedPlayer.preRollIntentionallyUnmuted) {
-                                                            runCatching { mediaPlayer.audio().isMute = true }
+                                                        // FIX: chequeo + mute atómicos (ver VlcPlayer.muteLock);
+                                                        // antes podían pisar al unmute real del hilo del player.
+                                                        if (currentPlayer?.id != precachedPlayer.id &&
+                                                            precachedPlayer.isPrimed &&
+                                                            precachedPlayer.reassertPrerollMute()
+                                                        ) {
                                                             CrossfadeAudit.log(
                                                                 "PREROLL_RAW_MUTE_REASSERTED",
                                                                 playerId = precachedPlayer.id,
@@ -3100,15 +3372,27 @@ class VlcPlayerAdapter(
                                                         newTime: Long,
                                                     ) {
                                                         val n = rawSampleCount.incrementAndGet()
+                                                        // Una vez desmuteado de verdad (promovido), este listener
+                                                        // ya no tiene nada que hacer: se desengancha en vez de
+                                                        // seguir ~12 min haciendo llamadas nativas en cada tick.
+                                                        if (precachedPlayer.preRollIntentionallyUnmuted || precachedPlayer.isReleased) {
+                                                            try {
+                                                                mediaPlayer.events().removeMediaPlayerEventListener(rawPrerollListener)
+                                                            } catch (_: Exception) {
+                                                            }
+                                                            return
+                                                        }
                                                         val currentMute = runCatching { mediaPlayer.audio().isMute }.getOrNull()
                                                         val previousMute = rawLastMute.getAndSet(currentMute)
                                                         // FIX (misma causa que en playing()): si durante el
                                                         // pre-roll el mute se cayó solo, lo volvemos a forzar acá
-                                                        // también — cubre el caso de que el drop pase un poco más
-                                                        // tarde que el evento playing(). Nunca toca al player una
-                                                        // vez promovido a currentPlayer (mismo guard).
-                                                        if (currentMute == false && currentPlayer?.id != precachedPlayer.id && precachedPlayer.isPrimed && !precachedPlayer.preRollIntentionallyUnmuted) {
-                                                            runCatching { mediaPlayer.audio().isMute = true }
+                                                        // también. Chequeo + mute atómicos (VlcPlayer.muteLock):
+                                                        // ya no puede pisar al unmute real del hilo del player.
+                                                        if (currentMute == false &&
+                                                            currentPlayer?.id != precachedPlayer.id &&
+                                                            precachedPlayer.isPrimed &&
+                                                            precachedPlayer.reassertPrerollMute()
+                                                        ) {
                                                             CrossfadeAudit.log(
                                                                 "PREROLL_RAW_MUTE_REASSERTED",
                                                                 playerId = precachedPlayer.id,
@@ -3426,7 +3710,9 @@ class VlcPlayerAdapter(
         }
 
         // Try new format API (returns both audio and video URLs)
-        streamRepository.getNewFormat(videoId).lastOrNull()?.let { format ->
+        // FIX: antes no se miraba expiredTime (Android sí): una URL vencida solo se
+        // descartaba si el HEAD de is403Url respondía 4xx. Ahora se ignora de entrada.
+        streamRepository.getNewFormat(videoId).lastOrNull()?.takeIf { it.expiredTime > now() }?.let { format ->
             val audioUrl = format.audioUrl
             val videoUrl = format.videoUrl
 
@@ -3471,7 +3757,7 @@ class VlcPlayerAdapter(
                     ).lastOrNull()
             if (videoUrl != null) {
                 Logger.d(TAG, "Stream Video $videoUrl")
-                return PlayableSource(isVideo = true, url = videoUrl)
+                return PlayableSource(isVideo = true, url = StreamUrlUtils.stripRangeQueryParam(videoUrl))
             }
         } else {
             val audioUrl =
@@ -3484,7 +3770,8 @@ class VlcPlayerAdapter(
                     ).lastOrNull()
             if (audioUrl != null) {
                 Logger.d(TAG, "Stream Audio $audioUrl")
-                return PlayableSource(isVideo = false, url = audioUrl)
+                // FIX: sin `range=` en la query, ver StreamUrlUtils.
+                return PlayableSource(isVideo = false, url = StreamUrlUtils.stripRangeQueryParam(audioUrl))
             }
         }
 
@@ -3532,6 +3819,35 @@ class VlcPlayer(
     // never re-mutes a player after its real unmute has already happened.
     @Volatile
     var preRollIntentionallyUnmuted = false
+        private set
+
+    // FIX (mute pegado en la canción siguiente - carrera TOCTOU): el listener de
+    // pre-roll corre en el hilo de eventos de vlcj y hacía "leer flag -> (llamada
+    // nativa isMute) -> isMute = true", mientras el hilo VLC-Player-Thread hacía
+    // "isMute = false -> flag = true" al promover el player. Si el listener leía el
+    // flag justo ANTES de que el hilo del player lo pusiera en true, su isMute = true
+    // aterrizaba DESPUÉS del unmute real y la canción nueva quedaba muda para siempre.
+    // Este lock hace atómicos "chequear flag + mutear" y "marcar flag + desmutear",
+    // así un re-mute de pre-roll nunca puede pisar al unmute intencional.
+    private val muteLock = Any()
+
+    /** Re-mutea solo si el player sigue en pre-roll (nunca después del unmute real). */
+    fun reassertPrerollMute(): Boolean =
+        synchronized(muteLock) {
+            if (preRollIntentionallyUnmuted || isReleased) return@synchronized false
+            runCatching { mediaPlayer.audio().isMute = true }
+            true
+        }
+
+    /** Unmute definitivo: a partir de acá ningún re-mute de pre-roll puede aplicarse. */
+    fun unmuteForPlayback() {
+        synchronized(muteLock) {
+            preRollIntentionallyUnmuted = true
+            if (!isReleased) {
+                runCatching { mediaPlayer.audio().isMute = false }
+            }
+        }
+    }
 
     private var eventListener: MediaPlayerEventAdapter? = null
 

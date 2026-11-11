@@ -2,15 +2,19 @@ package com.wavora.app
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
@@ -43,6 +47,7 @@ import io.sentry.Sentry
 import io.sentry.SentryLevel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
@@ -67,7 +72,12 @@ import wavora.composeapp.generated.resources.close_miniplayer
 import wavora.composeapp.generated.resources.explicit_content_blocked
 import wavora.composeapp.generated.resources.open_app
 import wavora.composeapp.generated.resources.open_miniplayer
+import wavora.composeapp.generated.resources.hw_accel_auto_disabled_toast
 import wavora.composeapp.generated.resources.quit_app
+import wavora.composeapp.generated.resources.tray_compat_mode
+import wavora.composeapp.generated.resources.splash_stage_library
+import wavora.composeapp.generated.resources.splash_stage_player
+import wavora.composeapp.generated.resources.splash_stage_starting
 import wavora.composeapp.generated.resources.time_out_check_internet_connection_or_change_piped_instance_in_settings
 
 private const val TAG = "DesktopApp"
@@ -84,6 +94,22 @@ private class AppReady(
     val sharedViewModel: SharedViewModel,
 )
 
+/**
+ * Etapa real del arranque, para que el splash muestre qué está pasando en vez
+ * de un logo mudo. Se actualiza desde el coroutine de arranque (Dispatchers.Default)
+ * y la UI la observa con collectAsState. `progress` es aproximado, por etapa.
+ */
+private enum class StartupStage(
+    val progress: Float,
+) {
+    STARTING(0.12f),
+    LIBRARY(0.45f),
+    PLAYER(0.8f),
+    READY(1f),
+}
+
+private val startupStage = MutableStateFlow(StartupStage.STARTING)
+
 @OptIn(ExperimentalMaterial3Api::class)
 fun runDesktopApp(args: Array<String> = emptyArray()) {
     // Install crash dialog handler first — catches all uncaught exceptions
@@ -97,6 +123,13 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
     // + sampler de CPU en un scope propio de vida larga (no atado a la
     // composición, que todavía ni existe en este punto).
     val auditScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Default)
+    // OPTIMIZACIÓN (v2.3): la instrumentación detallada (logs Debug a disco +
+    // samplers de CPU/procesos) ahora solo corre en modo diagnóstico. En uso
+    // normal se guardan solo Warn/Error. Ver DiagnosticsConfig.
+    val diagnosticsActive = com.wavora.app.diagnostics.DiagnosticsConfig.resolve(args)
+    co.touchlab.kermit.Logger.setMinSeverity(
+        if (diagnosticsActive) co.touchlab.kermit.Severity.Debug else co.touchlab.kermit.Severity.Warn,
+    )
     try {
         // VERIFICAR al compilar: Logger.setLogWriters(vararg LogWriter) es la
         // API pública estable de kermit 2.1.0 para reemplazar los writers
@@ -148,9 +181,11 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
     } catch (e: Throwable) {
         System.err.println("No se pudo loguear el diagnostico de arranque de proceso: ${e.message}")
     }
-    com.wavora.app.diagnostics.ProcessCensus.snapshot(label = "arranque (antes de Koin)")
-    com.wavora.app.diagnostics.ProcessCensus.startPeriodicSnapshots(auditScope)
-    com.wavora.app.diagnostics.CpuThreadSampler.startSampling(auditScope)
+    if (diagnosticsActive) {
+        com.wavora.app.diagnostics.ProcessCensus.snapshot(label = "arranque (antes de Koin)")
+        com.wavora.app.diagnostics.ProcessCensus.startPeriodicSnapshots(auditScope)
+        com.wavora.app.diagnostics.CpuThreadSampler.startSampling(auditScope)
+    }
 
     System.setProperty("compose.swing.render.on.graphics", "true")
     System.setProperty("compose.interop.blending", "true")
@@ -160,7 +195,10 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
     val isWindows = System.getProperty("os.name", "").contains("Windows", ignoreCase = true)
     if (isWindows) {
         System.setProperty("compose.layers.type", "SWING")
-        System.setProperty("skiko.renderApi", "SOFTWARE")
+        // v2.3: ya no se fuerza SOFTWARE para todos. RenderConfig decide
+        // (ajuste del usuario, historial de fallos y placa de video) y setea
+        // skiko.renderApi en DIRECT3D o SOFTWARE. Ante cualquier duda: SOFTWARE.
+        com.wavora.app.render.RenderConfig.decideAndApply(args)
     } else {
         System.setProperty("compose.layers.type", "COMPONENT")
     }
@@ -230,16 +268,6 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
     Logger.d(TAG, "===== DIAGNOSTICO ARRANQUE DE PROCESO - PUNTO 3: justo antes de application{} / crear ventana principal =====")
     application {
         var appReady by remember { mutableStateOf<AppReady?>(null) }
-        // WAVORA SPLASH FIX (Objetivo 1, Problema 4): antes, apenas `appReady`
-        // dejaba de ser null, `SplashWindow` se desmontaba en el mismo frame que
-        // `MainAppWindow` aparecía — un corte seco. Ahora `SplashScreen` corre su
-        // propia animación de salida (fade-out + scale-down, ~320ms) cuando
-        // `visible = false`, y solo al terminar esa animación (`onExitFinished`)
-        // marcamos `splashExited = true` para recién ahí desmontar la ventana de
-        // splash y dejar la principal sola. La espera es sobre una animación real,
-        // no un timer de arranque: el splash sigue desapareciendo exactamente
-        // cuando el init real terminó, solo que ahora con una transición.
-        var splashExited by remember { mutableStateOf(false) }
 
         // FIX (Problema 1 - "el splash queda atrapado, ni la X ni minimizar
         // funcionan"): antes onCloseRequest era {} incondicional y
@@ -289,6 +317,7 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
                     var result: AppReady? = null
                     for (attempt in 1..STARTUP_RETRY_MAX_ATTEMPTS) {
                     try {
+                        startupStage.value = StartupStage.LIBRARY
                         // Initialize Koin ONCE before application starts
                         com.wavora.app.diagnostics.StartupTiming.begin("startKoin + loadAllModules")
                         startKoin {
@@ -322,6 +351,7 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
                         org.app.lyrics.scrobbler.LastFmApi.configure(BuildKonfig.lastFmApiKey, BuildKonfig.lastFmApiSecret)
                         com.wavora.app.diagnostics.StartupTiming.end("language + VersionManager + Sentry")
 
+                        startupStage.value = StartupStage.PLAYER
                         com.wavora.app.diagnostics.StartupTiming.begin("MediaPlayerHandler (Koin get + VLC init)")
                         val mediaPlayerHandler = getKoin().get<MediaPlayerHandler>()
                         com.wavora.app.diagnostics.StartupTiming.end("MediaPlayerHandler (Koin get + VLC init)")
@@ -398,33 +428,56 @@ fun runDesktopApp(args: Array<String> = emptyArray()) {
                     result ?: throw (lastError ?: IllegalStateException("Startup terminó sin resultado y sin error"))
                 }
             com.wavora.app.diagnostics.StartupTiming.end("LaunchedEffect total (splash -> appReady)")
+            startupStage.value = StartupStage.READY
             appReady = ready
         }
 
-        val currentAppReady = appReady
-        if (!splashExited) {
-            SplashWindow(
-                visible = currentAppReady == null,
-                onExitFinished = { splashExited = true },
-                canForceClose = canForceClose,
-            )
-        }
-        if (currentAppReady != null && splashExited) {
-            MainAppWindow(
-                mediaPlayerHandler = currentAppReady.mediaPlayerHandler,
-                sharedViewModel = currentAppReady.sharedViewModel,
-            )
-        }
+        // WAVORA APERTURA (morph): ya no hay dos ventanas (splash cuadrado que
+        // muere y recién después la principal). Hay UNA sola ventana, creada desde
+        // el primer frame con su tamaño/posición finales y transparente: mientras
+        // arranca solo se ve el splash centrado; cuando el arranque termina, la
+        // UI real se compone debajo y la ventana se "abre" desde el blob. Sin
+        // hueco en pantalla y sin que todo aparezca de golpe.
+        WavoraMainWindow(
+            appReady = appReady,
+            canForceClose = canForceClose,
+        )
     }
 }
 
-/**
- * Tamaño fijo de la ventana de splash (cuadrada, con margen para los halos).
- * +20% sobre el tamaño anterior (440dp -> 528dp) a pedido, en línea con el
- * logo (176dp -> 211dp) y el aura exterior del nuevo diseño de dos halos en
- * [SplashScreen].
- */
-private val SPLASH_WINDOW_SIZE = 528.dp
+/** Intentos (cada ~1,5 s) para verificar que la ventana se ve con Direct3D. */
+private const val RENDER_CHECK_MAX_ATTEMPTS = 20
+
+/** Ejecuta la acción de un atajo de teclado (ver input/KeyboardShortcuts.kt). */
+private fun runShortcut(
+    action: com.wavora.app.input.KeyboardShortcuts.Action,
+    sharedViewModel: SharedViewModel,
+) {
+    when (action) {
+        com.wavora.app.input.KeyboardShortcuts.Action.PLAY_PAUSE ->
+            sharedViewModel.onUIEvent(com.wavora.app.viewModel.UIEvent.PlayPause)
+        com.wavora.app.input.KeyboardShortcuts.Action.NEXT ->
+            sharedViewModel.onUIEvent(com.wavora.app.viewModel.UIEvent.Next)
+        com.wavora.app.input.KeyboardShortcuts.Action.PREVIOUS ->
+            sharedViewModel.onUIEvent(com.wavora.app.viewModel.UIEvent.Previous)
+        com.wavora.app.input.KeyboardShortcuts.Action.VOLUME_UP,
+        com.wavora.app.input.KeyboardShortcuts.Action.VOLUME_DOWN -> {
+            val step = if (action == com.wavora.app.input.KeyboardShortcuts.Action.VOLUME_UP) 0.05f else -0.05f
+            val current = sharedViewModel.controllerState.value.volume
+            sharedViewModel.onUIEvent(com.wavora.app.viewModel.UIEvent.UpdateVolume((current + step).coerceIn(0f, 1f)))
+        }
+        com.wavora.app.input.KeyboardShortcuts.Action.LIKE ->
+            sharedViewModel.onUIEvent(com.wavora.app.viewModel.UIEvent.ToggleLike)
+        com.wavora.app.input.KeyboardShortcuts.Action.MINI_PLAYER ->
+            MiniPlayerManager.isOpen = !MiniPlayerManager.isOpen
+    }
+}
+
+/** Duración de la apertura (el blob se vuelve ventana). */
+private const val REVEAL_DURATION_MS = 760
+
+/** Diámetro del blob desde el que se abre la ventana. */
+private val REVEAL_START_SIZE = 260.dp
 
 // FIX (Problema 1). 30s es generoso frente a lo que tarda un arranque normal
 // (segundos, según los propios StartupTiming agregados arriba) — solo se
@@ -444,7 +497,7 @@ private const val STARTUP_RETRY_DELAY_MS = 1500L
  * activo (igual que hacen los launchers tipo Spotify/Discord), con fallback
  * al monitor por defecto si por algún motivo no se puede leer el puntero.
  */
-private fun centeredOnActiveScreen(windowSize: androidx.compose.ui.unit.Dp): androidx.compose.ui.window.WindowPosition {
+private fun centeredOnActiveScreen(windowSize: DpSize): androidx.compose.ui.window.WindowPosition {
     return try {
         val ge = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment()
         val pointerLocation = java.awt.MouseInfo.getPointerInfo()?.location
@@ -461,9 +514,10 @@ private fun centeredOnActiveScreen(windowSize: androidx.compose.ui.unit.Dp): and
         // (dp) a la misma unidad usando el scale factor de esa pantalla, para que
         // el centrado sea exacto también en monitores con distinto DPI.
         val scale = targetDevice.defaultConfiguration.defaultTransform.scaleX
-        val windowSizePx = (windowSize.value * scale).toInt()
-        val centerX = bounds.x + (bounds.width - windowSizePx) / 2
-        val centerY = bounds.y + (bounds.height - windowSizePx) / 2
+        val windowWidthPx = (windowSize.width.value * scale).toInt()
+        val windowHeightPx = (windowSize.height.value * scale).toInt()
+        val centerX = bounds.x + (bounds.width - windowWidthPx) / 2
+        val centerY = bounds.y + (bounds.height - windowHeightPx) / 2
         androidx.compose.ui.window.WindowPosition(
             x = (centerX / scale).toFloat().dp,
             y = (centerY / scale).toFloat().dp,
@@ -471,81 +525,79 @@ private fun centeredOnActiveScreen(windowSize: androidx.compose.ui.unit.Dp): and
     } catch (e: Throwable) {
         // Si por lo que sea no se puede leer la config gráfica (headless, etc.),
         // dejamos que el SO decida en vez de crashear el arranque.
-        Logger.e(TAG, "No se pudo centrar el splash en el monitor activo: ${e.message}", e)
+        Logger.e(TAG, "No se pudo centrar la ventana en el monitor activo: ${e.message}", e)
         androidx.compose.ui.window.WindowPosition.PlatformDefault
     }
 }
 
 /**
- * Ventana de splash: sin decoración, cuadrada, centrada en el monitor donde el
- * usuario abrió la app. Su contenido (`SplashScreen`) corre su propia
- * animación de salida cuando `visible` pasa a `false`; recién cuando esa
- * animación termina se invoca [onExitFinished], que en [runDesktopApp] dispara
- * el desmonte real de esta ventana. No tiene ningún timer de arranque propio.
+ * Ventana principal + splash + tray + mini player.
  *
- * @param canForceClose Cuando es `false` (arranque normal en curso), el
- *   comportamiento es el de siempre: sin botones de cierre nativos, siempre
- *   encima. Cuando pasa a `true` (arranque colgado más de
- *   [SPLASH_FORCE_CLOSE_TIMEOUT_MS], ver `runDesktopApp`), la X cierra la
- *   aplicación de verdad y se suelta `alwaysOnTop` para que minimizar
- *   funcione — así el usuario nunca queda atrapado sin poder salir.
- */
-@androidx.compose.runtime.Composable
-private fun androidx.compose.ui.window.ApplicationScope.SplashWindow(
-    visible: Boolean,
-    onExitFinished: () -> Unit,
-    canForceClose: Boolean,
-) {
-    val windowState =
-        remember {
-            androidx.compose.ui.window.WindowState(
-                size = DpSize(SPLASH_WINDOW_SIZE, SPLASH_WINDOW_SIZE),
-                position = centeredOnActiveScreen(SPLASH_WINDOW_SIZE),
-            )
-        }
-    Window(
-        onCloseRequest = {
-            if (canForceClose) {
-                Logger.w(TAG, "===== Splash: usuario cerró manualmente tras timeout de arranque =====")
-                exitApplication()
-            }
-        },
-        title = "Wavora",
-        undecorated = true,
-        transparent = true,
-        resizable = false,
-        alwaysOnTop = !canForceClose,
-        state = windowState,
-    ) {
-        SplashScreen(visible = visible, onExitFinished = onExitFinished)
-    }
-}
-
-/**
- * Ventana principal + tray + mini player — idéntico al contenido que antes
- * vivía directamente dentro de `application { }`, ahora parametrizado por el
- * `mediaPlayerHandler`/`sharedViewModel` ya construidos (ver [AppReady]).
+ * Mientras [appReady] es null la ventana ya existe (con su tamaño/posición
+ * finales) pero es transparente y solo muestra el [SplashScreen] centrado.
+ * Cuando el arranque termina:
+ *  1. se compone la UI real (App) debajo del splash, todavía recortada al blob;
+ *  2. se esperan dos frames para que ese primer frame pesado ya esté pintado;
+ *  3. la ventana se abre desde el blob ([RevealShape]) mientras el splash se
+ *     expande/desvanece y el logo vuela al punto de la barra de título.
+ *
+ * El tray y el mini player solo existen una vez que la app está lista, igual
+ * que antes.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @androidx.compose.runtime.Composable
-private fun androidx.compose.ui.window.ApplicationScope.MainAppWindow(
-    mediaPlayerHandler: MediaPlayerHandler,
-    sharedViewModel: SharedViewModel,
+private fun androidx.compose.ui.window.ApplicationScope.WavoraMainWindow(
+    appReady: AppReady?,
+    canForceClose: Boolean,
 ) {
-    // Main Window - restore saved size and position
-    val windowPrefs = java.util.prefs.Preferences.userRoot().node("Wavora/MainWindow")
-    val savedWidth = windowPrefs.getFloat("width", 1280f)
-    val savedHeight = windowPrefs.getFloat("height", 780f)
-    val savedX = windowPrefs.getInt("x", -1)
-    val savedY = windowPrefs.getInt("y", -1)
-    val wasMaximized = windowPrefs.getBoolean("maximized", false)
-
+    // Main Window - restore saved size, position and placement
+    val windowPrefs = remember { java.util.prefs.Preferences.userRoot().node("Wavora/MainWindow") }
     val windowState =
-        rememberWindowState(
-            size = DpSize(savedWidth.dp, savedHeight.dp),
-            placement = if (wasMaximized) androidx.compose.ui.window.WindowPlacement.Maximized
-                        else androidx.compose.ui.window.WindowPlacement.Floating,
-        )
+        remember {
+            val size =
+                DpSize(
+                    windowPrefs.getFloat("width", 1280f).dp,
+                    windowPrefs.getFloat("height", 780f).dp,
+                )
+            val wasMaximized = windowPrefs.getBoolean("maximized", false)
+            androidx.compose.ui.window.WindowState(
+                placement =
+                    if (wasMaximized) {
+                        androidx.compose.ui.window.WindowPlacement.Maximized
+                    } else {
+                        androidx.compose.ui.window.WindowPlacement.Floating
+                    },
+                // FIX: antes x/y se leían pero nunca se usaban.
+                position = restoredWindowPosition(windowPrefs, size) ?: centeredOnActiveScreen(size),
+                size = size,
+            )
+        }
+    val awtWindowRef = remember { java.util.concurrent.atomic.AtomicReference<java.awt.Window?>(null) }
+
+    // FIX: antes el tamaño solo se guardaba en el onCloseRequest del sistema, que
+    // con ventana sin bordes casi nunca se dispara (la X propia de CustomTitleBar
+    // solo ocultaba). Ahora se guarda en todos los caminos de cierre/ocultado.
+    fun saveWindowPrefs() {
+        try {
+            if (windowState.placement == androidx.compose.ui.window.WindowPlacement.Floating) {
+                windowPrefs.putFloat("width", windowState.size.width.value)
+                windowPrefs.putFloat("height", windowState.size.height.value)
+                val awtWindow = awtWindowRef.get()
+                // Minimizada, Windows reporta x/y = -32000: no guardar eso.
+                if (awtWindow != null && !windowState.isMinimized) {
+                    windowPrefs.putInt("x", awtWindow.x)
+                    windowPrefs.putInt("y", awtWindow.y)
+                }
+                windowPrefs.putBoolean("maximized", false)
+            } else {
+                windowPrefs.putBoolean("maximized", true)
+            }
+            windowPrefs.flush()
+        } catch (e: Exception) {
+            Logger.e(TAG, "No se pudo guardar el tamaño/posición de la ventana: ${e.message}", e)
+        }
+    }
+
     var isVisible by remember { mutableStateOf(true) }
     // The single-instance guard now runs before startKoin (top of
     // runDesktopApp). Here we only react to a restore request raised when a
@@ -558,56 +610,113 @@ private fun androidx.compose.ui.window.ApplicationScope.MainAppWindow(
             DesktopDeepLinkHandler.consumePendingUri()
         }
     }
-    val openAppString = stringResource(Res.string.open_app)
-    val quitAppString = stringResource(Res.string.quit_app)
-    val openMiniPlayer = stringResource(Res.string.open_miniplayer)
-    val closeMiniPlayer = stringResource(Res.string.close_miniplayer)
-    Tray(
-        icon = painterResource(Res.drawable.circle_app_icon),
-        tooltip = stringResource(Res.string.app_name),
-        primaryAction = {
-            isVisible = true
-            windowState.isMinimized = false
-        },
-    ) {
-        if (!isVisible) {
-            Item(openAppString) {
-                isVisible = true
-                windowState.isMinimized = false
-            }
-        }
-        if (MiniPlayerManager.isOpen) {
-            Item(closeMiniPlayer) {
-                MiniPlayerManager.isOpen = false
-            }
-        } else {
-            Item(openMiniPlayer) {
-                MiniPlayerManager.isOpen = true
-            }
-        }
-        Divider()
-        Item(quitAppString) {
-            mediaPlayerHandler.release()
-            exitApplication()
+
+    // Cierre ordenado (bandeja, reinicio por ajustes, diálogo de modo compatible).
+    fun quitApp() {
+        saveWindowPrefs()
+        com.wavora.app.input.GlobalMediaKeys.stop()
+        appReady?.mediaPlayerHandler?.release()
+        exitApplication()
+    }
+    androidx.compose.runtime.SideEffect {
+        com.wavora.app.render.AppRestart.exitHandler = { quitApp() }
+    }
+
+    // Teclas multimedia globales (Windows): funcionan con la app minimizada o en la bandeja.
+    LaunchedEffect(appReady) {
+        val vm = appReady?.sharedViewModel ?: return@LaunchedEffect
+        com.wavora.app.input.GlobalMediaKeys.start { action ->
+            vm.onUIEvent(
+                when (action) {
+                    com.wavora.app.input.GlobalMediaKeys.Action.PLAY_PAUSE -> com.wavora.app.viewModel.UIEvent.PlayPause
+                    com.wavora.app.input.GlobalMediaKeys.Action.NEXT -> com.wavora.app.viewModel.UIEvent.Next
+                    com.wavora.app.input.GlobalMediaKeys.Action.PREVIOUS -> com.wavora.app.viewModel.UIEvent.Previous
+                    com.wavora.app.input.GlobalMediaKeys.Action.STOP -> com.wavora.app.viewModel.UIEvent.Stop
+                },
+            )
         }
     }
+
+    // Si el arranque anterior desactivó sola la aceleración, se avisa una vez.
+    val fallbackNotice = com.wavora.app.render.RenderConfig.fallbackNotice
+    if (appReady != null && fallbackNotice != null) {
+        val noticeText = stringResource(Res.string.hw_accel_auto_disabled_toast)
+        LaunchedEffect(Unit) {
+            showToast(noticeText)
+            com.wavora.app.render.RenderConfig.clearNotice()
+        }
+    }
+
+    if (appReady != null) {
+        val openAppString = stringResource(Res.string.open_app)
+        val quitAppString = stringResource(Res.string.quit_app)
+        val openMiniPlayer = stringResource(Res.string.open_miniplayer)
+        val closeMiniPlayer = stringResource(Res.string.close_miniplayer)
+        val compatModeString = stringResource(Res.string.tray_compat_mode)
+        Tray(
+            icon = painterResource(Res.drawable.circle_app_icon),
+            tooltip = stringResource(Res.string.app_name),
+            primaryAction = {
+                isVisible = true
+                windowState.isMinimized = false
+            },
+        ) {
+            if (!isVisible) {
+                Item(openAppString) {
+                    isVisible = true
+                    windowState.isMinimized = false
+                }
+            }
+            if (MiniPlayerManager.isOpen) {
+                Item(closeMiniPlayer) {
+                    MiniPlayerManager.isOpen = false
+                }
+            } else {
+                Item(openMiniPlayer) {
+                    MiniPlayerManager.isOpen = true
+                }
+            }
+            if (com.wavora.app.render.RenderConfig.current?.api == com.wavora.app.render.RenderConfig.Api.DIRECT3D) {
+                // Salida de emergencia: el menú de la bandeja es nativo y se ve
+                // aunque la ventana haya quedado en blanco.
+                Item(compatModeString) {
+                    com.wavora.app.render.RenderConfig.mode = com.wavora.app.render.RenderConfig.Mode.SOFTWARE
+                    com.wavora.app.render.AppRestart.restartNow()
+                }
+            }
+            Divider()
+            Item(quitAppString) {
+                quitApp()
+            }
+        }
+    }
+
+    val stage by startupStage.collectAsState()
+    val stageText =
+        when (stage) {
+            StartupStage.STARTING -> stringResource(Res.string.splash_stage_starting)
+            StartupStage.LIBRARY -> stringResource(Res.string.splash_stage_library)
+            StartupStage.PLAYER, StartupStage.READY -> stringResource(Res.string.splash_stage_player)
+        }
+
     // WAVORA: Use undecorated frameless window on ALL platforms.
-    // The invisible window bug on Windows is fixed by SWING layers + SOFTWARE
-    // rendering set at startup. This gives us the custom Wavora title bar
+    // The invisible window bug on Windows is handled by SWING layers + the
+    // render API chosen by RenderConfig (Direct3D with verified fallback to
+    // SOFTWARE, see render/RenderConfig.kt). This gives us the custom title bar
     // with buttons on the right instead of the ugly white Windows frame.
-    val isUseDecorated = remember { false }
     Window(
         onCloseRequest = {
-            // Save window size and position for next launch
-            if (windowState.placement == androidx.compose.ui.window.WindowPlacement.Floating) {
-                windowPrefs.putFloat("width", windowState.size.width.value)
-                windowPrefs.putFloat("height", windowState.size.height.value)
-                windowPrefs.putBoolean("maximized", false)
+            if (appReady == null) {
+                // Mismo criterio que tenía la ventana de splash: durante un arranque
+                // normal no se cierra; si se colgó (timeout), la X sale de la app.
+                if (canForceClose) {
+                    Logger.w(TAG, "===== Splash: usuario cerró manualmente tras timeout de arranque =====")
+                    exitApplication()
+                }
             } else {
-                windowPrefs.putBoolean("maximized", true)
+                saveWindowPrefs()
+                isVisible = false
             }
-            windowPrefs.flush()
-            isVisible = false
         },
         title = stringResource(Res.string.app_name),
         icon = painterResource(Res.drawable.circle_app_icon),
@@ -616,63 +725,274 @@ private fun androidx.compose.ui.window.ApplicationScope.MainAppWindow(
         state = windowState,
         visible = isVisible,
     ) {
-        Column(
+        androidx.compose.runtime.SideEffect { awtWindowRef.set(window) }
+
+        // Atajos de teclado configurables (v2.3.1). Se escuchan a nivel AWT: el
+        // onKeyEvent de Compose solo recibe teclas si algo de la UI tiene foco,
+        // y por eso en la v2.3.0 no andaban. Ver input/KeyboardShortcuts.kt.
+        val shortcutViewModel = appReady?.sharedViewModel
+        androidx.compose.runtime.DisposableEffect(shortcutViewModel) {
+            if (shortcutViewModel != null) {
+                com.wavora.app.input.KeyboardShortcuts.install(window) { action ->
+                    runShortcut(action, shortcutViewModel)
+                }
+            }
+            onDispose { com.wavora.app.input.KeyboardShortcuts.uninstall() }
+        }
+
+        val reveal = remember { androidx.compose.animation.core.Animatable(0f) }
+        val isReady = appReady != null
+        LaunchedEffect(isReady) {
+            if (isReady) {
+                // Dejamos que App() componga y pinte su primer frame (el más caro)
+                // todavía oculto bajo el splash, y recién ahí abrimos la ventana:
+                // así la animación no arranca trabada.
+                androidx.compose.runtime.withFrameNanos { }
+                androidx.compose.runtime.withFrameNanos { }
+                reveal.animateTo(
+                    1f,
+                    androidx.compose.animation.core.tween(
+                        durationMillis = REVEAL_DURATION_MS,
+                        easing = androidx.compose.animation.core.CubicBezierEasing(0.2f, 0.8f, 0.2f, 1f),
+                    ),
+                )
+            }
+        }
+        val splashGone by remember { androidx.compose.runtime.derivedStateOf { reveal.value >= 1f } }
+
+        // Verificación de la aceleración por hardware (solo si este arranque usa
+        // Direct3D): ¿la ventana realmente se ve? Ver render/WindowRenderCheck.kt.
+        LaunchedEffect(splashGone) {
+            if (!splashGone || !com.wavora.app.render.RenderConfig.awaitingConfirmation) return@LaunchedEffect
+            val awtWindow = window
+            var confirmed = false
+            var failures = 0
+            for (attempt in 1..RENDER_CHECK_MAX_ATTEMPTS) {
+                kotlinx.coroutines.delay(if (attempt == 1) 800L else 1500L)
+                val result =
+                    withContext(Dispatchers.IO) { com.wavora.app.render.WindowRenderCheck.check(awtWindow) }
+                if (result == true) {
+                    confirmed = true
+                    break
+                }
+                if (result == false) {
+                    failures++
+                    // Dos lecturas seguidas sin ver la app = falla real, no un parpadeo.
+                    if (failures >= 2) break
+                } else {
+                    failures = 0
+                }
+            }
+            if (failures >= 2) {
+                com.wavora.app.render.RenderConfig.reportHardwareFailure("la ventana no se veía (pantalla en blanco)")
+                com.wavora.app.render.WindowRenderCheck.showFallbackDialog {
+                    com.wavora.app.render.AppRestart.exitHandler?.invoke()
+                }
+            } else {
+                // Confirmada, o no se pudo verificar (sin foco todo el rato): se
+                // da por buena. Quedan las salidas de emergencia (bandeja, Ajustes,
+                // --software-render) por si acaso.
+                if (!confirmed) Logger.w(TAG, "No se pudo verificar la ventana con Direct3D; se asume que se ve")
+                com.wavora.app.render.RenderConfig.confirmHardwareWorks(
+                    runCatching { awtWindow.renderApi.name }.getOrNull(),
+                )
+            }
+        }
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val windowSizePx = remember { java.util.concurrent.atomic.AtomicReference(androidx.compose.ui.unit.IntSize.Zero) }
+
+        androidx.compose.foundation.layout.Box(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .clip(RoundedCornerShape(12.dp)),
+                    .onSizeChanged { windowSizePx.set(it) },
+            contentAlignment = androidx.compose.ui.Alignment.Center,
         ) {
-            if (!isUseDecorated) {
-                CustomTitleBar(
-                    title = stringResource(Res.string.app_name),
-                    windowState = windowState,
-                    window = window,
-                    onCloseRequest = {
-                        isVisible = false
-                    },
-                )
+            if (appReady != null) {
+                val glowColor = com.wavora.app.ui.theme.wavoraPrimary
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                clip = true
+                                shape = RevealShape(reveal.value, REVEAL_START_SIZE, 12.dp)
+                            }.drawWithContent {
+                                drawContent()
+                                // Brillo violeta del blob que se apaga mientras la
+                                // ventana se abre: une visualmente splash y app.
+                                val glow = 1f - (reveal.value / 0.6f).coerceIn(0f, 1f)
+                                if (glow > 0f) {
+                                    drawRect(
+                                        brush =
+                                            androidx.compose.ui.graphics.Brush.radialGradient(
+                                                colors =
+                                                    listOf(
+                                                        glowColor.copy(alpha = 0.55f * glow),
+                                                        glowColor.copy(alpha = 0f),
+                                                    ),
+                                                center = center,
+                                                radius = size.minDimension * 0.6f,
+                                            ),
+                                    )
+                                }
+                            },
+                ) {
+                    CustomTitleBar(
+                        title = stringResource(Res.string.app_name),
+                        windowState = windowState,
+                        window = window,
+                        onCloseRequest = {
+                            saveWindowPrefs()
+                            isVisible = false
+                        },
+                        modifier =
+                            Modifier.graphicsLayer {
+                                val a = ((reveal.value - 0.45f) / 0.4f).coerceIn(0f, 1f)
+                                alpha = a
+                                translationY = (1f - a) * -6.dp.toPx()
+                            },
+                    )
+
+                    val context = LocalPlatformContext.current
+                    setSingletonImageLoaderFactory {
+                        ImageLoader
+                            .Builder(context)
+                            .components {
+                                add(
+                                    OkHttpNetworkFetcherFactory(
+                                        // A single shared OkHttpClient with an explicit
+                                        // connection pool instead of OkHttp's bare defaults.
+                                        callFactory = {
+                                            OkHttpClient.Builder()
+                                                .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
+                                                .build()
+                                        },
+                                    ),
+                                )
+                            }.diskCachePolicy(CachePolicy.ENABLED)
+                            .networkCachePolicy(CachePolicy.ENABLED)
+                            .diskCache(
+                                DiskCache
+                                    .Builder()
+                                    .directory(FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "image_cache")
+                                    .maxSizeBytes(512L * 1024 * 1024)
+                                    .build(),
+                            ).crossfade(true)
+                            .build()
+                    }
+                    Column(
+                        modifier =
+                            Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .graphicsLayer {
+                                    val a = ((reveal.value - 0.15f) / 0.5f).coerceIn(0f, 1f)
+                                    alpha = a
+                                    val s = 0.985f + 0.015f * a
+                                    scaleX = s
+                                    scaleY = s
+                                },
+                    ) {
+                        App()
+                        ToastHost()
+                    }
+                }
             }
 
-            val context = LocalPlatformContext.current
-            setSingletonImageLoaderFactory {
-                ImageLoader
-                    .Builder(context)
-                    .components {
-                        add(
-                            OkHttpNetworkFetcherFactory(
-                                // A single shared OkHttpClient with an explicit
-                                // connection pool instead of OkHttp's bare defaults.
-                                callFactory = {
-                                    OkHttpClient.Builder()
-                                        .connectionPool(ConnectionPool(5, 5, TimeUnit.MINUTES))
-                                        .build()
-                                },
-                            ),
-                        )
-                    }.diskCachePolicy(CachePolicy.ENABLED)
-                    .networkCachePolicy(CachePolicy.ENABLED)
-                    .diskCache(
-                        DiskCache
-                            .Builder()
-                            .directory(FileSystem.SYSTEM_TEMPORARY_DIRECTORY / "image_cache")
-                            .maxSizeBytes(512L * 1024 * 1024)
-                            .build(),
-                    ).crossfade(true)
-                    .build()
+            if (!splashGone) {
+                SplashScreen(
+                    exitProgress = { reveal.value },
+                    logoTargetOffset = {
+                        // Punto de color de CustomTitleBar: 16dp de padding + 3dp de
+                        // radio en X, mitad de los 44dp de alto en Y.
+                        val size = windowSizePx.get()
+                        with(density) {
+                            androidx.compose.ui.geometry.Offset(
+                                19.dp.toPx() - size.width / 2f,
+                                22.dp.toPx() - size.height / 2f,
+                            )
+                        }
+                    },
+                    statusText = stageText,
+                    loadProgress = stage.progress,
+                )
             }
-            App()
-            ToastHost()
         }
     }
 
     // Mini Player Window (separate window)
-    if (MiniPlayerManager.isOpen) {
+    if (appReady != null && MiniPlayerManager.isOpen) {
         MiniPlayerWindow(
-            sharedViewModel = sharedViewModel,
+            sharedViewModel = appReady.sharedViewModel,
             onCloseRequest = {
                 MiniPlayerManager.isOpen = false
             },
         )
+    }
+}
+
+/**
+ * Recorte de la ventana durante la apertura: arranca como un círculo de
+ * [startSize] en el centro (el blob del splash) y crece hasta ocupar toda la
+ * ventana con esquinas de [endRadius] — el mismo 12dp que ya usaba la ventana.
+ * En progress = 1 es idéntico al `clip(RoundedCornerShape(12.dp))` anterior.
+ */
+private class RevealShape(
+    private val progress: Float,
+    private val startSize: androidx.compose.ui.unit.Dp,
+    private val endRadius: androidx.compose.ui.unit.Dp,
+) : androidx.compose.ui.graphics.Shape {
+    override fun createOutline(
+        size: androidx.compose.ui.geometry.Size,
+        layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+        density: androidx.compose.ui.unit.Density,
+    ): androidx.compose.ui.graphics.Outline {
+        val p = progress.coerceIn(0f, 1f)
+        val start = with(density) { startSize.toPx() }.coerceAtMost(minOf(size.width, size.height))
+        val end = with(density) { endRadius.toPx() }
+        val w = start + (size.width - start) * p
+        val h = start + (size.height - start) * p
+        val left = (size.width - w) / 2f
+        val top = (size.height - h) / 2f
+        val r = start / 2f + (end - start / 2f) * p
+        return androidx.compose.ui.graphics.Outline.Rounded(
+            androidx.compose.ui.geometry.RoundRect(
+                left = left,
+                top = top,
+                right = left + w,
+                bottom = top + h,
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(r),
+            ),
+        )
+    }
+}
+
+/**
+ * Posición guardada de la ventana, solo si sigue cayendo en algún monitor
+ * conectado (si desenchufaste el segundo monitor, no abrimos la ventana fuera
+ * de la pantalla: devolvemos null y se centra en el monitor activo).
+ */
+private fun restoredWindowPosition(
+    prefs: java.util.prefs.Preferences,
+    size: DpSize,
+): androidx.compose.ui.window.WindowPosition? {
+    val x = prefs.getInt("x", Int.MIN_VALUE)
+    val y = prefs.getInt("y", Int.MIN_VALUE)
+    if (x == Int.MIN_VALUE || y == Int.MIN_VALUE) return null
+    return try {
+        val rect = java.awt.Rectangle(x, y, size.width.value.toInt(), size.height.value.toInt())
+        val onScreen =
+            java.awt.GraphicsEnvironment
+                .getLocalGraphicsEnvironment()
+                .screenDevices
+                .any { device ->
+                    val visible = device.defaultConfiguration.bounds.intersection(rect)
+                    !visible.isEmpty && visible.width >= 120 && visible.height >= 60
+                }
+        if (onScreen) androidx.compose.ui.window.WindowPosition(x.dp, y.dp) else null
+    } catch (e: Throwable) {
+        null
     }
 }
 
@@ -689,4 +1009,4 @@ private object DesktopRestoreSignal {
     fun request() {
         _requests.tryEmit(Unit)
     }
-}
+}

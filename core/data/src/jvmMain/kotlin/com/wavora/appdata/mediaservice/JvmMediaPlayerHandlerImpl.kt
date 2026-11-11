@@ -88,6 +88,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import org.koin.mp.KoinPlatform.getKoin
 import com.wavora.nowplayingcenter.NPYC
@@ -95,6 +96,8 @@ import com.wavora.nowplayingcenter.domain.NowPlayingListener
 import com.wavora.nowplayingcenter.domain.Platform
 import kotlin.math.pow
 
+private const val RELEASE_TRACKING_TIMEOUT_MS = 1_500L
+private const val ERROR_SKIP_RESET_AFTER_PLAYING_MS = 10_000L
 private val TAG = "JvmMediaPlayerHandler"
 
 /**
@@ -109,6 +112,8 @@ private data class InitialPlaybackPrefs(
     val shuffleKey: String?,
     val repeatKey: String?,
     val playerVolume: Float,
+    val endlessQueue: Boolean,
+    val explicitContentEnabled: Boolean,
 )
 
 class JvmMediaPlayerHandlerImpl(
@@ -158,6 +163,13 @@ class JvmMediaPlayerHandlerImpl(
     // Updated by a single collector each — zero cost to read, no coroutine suspension.
     private var cachedPlaybackSpeed: Float = 1.0f
     private var cachedSponsorBlockEnabled: Boolean = false
+    // Leídos en onMediaItemTransition / loadMore / playTrack, que corren en el
+    // hilo dedicado de VLC: antes cada lectura era un `runBlocking` sobre
+    // DataStore que podía trabar el cambio de canción. Se siembran con el
+    // valor real en el init (mismo runBlocking de arranque) y un collector
+    // los mantiene al día.
+    @Volatile private var cachedEndlessQueue: Boolean = false
+    @Volatile private var cachedExplicitContentEnabled: Boolean = true
     override var onUpdateNotification: (List<GenericCommandButton>) -> Unit = {}
     override var showToast: (ToastType) -> Unit = {}
     override var pushPlayerError: (PlayerError) -> Unit = {}
@@ -226,6 +238,13 @@ class JvmMediaPlayerHandlerImpl(
     override val currentSongIndex: StateFlow<Int> = _currentSongIndex.asStateFlow()
 
     // List of Specific variables
+
+    // FIX (se deja de reproducir al pasar a la siguiente): ver onPlayerError().
+    // Saltos automáticos seguidos por error, con tope para no recorrer toda la cola
+    // en segundos si se cayó la red; se resetea tras reproducir de verdad un rato.
+    private var consecutiveErrorSkips = 0
+    private val maxConsecutiveErrorSkips = 3
+    private var errorSkipResetJob: Job? = null
 
     private var skipSilent = false
 
@@ -306,8 +325,12 @@ class JvmMediaPlayerHandlerImpl(
                     shuffleKey = if (saveState == TRUE) dataStoreManager.shuffleKey.first() else null,
                     repeatKey = if (saveState == TRUE) dataStoreManager.repeatKey.first() else null,
                     playerVolume = dataStoreManager.playerVolume.first(),
+                    endlessQueue = dataStoreManager.endlessQueue.first() == TRUE,
+                    explicitContentEnabled = dataStoreManager.explicitContentEnabled.first() == TRUE,
                 )
             }
+        cachedEndlessQueue = initialPrefs.endlessQueue
+        cachedExplicitContentEnabled = initialPrefs.explicitContentEnabled
         skipSilent = initialPrefs.skipSilent
         normalizeVolume = initialPrefs.normalizeVolume
         _nowPlaying.value = player.currentMediaItem
@@ -453,6 +476,18 @@ class JvmMediaPlayerHandlerImpl(
                         .distinctUntilChanged()
                         .collect { cachedSponsorBlockEnabled = it == TRUE }
                 }
+            val endlessQueueCacheJob =
+                launch {
+                    dataStoreManager.endlessQueue
+                        .distinctUntilChanged()
+                        .collect { cachedEndlessQueue = it == TRUE }
+                }
+            val explicitContentCacheJob =
+                launch {
+                    dataStoreManager.explicitContentEnabled
+                        .distinctUntilChanged()
+                        .collect { cachedExplicitContentEnabled = it == TRUE }
+                }
             val discordRPCEnabledJob =
                 launch {
                     dataStoreManager.richPresenceEnabled
@@ -476,6 +511,8 @@ class JvmMediaPlayerHandlerImpl(
             playbackJob.join()
             playbackSpeedPitchJob.join()
             sponsorBlockCacheJob.join()
+            endlessQueueCacheJob.join()
+            explicitContentCacheJob.join()
             discordRPCEnabledJob.join()
         }
     }
@@ -1424,7 +1461,7 @@ class JvmMediaPlayerHandlerImpl(
                                 // funcionando para radios/playlists de YouTube reales, pero
                                 // NO debería inventar una radio nueva cuando lo que terminó
                                 // fue algo local.
-                                if (runBlocking { dataStoreManager.endlessQueue.first() } == TRUE &&
+                                if (cachedEndlessQueue &&
                                     queueData.value.data.playlistType != PlaylistType.LOCAL_PLAYLIST
                                 ) {
                                     Logger.w(TAG, "loadMore: Endless Queue")
@@ -1453,7 +1490,7 @@ class JvmMediaPlayerHandlerImpl(
                         }
                 }
             }
-        } else if (runBlocking { dataStoreManager.endlessQueue.first() } == TRUE &&
+        } else if (cachedEndlessQueue &&
             queueData.value.data.playlistType != PlaylistType.LOCAL_PLAYLIST
         ) {
             Logger.w(TAG, "loadMore: Endless Queue")
@@ -2071,7 +2108,7 @@ class JvmMediaPlayerHandlerImpl(
                 is SongEntity -> anyTrack.toTrack()
                 else -> return
             }
-        if (track.isExplicit && runBlocking { dataStoreManager.explicitContentEnabled.first() } == FALSE) {
+        if (track.isExplicit && !cachedExplicitContentEnabled) {
             showToast(ToastType.ExplicitContent)
             return
         }
@@ -2262,6 +2299,7 @@ class JvmMediaPlayerHandlerImpl(
             }
             discordRPC = null
             // Save state first
+            trackCurrentSongBeforeRelease()
             mayBeSaveRecentSong(true)
             mayBeSavePlaybackState()
 
@@ -2386,6 +2424,13 @@ class JvmMediaPlayerHandlerImpl(
         )
         _controlState.value = _controlState.value.copy(isPlaying = isPlaying)
         if (isPlaying) {
+            // Reset del tope de saltos por error solo tras reproducir de verdad un rato.
+            errorSkipResetJob?.cancel()
+            errorSkipResetJob =
+                coroutineScope.launch {
+                    delay(ERROR_SKIP_RESET_AFTER_PLAYING_MS)
+                    consecutiveErrorSkips = 0
+                }
             startProgressUpdate()
             nowPlayingState.value.songEntity?.let { updateDiscordRpc(it) }
         } else {
@@ -2438,7 +2483,7 @@ class JvmMediaPlayerHandlerImpl(
             }
         }
         queueData.value.data.listTracks.let { list ->
-            if ((list.size > 3 || runBlocking { dataStoreManager.endlessQueue.first() == TRUE }) &&
+            if ((list.size > 3 || cachedEndlessQueue) &&
                 list.size - player.currentMediaItemIndex < 3 &&
                 list.size - player.currentMediaItemIndex >= 0 &&
                 queueData.value.queueState == QueueData.StateSource.STATE_INITIALIZED
@@ -2459,34 +2504,60 @@ class JvmMediaPlayerHandlerImpl(
         song: SongEntity,
         currentPositionMillis: Long,
     ) {
-        coroutineScope.launch {
-            val trackingEnabled = dataStoreManager.localTrackingEnabled.first() == TRUE
-            if (!trackingEnabled) {
-                return@launch
-            }
-            val percent = (currentPositionMillis / (song.durationSeconds * 1000f))
-            Logger.w(TAG, "${song.title} - $currentPositionMillis ms listened, duration: ${song.durationSeconds * 1000} ms, percent: $percent")
-            if (percent < 0.2f) {
-                Logger.d(TAG, "Not enough listening time for ${song.title}, skipping tracking")
-                return@launch
-            }
-            Logger.d(TAG, "Tracking listening for ${song.title} at position $currentPositionMillis ms")
-            analyticsRepository
-                .insertPlaybackEvent(
-                    videoId = song.videoId,
-                    channelIds = song.artistId ?: emptyList(),
-                    albumBrowseId = song.albumId,
-                    durationSecond = song.durationSeconds.toLong(),
-                    listenedSecond =
-                        if (percent >= 0.8f) {
-                            song.durationSeconds.toLong()
-                        } else {
-                            (currentPositionMillis / 1000)
-                        },
-                ).collect {
-                    Logger.d(TAG, "Inserted playback event for ${song.title}: $it")
+        coroutineScope.launch { trackListeningLocal(song, currentPositionMillis) }
+    }
+
+    /**
+     * Registra la canción actual al cerrar el reproductor. Antes solo se registraba
+     * en onMediaItemTransition, así que la última canción de cada sesión (la que
+     * sonaba al cerrar la app) nunca entraba al historial local ni al Mix local.
+     * Bloquea como mucho [RELEASE_TRACKING_TIMEOUT_MS] para no demorar el cierre.
+     */
+    private fun trackCurrentSongBeforeRelease() {
+        try {
+            val song = nowPlayingState.value.songEntity ?: return
+            val state = simpleMediaState.value
+            if (state !is SimpleMediaState.Progress || song.durationSeconds <= 0) return
+            runBlocking {
+                withTimeoutOrNull(RELEASE_TRACKING_TIMEOUT_MS) {
+                    trackListeningLocal(song, state.progress)
                 }
+            }
+        } catch (e: Exception) {
+            Logger.e(TAG, "trackCurrentSongBeforeRelease: ${e.message}", e)
         }
+    }
+
+    private suspend fun trackListeningLocal(
+        song: SongEntity,
+        currentPositionMillis: Long,
+    ) {
+        val trackingEnabled = dataStoreManager.localTrackingEnabled.first() == TRUE
+        if (!trackingEnabled) {
+            return
+        }
+        val percent = (currentPositionMillis / (song.durationSeconds * 1000f))
+        Logger.w(TAG, "${song.title} - $currentPositionMillis ms listened, duration: ${song.durationSeconds * 1000} ms, percent: $percent")
+        if (percent < 0.2f) {
+            Logger.d(TAG, "Not enough listening time for ${song.title}, skipping tracking")
+            return
+        }
+        Logger.d(TAG, "Tracking listening for ${song.title} at position $currentPositionMillis ms")
+        analyticsRepository
+            .insertPlaybackEvent(
+                videoId = song.videoId,
+                channelIds = song.artistId ?: emptyList(),
+                albumBrowseId = song.albumId,
+                durationSecond = song.durationSeconds.toLong(),
+                listenedSecond =
+                    if (percent >= 0.8f) {
+                        song.durationSeconds.toLong()
+                    } else {
+                        (currentPositionMillis / 1000)
+                    },
+            ).collect {
+                Logger.d(TAG, "Inserted playback event for ${song.title}: $it")
+            }
     }
 
     /**
@@ -2543,27 +2614,26 @@ class JvmMediaPlayerHandlerImpl(
     }
 
     override fun onPlayerError(error: PlayerError) {
-        when (error.errorCode) {
-            PlayerConstants.ERROR_CODE_TIMEOUT -> {
-                Logger.e("Player Error", "onPlayerError (${error.errorCode}): ${error.message}")
-//                if (isAppInForeground()) {
-                showToast(ToastType.PlayerError(error.errorCodeName))
-//                } else {
-//                    Logger.w("Player Error", "App is not in foreground, skipping toast")
-//                }
-                player.pause()
-            }
-
-            else -> {
-                Logger.e("Player Error", "onPlayerError (${error.errorCode}): ${error.message}")
-                pushPlayerError(error)
-//                if (isAppInForeground()) {
-                showToast(ToastType.PlayerError(error.errorCodeName))
-//                } else {
-//                    Logger.w("Player Error", "App is not in foreground, skipping toast")
-//                }
-                player.pause()
-            }
+        Logger.e("Player Error", "onPlayerError (${error.errorCode}): ${error.message}")
+        if (error.errorCode != PlayerConstants.ERROR_CODE_TIMEOUT) {
+            pushPlayerError(error)
+        }
+        showToast(ToastType.PlayerError(error.errorCodeName))
+        // FIX: antes CUALQUIER error terminaba en player.pause(): la reproducción
+        // quedaba detenida hasta que el usuario pasaba de canción a mano. Cuando llega
+        // acá, VlcPlayerAdapter ya agotó sus reintentos sobre esta pista (con URL nueva
+        // y reanudando desde la posición del fallo), así que lo útil es seguir con la
+        // siguiente. Tope de saltos seguidos: si fallan varias pistas al hilo (sin red),
+        // se pausa como antes en vez de recorrer toda la cola.
+        errorSkipResetJob?.cancel()
+        if (consecutiveErrorSkips < maxConsecutiveErrorSkips && player.hasNextMediaItem()) {
+            consecutiveErrorSkips++
+            Logger.w(TAG, "Unrecoverable track error: skipping to next ($consecutiveErrorSkips/$maxConsecutiveErrorSkips)")
+            player.seekToNext()
+        } else {
+            Logger.w(TAG, "Unrecoverable track error: no next track or too many consecutive failures, pausing")
+            consecutiveErrorSkips = 0
+            player.pause()
         }
     }
 

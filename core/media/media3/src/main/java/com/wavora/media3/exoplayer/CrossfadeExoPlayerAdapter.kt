@@ -276,6 +276,13 @@ internal class CrossfadeExoPlayerAdapter(
     private var retryVideoId: String? = null
     private val maxRetryCount = 2
 
+    // Posición desde la que se reanudó el último reintento: el contador solo se
+    // resetea tras avanzar RETRY_RESET_AFTER_PROGRESS_MS más allá de ella.
+    private var retryResumePositionMs = 0L
+
+    // Watchdog: ticks seguidos con el player actual en IDLE mientras deberíamos sonar.
+    private var idleWhilePlayingTicks = 0
+
     // ========== AutoMix Metadata Cache ==========
     // videoId -> audio analysis data from Tidal (populated externally when 320kbps stream is fetched)
     private val audioMetaCache = ConcurrentHashMap<String, SongAudioMeta>()
@@ -1560,11 +1567,123 @@ internal class CrossfadeExoPlayerAdapter(
                 message = error.message,
             )
         Logger.e(TAG, "Playback error: ${error.message}")
-        listeners.forEach { it.onPlayerError(genericError) }
-        transitionToState(InternalState.ERROR)
+        // FIX (error notificado dos veces): antes se emitía onPlayerError acá Y otra vez
+        // (genérico, 403) dentro de transitionToState(ERROR). El handler contaba dos
+        // reintentos por cada fallo real (agotaba su presupuesto de 2 con UN solo
+        // error), lanzaba dos recargas en paralelo y mostraba dos toasts.
+        transitionToState(InternalState.ERROR, genericError)
     }
 
-    private fun transitionToState(newState: InternalState) {
+    /**
+     * FIX ("error de red" a mitad de canción → había que pasar a mano): antes solo
+     * se reintentaban 3001 (PARSING_CONTAINER_MALFORMED) y 2004 (BAD_HTTP_STATUS),
+     * aunque el comentario original decía que también 2001. Los errores de red
+     * reales (conexión caída, timeout, IO genérico — justamente lo que pasa con
+     * wifi/datos inestables o una URL que el resolver no pudo renovar) iban directo
+     * a ERROR sin ningún reintento ni reanudación.
+     */
+    private fun isRetryablePlaybackError(error: PlaybackException): Boolean =
+        when (error.errorCode) {
+            PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+            PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+            PlaybackException.ERROR_CODE_IO_INVALID_HTTP_CONTENT_TYPE,
+            PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
+            PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
+            PlaybackException.ERROR_CODE_TIMEOUT,
+            PlaybackException.ERROR_CODE_UNSPECIFIED,
+            -> true
+            else -> false
+        }
+
+    /**
+     * Manejo de error del player actual: reintenta (con backoff) recargando la pista
+     * con una URL nueva DESDE la posición donde falló; si se agotan los reintentos,
+     * reporta el error UNA vez y el handler decide (reintento propio / saltar).
+     */
+    private fun handleCurrentPlayerError(error: PlaybackException) {
+        val currentVideoId = playlist.getOrNull(localCurrentMediaItemIndex)?.mediaId
+        if (isRetryablePlaybackError(error) && currentVideoId != null) {
+            if (retryVideoId != currentVideoId) {
+                retryVideoId = currentVideoId
+                retryCount = 0
+            }
+            if (retryCount < maxRetryCount) {
+                retryCount++
+                val attempt = retryCount
+                // Snapshot the current position so the retry resumes where playback
+                // failed instead of restarting the track from the beginning.
+                val resumePositionMs = cachedPosition.coerceAtLeast(0L)
+                retryResumePositionMs = resumePositionMs
+                Logger.w(
+                    TAG,
+                    "Retryable error (attempt $attempt/$maxRetryCount) for $currentVideoId: " +
+                        "${error.errorCodeName} — reloading at ${resumePositionMs}ms",
+                )
+                // UI en "cargando" mientras esperamos el backoff (en vez de quedar
+                // en PLAYING con el player muerto).
+                transitionToState(InternalState.PREPARING)
+                coroutineScope.launch {
+                    try {
+                        // Backoff: recargar al instante durante un corte de red falla
+                        // igual; 1 s, 2 s le dan tiempo a la conexión a volver.
+                        delay(RETRY_BACKOFF_BASE_MS * attempt)
+                        // Invalidate cached format so ResolvingDataSource fetches a fresh URL
+                        streamRepository.invalidateFormat(currentVideoId)
+                        streamRepository.invalidateFormat("${com.wavora.common.MERGING_DATA_TYPE.VIDEO}$currentVideoId")
+                        // Evict from precache (it may hold a stale player)
+                        precachedPlayers.remove(currentVideoId)?.player?.release()
+                        // El usuario pudo cambiar de pista durante el backoff.
+                        if (playlist.getOrNull(localCurrentMediaItemIndex)?.mediaId != currentVideoId) return@launch
+                        loadAndPlayTrackInternal(localCurrentMediaItemIndex, resumePositionMs, internalPlayWhenReady)
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        Logger.e(TAG, "Retry failed: ${e.message}", e)
+                        propagatePlayerError(error)
+                    }
+                }
+                return
+            }
+            Logger.e(TAG, "Max retries ($maxRetryCount) exhausted for $currentVideoId")
+        }
+        propagatePlayerError(error)
+    }
+
+    /**
+     * FIX (pasa a la siguiente y queda muda/trabada en Android): durante el crossfade
+     * el listener ya está en el player ENTRANTE, pero currentPlayer sigue siendo el
+     * saliente, así que el chequeo `player != currentPlayer` descartaba TODOS los
+     * errores del entrante. Si fallaba (red, URL vencida) a mitad del fundido,
+     * finalizeCrossfade() lo promovía muerto y no quedaba ningún evento que
+     * disparara recuperación: silencio hasta tocar "siguiente" a mano. Ahora se
+     * aborta el crossfade y se recarga esa pista con una URL nueva.
+     */
+    private fun handleIncomingCrossfadePlayerError(error: PlaybackException) {
+        val failedIndex = localCurrentMediaItemIndex
+        val failedVideoId = playlist.getOrNull(failedIndex)?.mediaId
+        Logger.w(
+            TAG,
+            "Incoming crossfade player failed (${error.errorCodeName}) for $failedVideoId — " +
+                "aborting crossfade and reloading the track",
+        )
+        coroutineScope.launch {
+            if (failedVideoId != null) {
+                streamRepository.invalidateFormat(failedVideoId)
+                streamRepository.invalidateFormat("${com.wavora.common.MERGING_DATA_TYPE.VIDEO}$failedVideoId")
+            }
+            // seekTo() cancela el crossfade, libera el entrante y carga uno nuevo.
+            seekTo(failedIndex, 0)
+        }
+    }
+
+    /** Un player precacheado que ya falló (o quedó en IDLE) no se puede reusar. */
+    private fun isPrecachedPlayerUsable(player: ExoPlayer): Boolean =
+        player.playerError == null && player.playbackState != Player.STATE_IDLE
+
+    private fun transitionToState(
+        newState: InternalState,
+        error: PlayerError? = null,
+    ) {
         if (internalState == newState) {
             Logger.d(TAG, "State transition ignored: already in $newState")
             return
@@ -1622,15 +1741,14 @@ internal class CrossfadeExoPlayerAdapter(
             InternalState.ERROR -> {
                 listeners.forEach { it.onPlaybackStateChanged(PlayerConstants.STATE_IDLE) }
                 listeners.forEach { it.onIsPlayingChanged(false) }
-                listeners.forEach {
-                    it.onPlayerError(
-                        PlayerError(
-                            errorCode = 403,
-                            errorCodeName = "ERROR_UNKNOWN",
-                            message = "Can not extract playable URL or playback error",
-                        ),
+                // Una sola emisión: el error real si lo hay, si no el genérico.
+                val reported =
+                    error ?: PlayerError(
+                        errorCode = 403,
+                        errorCodeName = "ERROR_UNKNOWN",
+                        message = "Can not extract playable URL or playback error",
                     )
-                }
+                listeners.forEach { it.onPlayerError(reported) }
             }
         }
     }
@@ -1755,7 +1873,23 @@ internal class CrossfadeExoPlayerAdapter(
                     }
 
                     // Use precached player if available
-                    val cachedPlayerEntry = precachedPlayers.remove(videoId)
+                    // FIX (pasa a la siguiente y no suena, sin ningún error): un player
+                    // precacheado que falló en segundo plano (ExoPlayer reporta el error
+                    // de preparación aunque no esté reproduciendo, p.ej. red caída al
+                    // precachear) queda en STATE_IDLE con playerError. Se lo reusaba
+                    // igual: play() sobre un player en IDLE no hace nada, y su error ya
+                    // se había emitido ANTES de que tuviera nuestro listener → silencio
+                    // sin ningún evento que dispare recuperación. Ahora se descarta.
+                    val cachedPlayerEntry =
+                        precachedPlayers.remove(videoId)?.let { entry ->
+                            if (isPrecachedPlayerUsable(entry.player)) {
+                                entry
+                            } else {
+                                Logger.w(TAG, "Discarding failed precached player for $videoId (error=${entry.player.playerError?.errorCodeName})")
+                                cleanupPlayerInternal(entry.player)
+                                null
+                            }
+                        }
                     val player: ExoPlayer
                     val playerFilter: CrossfadeFilterAudioProcessor?
                     if (cachedPlayerEntry?.player != null) {
@@ -1786,6 +1920,11 @@ internal class CrossfadeExoPlayerAdapter(
                     // 3. Set new player as current
                     currentPlayer = player
                     currentPlayerFilter = playerFilter
+                    // FIX: posición cacheada = la de ESTA pista. Antes conservaba la de
+                    // la anterior hasta el primer tick (200 ms); un error en ese lapso
+                    // reanudaba la canción nueva en el minuto donde terminó la anterior.
+                    cachedPosition = startPositionMs
+                    cachedBufferedPosition = 0L
 
                     // 4. Setup our listener on new player
                     setupPlayerListenerInternal(player)
@@ -1917,9 +2056,11 @@ internal class CrossfadeExoPlayerAdapter(
                             // Duration should be available now
                             val dur = player.duration
                             if (dur > 0) cachedDuration = dur
-                            // Reset retry counter on successful playback
-                            retryCount = 0
-                            retryVideoId = null
+                            // FIX: el contador de reintentos ya NO se resetea en
+                            // STATE_READY (tras una recarga llega READY enseguida, desde
+                            // el caché, aunque vaya a volver a fallar en el mismo punto:
+                            // bucle infinito de reintentos). Se resetea en
+                            // startPositionUpdates() tras avanzar de verdad.
                         }
 
                         Player.STATE_BUFFERING -> {
@@ -1949,53 +2090,17 @@ internal class CrossfadeExoPlayerAdapter(
                 }
 
                 override fun onPlayerError(error: PlaybackException) {
+                    // FIX: errores del player ENTRANTE durante el crossfade (antes se
+                    // descartaban todos por el chequeo de abajo).
+                    if (isCrossfading && player === secondaryPlayer) {
+                        handleIncomingCrossfadePlayerError(error)
+                        return
+                    }
                     if (player != currentPlayer) {
                         Logger.d(TAG, "Ignoring onPlayerError from non-current player")
                         return
                     }
-
-                    // Retry for source errors (expired/invalid stream URL)
-                    // ERROR_CODE_PARSING_CONTAINER_MALFORMED (3001) = server returned non-media response (e.g. HTML error page)
-                    // ERROR_CODE_IO_BAD_HTTP_STATUS (2004) = HTTP 403/410 from expired URL
-                    // ERROR_CODE_IO_NETWORK_CONNECTION_FAILED (2001) = connection refused
-                    val isRetryableSourceError =
-                        error.errorCode == PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED ||
-                            error.errorCode == PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS
-
-                    val currentVideoId = playlist.getOrNull(localCurrentMediaItemIndex)?.mediaId
-                    if (isRetryableSourceError && currentVideoId != null) {
-                        // Reset retry count if this is a different track
-                        if (retryVideoId != currentVideoId) {
-                            retryVideoId = currentVideoId
-                            retryCount = 0
-                        }
-                        if (retryCount < maxRetryCount) {
-                            retryCount++
-                            Logger.w(TAG, "Retryable source error (attempt $retryCount/$maxRetryCount) for $currentVideoId: ${error.errorCodeName}")
-                            // Snapshot the current position so the retry resumes where playback
-                            // failed instead of restarting the track from the beginning.
-                            val resumePositionMs = cachedPosition.coerceAtLeast(0L)
-                            coroutineScope.launch {
-                                try {
-                                    // Invalidate cached format so ResolvingDataSource fetches a fresh URL
-                                    streamRepository.invalidateFormat(currentVideoId)
-                                    streamRepository.invalidateFormat("${com.wavora.common.MERGING_DATA_TYPE.VIDEO}$currentVideoId")
-                                    // Evict from precache (it may hold a stale player)
-                                    precachedPlayers.remove(currentVideoId)?.player?.release()
-                                    // Reload the track at the saved position
-                                    loadAndPlayTrackInternal(localCurrentMediaItemIndex, resumePositionMs, shouldPlay = true)
-                                } catch (e: Exception) {
-                                    if (e is CancellationException) throw e
-                                    Logger.e(TAG, "Retry failed: ${e.message}", e)
-                                    propagatePlayerError(error)
-                                }
-                            }
-                            return
-                        }
-                        Logger.e(TAG, "Max retries ($maxRetryCount) exhausted for $currentVideoId")
-                    }
-
-                    propagatePlayerError(error)
+                    handleCurrentPlayerError(error)
                 }
 
                 override fun onIsLoadingChanged(isLoading: Boolean) {
@@ -2252,7 +2357,17 @@ internal class CrossfadeExoPlayerAdapter(
                 Logger.d(TAG, "Starting crossfade to track $nextIndex")
 
                 // Get or create secondary player
-                val cachedPlayerEntry = precachedPlayers.remove(nextVideoId)
+                // FIX: mismo descarte de precacheados fallidos que en loadAndPlayTrackInternal.
+                val cachedPlayerEntry =
+                    precachedPlayers.remove(nextVideoId)?.let { entry ->
+                        if (isPrecachedPlayerUsable(entry.player)) {
+                            entry
+                        } else {
+                            Logger.w(TAG, "Crossfade: discarding failed precached player for $nextVideoId")
+                            cleanupPlayerInternal(entry.player)
+                            null
+                        }
+                    }
                 val nextPlayer: ExoPlayer
                 val nextFilter: CrossfadeFilterAudioProcessor?
                 if (cachedPlayerEntry?.player != null) {
@@ -2290,6 +2405,24 @@ internal class CrossfadeExoPlayerAdapter(
                 // esperamos la señal real STATE_READY, con un timeout de seguridad
                 // para no colgar el crossfade si por lo que sea nunca llega.
                 awaitPlayerReady(nextPlayer)
+
+                // FIX: awaitPlayerReady() también retorna si el player FALLÓ (IDLE/error).
+                // Antes se seguía igual: se le pasaba el listener, se le daba play() y
+                // el fundido promovía un player muerto (silencio sin evento de error).
+                // Ahora se aborta el crossfade y se carga la pista con una URL nueva.
+                if (!isPrecachedPlayerUsable(nextPlayer)) {
+                    Logger.w(
+                        TAG,
+                        "Crossfade: next player failed while preparing " +
+                            "(${nextPlayer.playerError?.errorCodeName}) — falling back to plain transition",
+                    )
+                    cleanupPlayerInternal(nextPlayer)
+                    streamRepository.invalidateFormat(nextVideoId)
+                    streamRepository.invalidateFormat("${com.wavora.common.MERGING_DATA_TYPE.VIDEO}$nextVideoId")
+                    setCrossfading(false)
+                    seekTo(nextIndex, 0)
+                    return@launch
+                }
 
                 // Setup secondary player
                 secondaryPlayer = nextPlayer
@@ -2958,6 +3091,15 @@ internal class CrossfadeExoPlayerAdapter(
         // enough that STATE_READY actually means "safe to play without underrun".
         private const val CROSSFADE_BUFFER_FOR_PLAYBACK_MS = 1500
 
+        // Backoff entre reintentos de recarga tras un error (x número de intento).
+        private const val RETRY_BACKOFF_BASE_MS = 1000L
+
+        // El contador de reintentos se resetea tras reproducir esto de verdad.
+        private const val RETRY_RESET_AFTER_PROGRESS_MS = 10_000L
+
+        // Ticks (de 200 ms) en STATE_IDLE mientras deberíamos sonar antes de recuperar.
+        private const val IDLE_WHILE_PLAYING_TICKS = 10
+
         // AUDIT FIX (Chromecast no avanza sola al terminar la canción):
         // confirmado con logs reales + captura de pantalla (pista de 4:32,
         // se frena en pos=4:31.955) que el CastPlayer de Google, al llegar
@@ -3264,6 +3406,38 @@ internal class CrossfadeExoPlayerAdapter(
                                 if (pos >= 0) cachedPosition = pos
                                 if (dur > 0) cachedDuration = dur
                                 if (buf >= 0) cachedBufferedPosition = buf
+
+                                if (!isCrossfading) {
+                                    // FIX: reset del contador de reintentos solo tras
+                                    // progreso real (ver retryResumePositionMs).
+                                    if (retryCount > 0 && pos > retryResumePositionMs + RETRY_RESET_AFTER_PROGRESS_MS) {
+                                        retryCount = 0
+                                        retryVideoId = null
+                                    }
+                                    // FIX (watchdog): el player actual quedó en IDLE (falló o
+                                    // se detuvo) mientras deberíamos estar sonando, sin que
+                                    // nos llegara el evento. Recuperarlo en vez de quedar en
+                                    // "PLAYING" en silencio para siempre.
+                                    if (!isCastingActive &&
+                                        internalState == InternalState.PLAYING &&
+                                        internalPlayWhenReady &&
+                                        player.playbackState == Player.STATE_IDLE
+                                    ) {
+                                        idleWhilePlayingTicks++
+                                        if (idleWhilePlayingTicks >= IDLE_WHILE_PLAYING_TICKS) {
+                                            idleWhilePlayingTicks = 0
+                                            val err = player.playerError
+                                            Logger.w(TAG, "Watchdog: current player IDLE while playing (error=${err?.errorCodeName})")
+                                            if (err != null) {
+                                                handleCurrentPlayerError(err)
+                                            } else {
+                                                loadAndPlayTrackInternal(localCurrentMediaItemIndex, cachedPosition, true)
+                                            }
+                                        }
+                                    } else {
+                                        idleWhilePlayingTicks = 0
+                                    }
+                                }
 
                                 // Check if should trigger crossfade.
                                 // Add a preparation buffer (3s) so that if the next track

@@ -1197,10 +1197,20 @@ class Ytmusic {
 
     suspend fun is403Url(url: String): Boolean {
         return try {
-            return httpClient.head(url).status.value in 400..499
+            httpClient.head(url).status.value in 400..499
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
+            // FIX: antes CUALQUIER fallo del HEAD (timeout, sin red, DNS) devolvía
+            // `true` = "URL vencida". El resolver de Android (que hace este HEAD en cada
+            // reapertura de la conexión) y el de Desktop descartaban entonces una URL
+            // válida y lanzaban una extracción completa (YouTube player + búsqueda en
+            // Tidal) justo durante el corte de red, que también fallaba → "error de red"
+            // a mitad de canción. Un fallo de red NO prueba que la URL esté vencida:
+            // se devuelve false y la petición real decide (un 403 real lo maneja el
+            // reintento del player, que invalida y re-extrae).
             e.printStackTrace()
-            true
+            false
         }
     }
 
